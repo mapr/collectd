@@ -229,6 +229,43 @@ vs_processes		value:GAUGE:0:65535
 vs_threads		value:GAUGE:0:65535
 
 #
+# MapR specific types
+#
+#
+# ResourceManager    
+apps-running        value:COUNTER:U:U
+active-applications     value:COUNTER:U:U
+active-users        value:COUNTER:U:U
+aggregate-containers-allocated      value:COUNTER:U:U
+aggregate-containers-released       value:COUNTER:U:U
+allocated-MB        value:COUNTER:U:U
+apps-completed      value:COUNTER:U:U
+apps-failed     value:COUNTER:U:U
+apps-pending        value:COUNTER:U:U
+apps-submitted      value:COUNTER:U:U
+available-MB        value:COUNTER:U:U
+allocated-vcores        value:COUNTER:U:U
+available-vcores        value:COUNTER:U:U
+pending-containers      value:COUNTER:U:U
+pending-MB      value:COUNTER:U:U
+pending-vcores      value:COUNTER:U:U
+reserved-containers     value:COUNTER:U:U
+reserved-MB     value:COUNTER:U:U
+reserved-vcores     value:COUNTER:U:U
+
+# NodeManager
+containers-launched     value:COUNTER:U:U
+containers-killed       value:COUNTER:U:U 
+allocated-containers        value:COUNTER:U:U
+allocated-GB        value:COUNTER:U:U
+allocated-vcores        value:COUNTER:U:U
+available-GB        value:COUNTER:U:U
+available-vcores        value:COUNTER:U:U
+containers-completed        value:COUNTER:U:U
+containers-failed       value:COUNTER:U:U
+containers-initing      value:COUNTER:U:U
+containers-running      value:COUNTER:U:U
+
 # Legacy types
 # (required for the v5 upgrade target)
 #
