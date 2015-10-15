@@ -1368,11 +1368,13 @@ endif
 all-local: check-conf-changes
 
 check-conf-changes: $(srcdir)/collectd.conf
-	diff -u $(srcdir)/collectd.conf $(srcdir)/../ext-conf/collectd.conf > (srcdir)/collectd.conf.mapr.diff
-        if [[ diff -q $(srcdir)/collectd.conf.mapr.diff $(srcdir)/../ext-conf/collectd.conf.mapr.diff ]] ; \
+	- diff -u $(srcdir)/collectd.conf $(srcdir)/../ext-conf/collectd.conf | sed -e 's/^[-+][-+][-+] .*$$//' > $(srcdir)/collectd.conf.mapr.diff
+	- cat $(srcdir)/../ext-conf/collectd.conf.mapr.diff | sed -e 's/^[-+][-+][-+] .*$$//' > $(srcdir)/collectd.conf.mapr.orig.diff
+	if ! diff -q $(srcdir)/collectd.conf.mapr.diff $(srcdir)/collectd.conf.mapr.orig.diff  ; \
 	then \
-		echo "Collectd.conf has changeds - update the mapr version accordingly" \
-	fi; \
+		echo "Collectd.conf has changes - update the mapr version accordingly"; \
+		exit 1; \
+	fi; 
 
 install-exec-hook:
 	$(mkinstalldirs) $(DESTDIR)$(sysconfdir)
