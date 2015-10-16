@@ -12,10 +12,10 @@
 
 #Hostname    "localhost"
 #FQDNLookup   true
-#BaseDir     "${prefix}/var/lib/collectd"
-#PIDFile     "${prefix}/var/run/collectd.pid"
-#PluginDir   "${exec_prefix}/lib/collectd"
-#TypesDB     "${prefix}/share/collectd/types.db"
+#BaseDir     "@localstatedir@/lib/@PACKAGE_NAME@"
+#PIDFile     "@localstatedir@/run/@PACKAGE_NAME@.pid"
+#PluginDir   "@libdir@/@PACKAGE_NAME@"
+#TypesDB     "@prefix@/share/@PACKAGE_NAME@/types.db"
 
 #----------------------------------------------------------------------------#
 # When enabled, plugins are loaded automatically with the default options    #
@@ -58,24 +58,24 @@
 # accessed.                                                                  #
 ##############################################################################
 
-LoadPlugin syslog
-#LoadPlugin logfile
-##LoadPlugin log_logstash
+@LOAD_PLUGIN_SYSLOG@LoadPlugin syslog
+@LOAD_PLUGIN_LOGFILE@LoadPlugin logfile
+@LOAD_PLUGIN_LOG_LOGSTASH@LoadPlugin log_logstash
 
-<Plugin logfile>
-	LogLevel info
-	File "${prefix}/var/log/collectd.log"
-	Timestamp true
-	PrintSeverity true
-</Plugin>
+#<Plugin logfile>
+#	LogLevel @DEFAULT_LOG_LEVEL@
+#	File STDOUT
+#	Timestamp true
+#	PrintSeverity false
+#</Plugin>
 
 #<Plugin log_logstash>
-#	LogLevel info
-#	File "${prefix}/var/log/collectd.json.log"
+#	LogLevel @DEFAULT_LOG_LEVEL@
+#	File "@localstatedir@/log/@PACKAGE_NAME@.json.log"
 #</Plugin>
 
 #<Plugin syslog>
-#	LogLevel info
+#	LogLevel @DEFAULT_LOG_LEVEL@
 #</Plugin>
 
 ##############################################################################
@@ -88,127 +88,127 @@ LoadPlugin syslog
 # to missing dependencies or because they have been deactivated explicitly.  #
 ##############################################################################
 
-LoadPlugin aggregation
-##LoadPlugin amqp
-#LoadPlugin apache
-#LoadPlugin apcups
-##LoadPlugin apple_sensors
-##LoadPlugin aquaero
-#LoadPlugin ascent
-##LoadPlugin barometer
-#LoadPlugin battery
-#LoadPlugin bind
-##LoadPlugin ceph
-#LoadPlugin cgroups
-#LoadPlugin conntrack
-#LoadPlugin contextswitch
-LoadPlugin cpu
-#LoadPlugin cpufreq
-#LoadPlugin csv
-#LoadPlugin curl
-#LoadPlugin curl_json
-#LoadPlugin curl_xml
-##LoadPlugin dbi
-LoadPlugin df
-LoadPlugin disk
-##LoadPlugin dns
-#LoadPlugin drbd
-#LoadPlugin email
-#LoadPlugin entropy
-#LoadPlugin ethstat
-LoadPlugin exec
-#LoadPlugin fhcount
-#LoadPlugin filecount
-#LoadPlugin fscache
-##LoadPlugin gmond
-#LoadPlugin hddtemp
-LoadPlugin interface
-#LoadPlugin ipc
-##LoadPlugin ipmi
-##LoadPlugin iptables
-#LoadPlugin ipvs
-#LoadPlugin irq
-LoadPlugin java
-LoadPlugin load
-##LoadPlugin lpar
-#LoadPlugin lvm
-#LoadPlugin madwifi
-#LoadPlugin mbmon
-#LoadPlugin md
-##LoadPlugin memcachec
-#LoadPlugin memcached
-LoadPlugin memory
-##LoadPlugin mic
-##LoadPlugin modbus
-##LoadPlugin mqtt
-#LoadPlugin multimeter
-#LoadPlugin mysql
-##LoadPlugin netapp
-##LoadPlugin netlink
-#LoadPlugin network
-#LoadPlugin nfs
-#LoadPlugin nginx
-##LoadPlugin notify_desktop
-##LoadPlugin notify_email
-#LoadPlugin ntpd
-#LoadPlugin numa
-##LoadPlugin nut
-#LoadPlugin olsrd
-##LoadPlugin onewire
-#LoadPlugin openldap
-#LoadPlugin openvpn
-##LoadPlugin oracle
-##LoadPlugin perl
-##LoadPlugin pinba
-##LoadPlugin ping
-##LoadPlugin postgresql
-#LoadPlugin powerdns
-#LoadPlugin processes
-#LoadPlugin protocols
-#LoadPlugin python
-##LoadPlugin redis
-##LoadPlugin routeros
-#LoadPlugin rrdcached
-LoadPlugin rrdtool
-#LoadPlugin sensors
-#LoadPlugin serial
-##LoadPlugin sigrok
-#LoadPlugin smart
-##LoadPlugin snmp
-#LoadPlugin statsd
-LoadPlugin swap
-#LoadPlugin table
-#LoadPlugin tail
-#LoadPlugin tail_csv
-##LoadPlugin tape
-#LoadPlugin tcpconns
-#LoadPlugin teamspeak2
-#LoadPlugin ted
-#LoadPlugin thermal
-##LoadPlugin tokyotyrant
-##LoadPlugin turbostat
-#LoadPlugin unixsock
-#LoadPlugin uptime
-#LoadPlugin users
-#LoadPlugin uuid
-##LoadPlugin varnish
-##LoadPlugin virt
-LoadPlugin vmem
-#LoadPlugin vserver
-#LoadPlugin wireless
-#LoadPlugin write_graphite
-##LoadPlugin write_http
-##LoadPlugin write_kafka
-LoadPlugin write_log
-##LoadPlugin write_mongodb
-##LoadPlugin write_redis
-##LoadPlugin write_riemann
-#LoadPlugin write_sensu
-#LoadPlugin write_tsdb
-##LoadPlugin xmms
-#LoadPlugin zfs_arc
-##LoadPlugin zone
-#LoadPlugin zookeeper
+#@BUILD_PLUGIN_AGGREGATION_TRUE@LoadPlugin aggregation
+#@BUILD_PLUGIN_AMQP_TRUE@LoadPlugin amqp
+#@BUILD_PLUGIN_APACHE_TRUE@LoadPlugin apache
+#@BUILD_PLUGIN_APCUPS_TRUE@LoadPlugin apcups
+#@BUILD_PLUGIN_APPLE_SENSORS_TRUE@LoadPlugin apple_sensors
+#@BUILD_PLUGIN_AQUAERO_TRUE@LoadPlugin aquaero
+#@BUILD_PLUGIN_ASCENT_TRUE@LoadPlugin ascent
+#@BUILD_PLUGIN_BAROMETER_TRUE@LoadPlugin barometer
+#@BUILD_PLUGIN_BATTERY_TRUE@LoadPlugin battery
+#@BUILD_PLUGIN_BIND_TRUE@LoadPlugin bind
+#@BUILD_PLUGIN_CEPH_TRUE@LoadPlugin ceph
+#@BUILD_PLUGIN_CGROUPS_TRUE@LoadPlugin cgroups
+#@BUILD_PLUGIN_CONNTRACK_TRUE@LoadPlugin conntrack
+#@BUILD_PLUGIN_CONTEXTSWITCH_TRUE@LoadPlugin contextswitch
+@BUILD_PLUGIN_CPU_TRUE@@BUILD_PLUGIN_CPU_TRUE@LoadPlugin cpu
+#@BUILD_PLUGIN_CPUFREQ_TRUE@LoadPlugin cpufreq
+@LOAD_PLUGIN_CSV@LoadPlugin csv
+#@BUILD_PLUGIN_CURL_TRUE@LoadPlugin curl
+#@BUILD_PLUGIN_CURL_JSON_TRUE@LoadPlugin curl_json
+#@BUILD_PLUGIN_CURL_XML_TRUE@LoadPlugin curl_xml
+#@BUILD_PLUGIN_DBI_TRUE@LoadPlugin dbi
+#@BUILD_PLUGIN_DF_TRUE@LoadPlugin df
+#@BUILD_PLUGIN_DISK_TRUE@LoadPlugin disk
+#@BUILD_PLUGIN_DNS_TRUE@LoadPlugin dns
+#@BUILD_PLUGIN_DRBD_TRUE@LoadPlugin drbd
+#@BUILD_PLUGIN_EMAIL_TRUE@LoadPlugin email
+#@BUILD_PLUGIN_ENTROPY_TRUE@LoadPlugin entropy
+#@BUILD_PLUGIN_ETHSTAT_TRUE@LoadPlugin ethstat
+#@BUILD_PLUGIN_EXEC_TRUE@LoadPlugin exec
+#@BUILD_PLUGIN_FHCOUNT_TRUE@LoadPlugin fhcount
+#@BUILD_PLUGIN_FILECOUNT_TRUE@LoadPlugin filecount
+#@BUILD_PLUGIN_FSCACHE_TRUE@LoadPlugin fscache
+#@BUILD_PLUGIN_GMOND_TRUE@LoadPlugin gmond
+#@BUILD_PLUGIN_HDDTEMP_TRUE@LoadPlugin hddtemp
+@BUILD_PLUGIN_INTERFACE_TRUE@@BUILD_PLUGIN_INTERFACE_TRUE@LoadPlugin interface
+#@BUILD_PLUGIN_IPC_TRUE@@BUILD_PLUGIN_IPC_TRUE@LoadPlugin ipc
+#@BUILD_PLUGIN_IPMI_TRUE@LoadPlugin ipmi
+#@BUILD_PLUGIN_IPTABLES_TRUE@LoadPlugin iptables
+#@BUILD_PLUGIN_IPVS_TRUE@LoadPlugin ipvs
+#@BUILD_PLUGIN_IRQ_TRUE@LoadPlugin irq
+#@BUILD_PLUGIN_JAVA_TRUE@LoadPlugin java
+@BUILD_PLUGIN_LOAD_TRUE@@BUILD_PLUGIN_LOAD_TRUE@LoadPlugin load
+#@BUILD_PLUGIN_LPAR_TRUE@LoadPlugin lpar
+#@BUILD_PLUGIN_LVM_TRUE@LoadPlugin lvm
+#@BUILD_PLUGIN_MADWIFI_TRUE@LoadPlugin madwifi
+#@BUILD_PLUGIN_MBMON_TRUE@LoadPlugin mbmon
+#@BUILD_PLUGIN_MD_TRUE@LoadPlugin md
+#@BUILD_PLUGIN_MEMCACHEC_TRUE@LoadPlugin memcachec
+#@BUILD_PLUGIN_MEMCACHED_TRUE@LoadPlugin memcached
+@BUILD_PLUGIN_MEMORY_TRUE@@BUILD_PLUGIN_MEMORY_TRUE@LoadPlugin memory
+#@BUILD_PLUGIN_MIC_TRUE@LoadPlugin mic
+#@BUILD_PLUGIN_MODBUS_TRUE@LoadPlugin modbus
+#@BUILD_PLUGIN_MQTT_TRUE@LoadPlugin mqtt
+#@BUILD_PLUGIN_MULTIMETER_TRUE@LoadPlugin multimeter
+#@BUILD_PLUGIN_MYSQL_TRUE@LoadPlugin mysql
+#@BUILD_PLUGIN_NETAPP_TRUE@LoadPlugin netapp
+#@BUILD_PLUGIN_NETLINK_TRUE@LoadPlugin netlink
+@LOAD_PLUGIN_NETWORK@LoadPlugin network
+#@BUILD_PLUGIN_NFS_TRUE@LoadPlugin nfs
+#@BUILD_PLUGIN_NGINX_TRUE@LoadPlugin nginx
+#@BUILD_PLUGIN_NOTIFY_DESKTOP_TRUE@LoadPlugin notify_desktop
+#@BUILD_PLUGIN_NOTIFY_EMAIL_TRUE@LoadPlugin notify_email
+#@BUILD_PLUGIN_NTPD_TRUE@LoadPlugin ntpd
+#@BUILD_PLUGIN_NUMA_TRUE@LoadPlugin numa
+#@BUILD_PLUGIN_NUT_TRUE@LoadPlugin nut
+#@BUILD_PLUGIN_OLSRD_TRUE@LoadPlugin olsrd
+#@BUILD_PLUGIN_ONEWIRE_TRUE@LoadPlugin onewire
+#@BUILD_PLUGIN_OPENLDAP_TRUE@LoadPlugin openldap
+#@BUILD_PLUGIN_OPENVPN_TRUE@LoadPlugin openvpn
+#@BUILD_PLUGIN_ORACLE_TRUE@LoadPlugin oracle
+#@BUILD_PLUGIN_PERL_TRUE@LoadPlugin perl
+#@BUILD_PLUGIN_PINBA_TRUE@LoadPlugin pinba
+#@BUILD_PLUGIN_PING_TRUE@LoadPlugin ping
+#@BUILD_PLUGIN_POSTGRESQL_TRUE@LoadPlugin postgresql
+#@BUILD_PLUGIN_POWERDNS_TRUE@LoadPlugin powerdns
+#@BUILD_PLUGIN_PROCESSES_TRUE@LoadPlugin processes
+#@BUILD_PLUGIN_PROTOCOLS_TRUE@LoadPlugin protocols
+#@BUILD_PLUGIN_PYTHON_TRUE@LoadPlugin python
+#@BUILD_PLUGIN_REDIS_TRUE@LoadPlugin redis
+#@BUILD_PLUGIN_ROUTEROS_TRUE@LoadPlugin routeros
+#@BUILD_PLUGIN_RRDCACHED_TRUE@LoadPlugin rrdcached
+@LOAD_PLUGIN_RRDTOOL@LoadPlugin rrdtool
+#@BUILD_PLUGIN_SENSORS_TRUE@LoadPlugin sensors
+#@BUILD_PLUGIN_SERIAL_TRUE@LoadPlugin serial
+#@BUILD_PLUGIN_SIGROK_TRUE@LoadPlugin sigrok
+#@BUILD_PLUGIN_SMART_TRUE@LoadPlugin smart
+#@BUILD_PLUGIN_SNMP_TRUE@LoadPlugin snmp
+#@BUILD_PLUGIN_STATSD_TRUE@LoadPlugin statsd
+#@BUILD_PLUGIN_SWAP_TRUE@LoadPlugin swap
+#@BUILD_PLUGIN_TABLE_TRUE@LoadPlugin table
+#@BUILD_PLUGIN_TAIL_TRUE@LoadPlugin tail
+#@BUILD_PLUGIN_TAIL_CSV_TRUE@LoadPlugin tail_csv
+#@BUILD_PLUGIN_TAPE_TRUE@LoadPlugin tape
+#@BUILD_PLUGIN_TCPCONNS_TRUE@LoadPlugin tcpconns
+#@BUILD_PLUGIN_TEAMSPEAK2_TRUE@LoadPlugin teamspeak2
+#@BUILD_PLUGIN_TED_TRUE@LoadPlugin ted
+#@BUILD_PLUGIN_THERMAL_TRUE@LoadPlugin thermal
+#@BUILD_PLUGIN_TOKYOTYRANT_TRUE@LoadPlugin tokyotyrant
+#@BUILD_PLUGIN_TURBOSTAT_TRUE@LoadPlugin turbostat
+#@BUILD_PLUGIN_UNIXSOCK_TRUE@LoadPlugin unixsock
+#@BUILD_PLUGIN_UPTIME_TRUE@LoadPlugin uptime
+#@BUILD_PLUGIN_USERS_TRUE@LoadPlugin users
+#@BUILD_PLUGIN_UUID_TRUE@LoadPlugin uuid
+#@BUILD_PLUGIN_VARNISH_TRUE@LoadPlugin varnish
+#@BUILD_PLUGIN_VIRT_TRUE@LoadPlugin virt
+#@BUILD_PLUGIN_VMEM_TRUE@LoadPlugin vmem
+#@BUILD_PLUGIN_VSERVER_TRUE@LoadPlugin vserver
+#@BUILD_PLUGIN_WIRELESS_TRUE@LoadPlugin wireless
+#@BUILD_PLUGIN_WRITE_GRAPHITE_TRUE@LoadPlugin write_graphite
+#@BUILD_PLUGIN_WRITE_HTTP_TRUE@LoadPlugin write_http
+#@BUILD_PLUGIN_WRITE_KAFKA_TRUE@LoadPlugin write_kafka
+#@BUILD_PLUGIN_WRITE_LOG_TRUE@LoadPlugin write_log
+#@BUILD_PLUGIN_WRITE_MONGODB_TRUE@LoadPlugin write_mongodb
+#@BUILD_PLUGIN_WRITE_REDIS_TRUE@LoadPlugin write_redis
+#@BUILD_PLUGIN_WRITE_RIEMANN_TRUE@LoadPlugin write_riemann
+#@BUILD_PLUGIN_WRITE_SENSU_TRUE@LoadPlugin write_sensu
+#@BUILD_PLUGIN_WRITE_TSDB_TRUE@LoadPlugin write_tsdb
+#@BUILD_PLUGIN_XMMS_TRUE@LoadPlugin xmms
+#@BUILD_PLUGIN_ZFS_ARC_TRUE@LoadPlugin zfs_arc
+#@BUILD_PLUGIN_ZONE_TRUE@LoadPlugin zone
+#@BUILD_PLUGIN_ZOOKEEPER_TRUE@LoadPlugin zookeeper
 
 ##############################################################################
 # Plugin configuration                                                       #
@@ -217,25 +217,25 @@ LoadPlugin write_log
 # ription of those options is available in the collectd.conf(5) manual page. #
 ##############################################################################
 
-<Plugin aggregation>
-  <Aggregation>
-    #Host "unspecified"
-    Plugin "cpu"
-    #PluginInstance "unspecified"
-    Type "cpu"
-    #TypeInstance "unspecified"
-
-    GroupBy "Host"
-    GroupBy "TypeInstance"
-
-    CalculateNum true
-    CalculateSum true
-    CalculateAverage true
+#<Plugin aggregation>
+#  <Aggregation>
+#    #Host "unspecified"
+#    Plugin "cpu"
+#    #PluginInstance "unspecified"
+#    Type "cpu"
+#    #TypeInstance "unspecified"
+#
+#    GroupBy "Host"
+#    GroupBy "TypeInstance"
+#
+#    CalculateNum false
+#    CalculateSum false
+#    CalculateAverage true
 #    CalculateMinimum false
 #    CalculateMaximum false
 #    CalculateStddev false
-  </Aggregation>
-</Plugin>
+#  </Aggregation>
+#</Plugin>
 
 #<Plugin amqp>
 #  <Publish "name">
@@ -265,6 +265,7 @@ LoadPlugin write_log
 #	Host "localhost"
 #	Port "3551"
 #	ReportSeconds true
+#	PersistentConnection true
 #</Plugin>
 
 #<Plugin aquaero>
@@ -335,14 +336,14 @@ LoadPlugin write_log
 #  IgnoreSelected false
 #</Plugin>
 
-<Plugin cpu>
-  ReportByCpu true
-  ReportByState true
-  ValuesPercentage true
-</Plugin>
+#<Plugin cpu>
+#  ReportByCpu true
+#  ReportByState true
+#  ValuesPercentage false
+#</Plugin>
 #
 #<Plugin csv>
-#	DataDir "${prefix}/var/lib/collectd/csv"
+#	DataDir "@localstatedir@/lib/@PACKAGE_NAME@/csv"
 #	StoreRates false
 #</Plugin>
 
@@ -479,11 +480,10 @@ LoadPlugin write_log
 #	</Database>
 #</Plugin>
 
-<Plugin df>
-	Device "/dev/sda1"
-        Device "/dev/sda2"
+#<Plugin df>
+#	Device "/dev/hda1"
 #	Device "192.168.0.2:/mnt/nfs"
-	MountPoint "/"
+#	MountPoint "/home"
 #	FSType "ext3"
 #	IgnoreSelected false
 #	ReportByDevice false
@@ -491,14 +491,14 @@ LoadPlugin write_log
 #	ReportInodes false
 #	ValuesAbsolute true
 #	ValuesPercentage false
-</Plugin>
+#</Plugin>
 
-<Plugin disk>
-	Disk "/^[hs]d[a-f][0-9]?$/"
-	IgnoreSelected false
-	#UseBSDName false
-	#UdevNameAttr "DEVNAME"
-</Plugin>
+#<Plugin disk>
+#	Disk "/^[hs]d[a-f][0-9]?$/"
+#	IgnoreSelected false
+#	UseBSDName false
+#	UdevNameAttr "DEVNAME"
+#</Plugin>
 
 #<Plugin dns>
 #	Interface "eth0"
@@ -507,7 +507,7 @@ LoadPlugin write_log
 #</Plugin>
 
 #<Plugin email>
-#	SocketFile "${prefix}/var/run/collectd-email"
+#	SocketFile "@localstatedir@/run/@PACKAGE_NAME@-email"
 #	SocketGroup "collectd"
 #	SocketPerms "0770"
 #	MaxConns 5
@@ -520,10 +520,10 @@ LoadPlugin write_log
 #	MappedOnly false
 #</Plugin>
 
-<Plugin exec>
-	#Exec "mapr:mapr"  "${prefix}/exec-mfs-plugin.sh"
-        Exec "mapr:mapr"  "${prefix}/exec-volume-plugin.sh"
-</Plugin>
+#<Plugin exec>
+#	Exec "user:group" "/path/to/exec"
+#	NotificationExec "user:group" "/path/to/exec"
+#</Plugin>
 
 #<Plugin fhcount>
 #	ValuesAbsolute true
@@ -560,10 +560,10 @@ LoadPlugin write_log
 #  Port "7634"
 #</Plugin>
 
-<Plugin interface>
-	Interface "eth0"
-	IgnoreSelected false
-</Plugin>
+#<Plugin interface>
+#	Interface "eth0"
+#	IgnoreSelected false
+#</Plugin>
 
 #<Plugin ipmi>
 #	Sensor "some_sensor"
@@ -585,195 +585,15 @@ LoadPlugin write_log
 #	IgnoreSelected true
 #</Plugin>
 
-### **** MAPR_CONF_TAG: MAPR CONFIGURATION - DO NOT EDIT or REMOVE TAG/BLOCK ***
 #<Plugin java>
-#	JVMArg "-Djava.class.path=/opt/mapr/collectd/share/collectd/java/collectd-api.jar:/root/collectd-fast-jmx/target/fast-jmx-1.1-SNAPSHOT.jar"  
-#   
-#  LoadPlugin "org.collectd.FastJMX"
+#	JVMArg "-verbose:jni"
+#	JVMArg "-Djava.class.path=@prefix@/share/collectd/java/collectd-api.jar"
 #
-#  <Plugin "FastJMX">
-#    ForceLoggingTo INFO
-#    LogLevel FINEST
-#    MaxThreads 256
-#    
-#    <MBean "QueueMetrics">
-#      ObjectName "Hadoop:service=ResourceManager,name=QueueMetrics,q0=root" 
-#      InstancePrefix "resourcemanager"
-#    
-#      <Value "AppsRunning">
-#        Type "apps-running"
-#        InstancePrefix "default-queue"
-#      </Value>
-#
-#      <Value "ActiveApplications">
-#        Type "active-applications"
-#        InstancePrefix "default-queue"
-#      </Value>
-#      
-#      <Value "ActiveUsers">
-#        Type "active-users"
-#        InstancePrefix "default-queue"
-#      </Value>
-#      
-#      <Value "AggregateContainersAllocated">
-#        Type "aggregate-containers-allocated"
-#        InstancePrefix "default-queue"
-#      </Value>
-#      
-#      <Value "AggregateContainersReleased">
-#        Type "aggregate-containers-released"
-#        InstancePrefix "default-queue"
-#      </Value>
-#      
-#      <Value "AllocatedMB">
-#        Type "allocated-MB"
-#        InstancePrefix "default-queue"
-#      </Value>
-#      
-#      <Value "AppsCompleted">
-#        Type "apps-completed"
-#        InstancePrefix "default-queue"
-#      </Value>
-#      
-#      <Value "AppsFailed">
-#        Type "apps-failed"
-#        InstancePrefix "default-queue"
-#      </Value>
-#      
-#      <Value "AppsPending">
-#        Type "apps-pending"
-#        InstancePrefix "default-queue"
-#      </Value>
-#      
-#      <Value "AppsSubmitted">
-#        Type "apps-submitted"
-#        InstancePrefix "default-queue"
-#      </Value>
-#      
-#      <Value "AvailableMB">
-#        Type "available-MB"
-#        InstancePrefix "default-queue"
-#      </Value>
-#      
-#      <Value "AllocatedVCores">
-#        Type "allocated-vcores"
-#        InstancePrefix "default-queue"
-#      </Value>
-#      
-#      <Value "AvailableVCores">
-#        Type "available-vcores"
-#        InstancePrefix "default-queue"
-#      </Value>
-#      
-#      <Value "PendingContainers">
-#        Type "pending-containers"
-#        InstancePrefix "default-queue"
-#      </Value>
-#      
-#      <Value "PendingMB">
-#        Type "pending-MB"
-#        InstancePrefix "default-queue"
-#      </Value>
-#      
-#      <Value "PendingVCores">
-#        Type "pending-vcores"
-#        InstancePrefix "default-queue"
-#      </Value>
-#      
-#      <Value "ReservedContainers">
-#        Type "reserved-containers"
-#        InstancePrefix "default-queue"
-#      </Value>
-#      
-#      <Value "ReservedMB">
-#        Type "reserved-MB"
-#        InstancePrefix "default-queue"
-#      </Value>
-#      
-#      <Value "ReservedVCores">
-#        Type "reserved-vcores"
-#        InstancePrefix "default-queue"
-#      </Value>
-#      
-#    </MBean>
-#    
-#    <MBean "NodeManagerMetrics">
-#       InstancePrefix "nodemanager"
-#       ObjectName "Hadoop:service=NodeManager,name=NodeManagerMetrics"
-#       <Value "ContainersLaunched">
-#          Type "containers-launched"
-#          InstancePrefix "default-queue"
-#       </Value>
-#       
-#      <Value "ContainersKilled">
-#        Type "containers-killed"
-#        InstancePrefix "default-queue"
-#      </Value>
-#      
-#      <Value "AllocatedContainers">
-#          Type "allocated-containers"
-#	  InstancePrefix "default-queue"
-#       </Value>
-#       
-#      <Value "AllocatedGB">
-#        Type "allocated-GB"
-#	InstancePrefix "default-queue"
-#      </Value>
-#      
-#      <Value "AllocatedVCores">
-#          Type "allocated-vcores"
-#	  InstancePrefix "default-queue"
-#       </Value>
-#       
-#      <Value "AvailableGB">
-#        Type "available-GB"
-#	InstancePrefix "default-queue"
-#      </Value>
-#      
-#      <Value "AvailableVCores">
-#          Type "available-GB"
-#	  InstancePrefix "default-queue"
-#       </Value>
-#       
-#      <Value "ContainersCompleted">
-#        Type "containers-completed"
-#	InstancePrefix "default-queue"
-#      </Value>
-#      
-#      <Value "ContainersFailed">
-#          Type "containers-failed"
-#	  InstancePrefix "default-queue"
-#       </Value>
-#       
-#      <Value "ContainersIniting">
-#        Type "containers-initing"
-# 	InstancePrefix "default-queue"
-#      </Value>
-#      
-#      <Value "ContainersRunning">
-#          Type "containers-running"
-#	  InstancePrefix "default-queue"
-#       </Value>
-#       
-#    </MBean> 
-#
-#### **** MAPR_CONN_CONF_TAG: 
-#    <Connection>
-#      ServiceURL "service:jmx:rmi:///jndi/rmi://10.10.88.96:8025/jmxrmi"
-#      #IncludePortInHostname true
-#      Collect "QueueMetrics"
-#    </Connection>
-#  
-#    <Connection>
-#      ServiceURL "service:jmx:rmi:///jndi/rmi://10.10.88.96:8027/jmxrmi"
-#      #IncludePortInHostname true
-#      Collect "NodeManagerMetrics"
-#    </Connection>
-#### **** MAPR_CONN_CONF_TAG_END: 
-#
-#  </Plugin>
+#	LoadPlugin "org.collectd.java.Foobar"
+#	<Plugin "org.collectd.java.Foobar">
+#	  # To be parsed by the plugin
+#	</Plugin>
 #</Plugin>
-### **** MAPR_CONF_TAG_END: MAPR CONFIGURATION - DO NOT EDIT or REMOVE TAG *** 
 
 #<Plugin load>
 #        ReportRelative true
@@ -957,16 +777,16 @@ LoadPlugin write_log
 #	IgnoreSelected false
 #</Plugin>
 
-#<Plugin network>
+@LOAD_PLUGIN_NETWORK@<Plugin network>
 #	# client setup:
-#	Server "ff18::efc0:4a42" "25826"
-#	<Server "239.192.74.66" "25826">
+@LOAD_PLUGIN_NETWORK@	Server "ff18::efc0:4a42" "25826"
+@LOAD_PLUGIN_NETWORK@	<Server "239.192.74.66" "25826">
 #		SecurityLevel Encrypt
 #		Username "user"
 #		Password "secret"
 #		Interface "eth0"
 #		ResolveInterval 14400
-#	</Server>
+@LOAD_PLUGIN_NETWORK@	</Server>
 #	TimeToLive 128
 #
 #	# server setup:
@@ -986,7 +806,7 @@ LoadPlugin write_log
 #
 #	# "garbage collection"
 #	CacheFlush 1800
-#</Plugin>
+@LOAD_PLUGIN_NETWORK@</Plugin>
 
 #<Plugin nginx>
 #	URL "http://localhost/status?auto"
@@ -1170,7 +990,7 @@ LoadPlugin write_log
 #    Collect "cache-hits" "cache-misses"
 #    Socket "/var/run/pdns_recursor.controlsocket"
 #  </Recursor>
-#  LocalSocket "${prefix}/var/run/collectd-powerdns"
+#  LocalSocket "/opt/collectd/var/run/collectd-powerdns"
 #</Plugin>
 
 #<Plugin processes>
@@ -1218,22 +1038,22 @@ LoadPlugin write_log
 
 #<Plugin rrdcached>
 #	DaemonAddress "unix:/tmp/rrdcached.sock"
-#	DataDir "${prefix}/var/lib/collectd/rrd"
+#	DataDir "@localstatedir@/lib/@PACKAGE_NAME@/rrd"
 #	CreateFiles true
 #	CreateFilesAsync false
 #	CollectStatistics true
 #</Plugin>
 
-<Plugin rrdtool>
-	DataDir "${prefix}/var/lib/collectd/rrd"
-	CreateFilesAsync false
-	CacheTimeout 120
-	CacheFlush   900
-	WritesPerSecond 50
-</Plugin>
+#<Plugin rrdtool>
+#	DataDir "@localstatedir@/lib/@PACKAGE_NAME@/rrd"
+#	CreateFilesAsync false
+#	CacheTimeout 120
+#	CacheFlush   900
+#	WritesPerSecond 50
+#</Plugin>
 
 #<Plugin sensors>
-#	SensorConfigFile "${prefix}/etc/sensors.conf"
+#	SensorConfigFile "/etc/sensors.conf"
 #	Sensor "it8712-isa-0290/temperature-temp1"
 #	Sensor "it8712-isa-0290/fanspeed-fan3"
 #	Sensor "it8712-isa-0290/voltage-in8"
@@ -1438,7 +1258,7 @@ LoadPlugin write_log
 #</Plugin>
 
 #<Plugin unixsock>
-#	SocketFile "${prefix}/var/run/collectd-unixsock"
+#	SocketFile "@prefix@/var/run/@PACKAGE_NAME@-unixsock"
 #	SocketGroup "collectd"
 #	SocketPerms "0660"
 #	DeleteSocket false
@@ -1508,9 +1328,9 @@ LoadPlugin write_log
 #	PluginInstanceFormat name
 #</Plugin>
 
-<Plugin vmem>
- Verbose false
-</Plugin>
+#<Plugin vmem>
+#	Verbose false
+#</Plugin>
 
 #<Plugin write_graphite>
 #  <Node "example">
@@ -1571,6 +1391,7 @@ LoadPlugin write_log
 #		Host "localhost"
 #		Port "6379"
 #		Timeout 1000
+#		Prefix "collectd/"
 #	</Node>
 #</Plugin>
 
@@ -1610,18 +1431,15 @@ LoadPlugin write_log
 #	Attribute "foo" "bar"
 #</Plugin>
 
-
-### **** MAPR_CONF_TAG: MAPR CONFIGURATION - DO NOT EDIT or REMOVE TAG/BLOCK ***
 #<Plugin write_tsdb>
 #	<Node>
 #		Host "localhost"
 #		Port "4242"
 #		HostTags "status=production"
-#		StoreRates true
+#		StoreRates false
 #		AlwaysAppendDS false
 #	</Node>
 #</Plugin>
-### **** MAPR_CONF_END_TAG: MAPR CONFIGURATION - DO NOT EDIT or REMOVE TAG *** 
 
 #<Plugin zookeeper>
 #    Host "localhost"
@@ -1637,37 +1455,26 @@ LoadPlugin write_log
 ##############################################################################
 
 # Load required matches:
-#LoadPlugin match_empty_counter
-#LoadPlugin match_hashed
-LoadPlugin match_regex
-#LoadPlugin match_value
-#LoadPlugin match_timediff
+#@BUILD_PLUGIN_MATCH_EMPTY_COUNTER_TRUE@LoadPlugin match_empty_counter
+#@BUILD_PLUGIN_MATCH_HASHED_TRUE@LoadPlugin match_hashed
+#@BUILD_PLUGIN_MATCH_REGEX_TRUE@LoadPlugin match_regex
+#@BUILD_PLUGIN_MATCH_VALUE_TRUE@LoadPlugin match_value
+#@BUILD_PLUGIN_MATCH_TIMEDIFF_TRUE@LoadPlugin match_timediff
 
 # Load required targets:
-#LoadPlugin target_notification
-#LoadPlugin target_replace
-#LoadPlugin target_scale
-#LoadPlugin target_set
-#LoadPlugin target_v5upgrade
+#@BUILD_PLUGIN_TARGET_NOTIFICATION_TRUE@LoadPlugin target_notification
+#@BUILD_PLUGIN_TARGET_REPLACE_TRUE@LoadPlugin target_replace
+#@BUILD_PLUGIN_TARGET_SCALE_TRUE@LoadPlugin target_scale
+#@BUILD_PLUGIN_TARGET_SET_TRUE@LoadPlugin target_set
+#@BUILD_PLUGIN_TARGET_V5UPGRADE_TRUE@LoadPlugin target_v5upgrade
 
 #----------------------------------------------------------------------------#
 # The following block demonstrates the default behavior if no filtering is   #
 # configured at all: All values will be sent to all available write plugins. #
 #----------------------------------------------------------------------------#
 
-# Comment out for now to see both aggregates and individual cores
 #<Chain "PostCache">
 #  Target "write"
-#  <Rule> # Send "cpu" values to the aggregation plugin.
-#    <Match regex>
-#      Plugin "^cpu$"
-#      PluginInstance "^[0-9]+$"
-#    </Match>
-#    <Target write>
-#      Plugin "aggregation"
-#    </Target>
-#    Target stop
-#  </Rule>
 #</Chain>
 
 ##############################################################################
@@ -1678,7 +1485,7 @@ LoadPlugin match_regex
 # the collectd-threshold(5) manual page.                                     #
 ##############################################################################
 
-#LoadPlugin "threshold"
+#@BUILD_PLUGIN_THRESHOLD_TRUE@LoadPlugin "threshold"
 #<Plugin threshold>
 #  <Type "foo">
 #    WarningMin    0.00

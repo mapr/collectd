@@ -1368,11 +1368,13 @@ endif
 all-local: check-conf-changes
 
 check-conf-changes: $(srcdir)/collectd.conf
-	- diff -u $(srcdir)/collectd.conf $(srcdir)/../ext-conf/collectd.conf | sed -e 's/^[-+][-+][-+] .*$$//' > $(srcdir)/collectd.conf.mapr.diff
-	- cat $(srcdir)/../ext-conf/collectd.conf.mapr.diff | sed -e 's/^[-+][-+][-+] .*$$//' > $(srcdir)/collectd.conf.mapr.orig.diff
-	if ! diff -q $(srcdir)/collectd.conf.mapr.diff $(srcdir)/collectd.conf.mapr.orig.diff  ; \
+	if ! diff -q $(srcdir)/collectd.conf.in $(srcdir)/../ext-conf/collectd.conf.in.change_detect  ; \
 	then \
 		echo "Collectd.conf has changes - update the mapr version accordingly"; \
+		echo "and copy src/collectd.conf.in to ext-conf/collectd.conf.in.change_detect" ; \
+		echo "so we can detect the next time it changes" ; \
+		echo "Keep in mind that the plugins gets auto-enabled based on" ; \
+		echo "what is installed on the build machine" ; \
 		exit 1; \
 	fi; 
 
