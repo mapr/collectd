@@ -10,11 +10,15 @@
 # 
 # TODO: add support to tweak other collection facilities, like disk, fs, network
 # TODO: Need to add support to clean up old copies
+#
+# __INSTALL__ gets expanded to /opt/mapr/collectd/collectd-5.5 during pakcaging
+# set COLLECTD_HOME explicitly if running this in a source built env.
 #############################################################################
 
-COLLECTD_HOME={-:/opt/mapr/collect/${__INSTALL__}}
-CONF_FILE={-:${COLLECTD_HOME}/etc/collectd.conf}
+COLLECTD_HOME=${COLLECTD_HOME:-__INSTALL__}
+CONF_FILE=${CONF_FILE:-${COLLECTD_HOME}/etc/collectd.conf}
 CONF_FILE_SAVE_AGE="30"
+AWKLIBPATH=${AWKLIBPATH:-$COLLECTD_HOME/lib/awk}
 NOW=`date "+%Y%m%d_%H%M%S"`
 exit 0
 
@@ -24,7 +28,7 @@ exit 0
 function enableSection
 {
    # $1 is the sectionTag prefix we will use to determine section to uncomment  
-   cat ${CONF_FILE} | awk -f ${COLLECTD_HOME}/bin/uncommentSection.awk -v tag="$1" > ${CONF_FILE}.new
+   cat ${CONF_FILE} | awk -f ${AWKLIBPATH}/uncommentSection.awk -v tag="$1" > ${CONF_FILE}.new
    if [[ $? -eq 0 ]] ; then
       mv ${CONF_FILE} ${CONF_FILE}.${NOW}
       mv ${CONF_FILE}.new ${CONF_FILE}
@@ -37,7 +41,7 @@ function enableSection
 function disableSection
 {
    # $1 is the sectionTag prefix we will use to determine section to comment out
-   cat ${CONF_FILE} | awk -f ${COLLECTD_HOME}/bin/commentOutSection.awk -v tag="$1" > ${CONF_FILE}.new
+   cat ${CONF_FILE} | awk -f ${AWKLIBPATH}/commentOutSection.awk -v tag="$1" > ${CONF_FILE}.new
    if [[ $? -eq 0 ]] ; then
       mv ${CONF_FILE} ${CONF_FILE}.${NOW}
       mv ${CONF_FILE}.new ${CONF_FILE}
@@ -50,7 +54,7 @@ function disableSection
 function removeSection
 {
    # $1 is the sectionTag prefix we will use to determine section to remove
-   cat ${CONF_FILE} | awk -f ${COLLECTD_HOME}/bin/removeSection.awk -v tag="$1" > ${CONF_FILE}.new
+   cat ${CONF_FILE} | awk -f ${AWKLIBPATH}/removeSection.awk -v tag="$1" > ${CONF_FILE}.new
    if [[ $? -eq 0 ]] ; then
       mv ${CONF_FILE} ${CONF_FILE}.${NOW}
       mv ${CONF_FILE}.new ${CONF_FILE}
@@ -64,7 +68,7 @@ function fillSection
    # $1 is the sectionTag prefix we will use to determine section to replace
    # $2 is the file containing the new content of the section
    removeSection $1
-   cat ${CONF_FILE} | awk -f ${COLLECTD_HOME}/bin/replaceSection.awk -v tag="$1" -v newSectionContentFile="$2" > ${CONF_FILE}.new
+   cat ${CONF_FILE} | awk -f ${AWKLIBPATH}/replaceSection.awk -v tag="$1" -v newSectionContentFile="$2" > ${CONF_FILE}.new
    if [[ $? -eq 0 ]] ; then
       mv ${CONF_FILE} ${CONF_FILE}.${NOW}
       mv ${CONF_FILE}.new ${CONF_FILE}
