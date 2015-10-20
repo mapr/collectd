@@ -42,6 +42,19 @@ SCRIPTNAME=/etc/init.d/$NAME
 . /lib/lsb/init-functions
 
 #
+# Load the mapr environment:
+#
+.  /opt/mapr/conf/env.sh
+
+#
+# Now add to LD_LIBRARY_PATH the path to libjvm.so
+#
+# XXX: Need to use a variable for the architecture
+#
+export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${JAVA_HOME}/jre/lib/amd64/server
+
+
+#
 # Function that starts the daemon/service
 #
 do_start()
