@@ -17,7 +17,7 @@
 # Do NOT "set -e"
 
 # PATH should only include /usr/* if it runs after the mountnfs.sh script
-COLLECTD_HOME="/opt/mapr/collectd"
+COLLECTD_HOME="__INSTALL__"
 PATH=/sbin:/usr/sbin:/bin:/usr/bin:${COLLECTD_HOME}/sbin:${COLLECTD_HOME}/collectd/bin
 DESC="Statistics daemon collectd"
 NAME=collectd
@@ -50,6 +50,7 @@ SCRIPTNAME=/etc/init.d/$NAME
 # Now add to LD_LIBRARY_PATH the path to libjvm.so
 #
 # XXX: Need to use a variable for the architecture
+# XXX: Need to use a variable for /opt/mapr - __xx__
 #
 export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${JAVA_HOME}/jre/lib/amd64/server
 

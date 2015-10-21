@@ -16,9 +16,10 @@ RETVAL=0
 ARGS=""
 prog="collectdmon"
 service="collectd"
-CONFIG=/etc/collectd.conf
-COLLECTD=/usr/sbin/collectd
-COLLECTDMONPIDDIR="/var/run"
+COLLECTD_HOME="__INSTALL__"
+CONFIG="${COLLECTD_HOME}/etc/collectd.conf"
+COLLECTD="${COLLECTD_HOME}/usr/sbin/collectd"
+COLLECTDMONPIDDIR="${COLLECTD_HOME}/var/run"
 COLLECTDMONPID="$COLLECTDMONPIDDIR/collectdmon.pid"
 
 MAXWAIT=30
@@ -36,6 +37,7 @@ fi
 # Now add to LD_LIBRARY_PATH the path to libjvm.so
 #
 # XXX: Need to use a variable for the architecture
+# XXX: Need to use a variable for /opt/mapr -- __xx__
 #
 export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${JAVA_HOME}/jre/lib/amd64/server
 
