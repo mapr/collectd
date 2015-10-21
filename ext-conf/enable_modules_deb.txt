@@ -27,6 +27,7 @@
 --enable-java
 --enable-load
 --enable-logfile
+--enable-lvm
 --enable-madwifi
 --enable-match_empty_counter
 --enable-match_hashed
