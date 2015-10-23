@@ -232,7 +232,52 @@ vs_threads		value:GAUGE:0:65535
 # MapR specific types
 #
 #
-# ResourceManager    
+
+# GUTS
+appendrpcs        value:COUNTER:U:U
+getcurrpcs        value:COUNTER:U:U
+getrpcrows        value:COUNTER:U:U
+getrpcs        value:COUNTER:U:U
+putcurrpcs        value:COUNTER:U:U
+putrpcrows        value:COUNTER:U:U
+putrpcs        value:COUNTER:U:U
+scancurrpcs        value:COUNTER:U:U
+scanrpcrows        value:COUNTER:U:U
+scanrpcs        value:COUNTER:U:U
+valuecachehits   value:COUNTER:U:U
+valuecachelookups   value:COUNTER:U:U
+valuecacheusedSize   value:COUNTER:U:U
+updateandgetrpcs   value:COUNTER:U:U
+bulkwrites         value:COUNTER:U:U
+bulkwritesbytes         value:GAUGE:0:U
+kvstoredelete         value:COUNTER:U:U
+kvstoreinsert         value:COUNTER:U:U
+kvstorelookup         value:COUNTER:U:U
+kvstorescan         value:COUNTER:U:U
+localreadbytes         value:GAUGE:0:U
+localreads         value:COUNTER:U:U
+localwritebytes         value:GAUGE:0:U
+localwrites         value:COUNTER:U:U
+readbytes         value:GAUGE:0:U
+readcachehits         value:COUNTER:U:U
+readcachemisses         value:COUNTER:U:U
+reads         value:COUNTER:U:U
+statstypecreate         value:COUNTER:U:U
+statstypelookup         value:COUNTER:U:U
+statstyperead        value:COUNTER:U:U
+statstypewrite         value:COUNTER:U:U
+writes         value:COUNTER:U:U
+writebytes         value:GAUGE:0:U
+callsrecd         value:COUNTER:U:U
+bytesrecd         value:GAUGE:0:U
+bytessent         value:GAUGE:0:U
+percentidle         value:GAUGE:0:100.1
+percentbusy         value:GAUGE:0:100.1
+percentsystem         value:GAUGE:0:100.1
+percentnice       value:GAUGE:0:100.1
+percentuser         value:GAUGE:0:100.1
+
+# ResourceManager
 apps-running        value:COUNTER:U:U
 active-applications     value:COUNTER:U:U
 active-users        value:COUNTER:U:U
@@ -255,17 +300,16 @@ reserved-vcores     value:COUNTER:U:U
 
 # NodeManager
 containers-launched     value:COUNTER:U:U
-containers-killed       value:COUNTER:U:U 
+containers-killed       value:COUNTER:U:U
 allocated-containers        value:COUNTER:U:U
 allocated-GB        value:COUNTER:U:U
-allocated-vcores        value:COUNTER:U:U
 available-GB        value:COUNTER:U:U
-available-vcores        value:COUNTER:U:U
 containers-completed        value:COUNTER:U:U
 containers-failed       value:COUNTER:U:U
 containers-initing      value:COUNTER:U:U
 containers-running      value:COUNTER:U:U
 
+#
 # Legacy types
 # (required for the v5 upgrade target)
 #
