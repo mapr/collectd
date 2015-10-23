@@ -14,13 +14,13 @@
 
 RETVAL=0
 ARGS=""
-prog="collectdmon"
+prog="collectd"
 service="collectd"
 COLLECTD_HOME="__INSTALL__"
 CONFIG="${COLLECTD_HOME}/etc/collectd.conf"
-COLLECTD="${COLLECTD_HOME}/usr/sbin/collectd"
-COLLECTDMONPIDDIR="${COLLECTD_HOME}/var/run"
-COLLECTDMONPID="$COLLECTDMONPIDDIR/collectdmon.pid"
+COLLECTD="${COLLECTD_HOME}/sbin/collectd"
+COLLECTDPIDDIR="${COLLECTD_HOME}/var/run"
+COLLECTDPID="$COLLECTDPIDDIR/collectd.pid"
 
 MAXWAIT=30
 
@@ -43,9 +43,8 @@ export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${JAVA_HOME}/jre/lib/amd64/server
 
 
 
-if [[ ! -d $COLLECTDMONPIDDIR ]]; then
-	mkdir -p $COLLECTDMONPIDDIR
-	[ -n "${RUNAS}" ] && chown "${RUNAS}:" "$COLLECTDMONPIDDIR"
+if [[ ! -d $COLLECTDPIDDIR ]]; then
+	mkdir -p $COLLECTDPIDDIR
 fi
 
 check_config() {
@@ -67,19 +66,19 @@ start () {
 		echo $"not starting due to configuration error"
 		failure $"not starting $service due to configuration error"
 	else
-		daemon --user "${RUNAS:-root}" $prog -P $COLLECTDMONPID -c $COLLECTD -- -C "$CONFIG" $ARGS
+		daemon  $COLLECTD -P $COLLECTDPID -C "$CONFIG" $ARGS
 		RETVAL=$?
 		echo
-		[ $RETVAL -eq 0 ] && touch /var/lock/subsys/$service
+		[ $RETVAL -eq 0 ] && touch ${COLLECTD_HOME}/var/lock/$service
 	fi
 }
 
 stop () {
 	echo -n $"Stopping collectd: "
-	killproc -p $COLLECTDMONPID -d $MAXWAIT $prog
+	killproc -p $COLLECTDPID -d $MAXWAIT $prog
 	RETVAL=$?
 	echo
-	[ $RETVAL -eq 0 ] && rm -f /var/lock/subsys/$service
+	[ $RETVAL -eq 0 ] && rm -f ${COLLECTD_HOME}/var/lock/$service
 }
 
 restart () {
@@ -104,13 +103,13 @@ case "$1" in
 	stop
 	;;
   status)
-	status -p $COLLECTDMONPID $prog
+	status -p $COLLECTDPID $prog
 	;;
   restart|reload)
 	restart
 	;;
   condrestart)
-	[ -f /var/lock/subsys/$service ] && restart || :
+	[ -f ${COLLECTD_HOME}/var/lock/$service ] && restart || :
 	;;
   *)
 	echo $"Usage: $0 {start|stop|status|restart|reload|condrestart}"
