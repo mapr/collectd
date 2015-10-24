@@ -1,6 +1,7 @@
 --enable-aggregation
 --enable-apache
 --enable-apcups
+--enable-ascent
 --enable-battery
 --enable-bind
 --enable-cgroups
@@ -9,6 +10,9 @@
 --enable-cpu
 --enable-cpufreq
 --enable-csv
+--enable-curl
+--enable-curl_json
+--enable-curl_xml
 --enable-df
 --enable-disk
 --enable-drbd
@@ -27,6 +31,7 @@
 --enable-java
 --enable-load
 --enable-logfile
+--enable-log_logstash
 --enable-lvm
 --enable-madwifi
 --enable-match_empty_counter
@@ -42,11 +47,13 @@
 --enable-mysql
 --enable-network
 --enable-nfs
+--enable-nginx
 --enable-ntpd
 --enable-numa
 --enable-olsrd
 --enable-openldap
 --enable-openvpn
+--enable-perl
 --enable-powerdns
 --enable-processes
 --enable-protocols
@@ -80,6 +87,7 @@
 --enable-vserver
 --enable-wireless
 --enable-write_graphite
+--enable-write_http
 --enable-write_log
 --enable-write_sensu
 --enable-write_tsdb
