@@ -309,6 +309,28 @@ containers-failed       value:COUNTER:U:U
 containers-initing      value:COUNTER:U:U
 containers-running      value:COUNTER:U:U
 
+# CLDB
+cluster-memory-capacity value:COUNTER:U:U
+cluster-memory-used     value:COUNTER:U:U
+containers-unusable     value:COUNTER:U:U
+cluster-diskspace-used value:COUNTER:U:U
+cluster-cpubusy-percent value:COUNTER:U:U
+containers-created value:COUNTER:U:U
+nodes-in-cluster value:COUNTER:U:U
+containers value:COUNTER:U:U
+storage-pools-cluster value:COUNTER:U:U
+rpcs-failed value:COUNTER:U:U
+cluster-cpu-total value:COUNTER:U:U
+cluster-disk-capacity value:COUNTER:U:U
+rpc-received    value:COUNTER:U:U
+storage-pools-offline   value:COUNTER:U:U
+volumes value:COUNTER:U:U
+nodes-offline   value:COUNTER:U:U
+disk-space-available    value:COUNTER:U:U
+
+
+########## END MAPR TYPES ################
+
 #
 # Legacy types
 # (required for the v5 upgrade target)
