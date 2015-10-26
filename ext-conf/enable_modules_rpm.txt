@@ -58,7 +58,6 @@
 --enable-processes
 --enable-protocols
 --enable-python
---enable-rrdcached
 --enable-rrdtool
 --enable-sensors
 --enable-serial
