@@ -32,7 +32,6 @@
 --enable-load
 --enable-logfile
 --enable-log_logstash
---enable-lvm
 --enable-madwifi
 --enable-match_empty_counter
 --enable-match_hashed
