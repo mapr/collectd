@@ -1363,6 +1363,21 @@ riemann.pb-c.c riemann.pb-c.h: riemann.proto
 	protoc-c -I$(srcdir) --c_out . $(srcdir)/riemann.proto
 endif
 
+# add a check to warn if collectd.conf changes so we can update the 
+# mapr template..
+all-local: check-conf-changes
+
+check-conf-changes: $(srcdir)/collectd.conf
+	if ! diff -q $(srcdir)/collectd.conf.in $(srcdir)/../ext-conf/collectd.conf.in.change_detect  ; \
+	then \
+		echo "Collectd.conf has changes - update the mapr version accordingly"; \
+		echo "and copy src/collectd.conf.in to ext-conf/collectd.conf.in.change_detect" ; \
+		echo "so we can detect the next time it changes" ; \
+		echo "Keep in mind that the plugins gets auto-enabled based on" ; \
+		echo "what is installed on the build machine" ; \
+		exit 1; \
+	fi; 
+
 install-exec-hook:
 	$(mkinstalldirs) $(DESTDIR)$(sysconfdir)
 	if test -e $(DESTDIR)$(sysconfdir)/collectd.conf; \
