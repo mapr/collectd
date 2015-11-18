@@ -1,6 +1,6 @@
 #!/bin/bash
 HOSTNAME="${COLLECTD_HOSTNAME:-`hostname -f`}"
-INTERVAL="${COLLECTD_INTERVAL:-600}"
+INTERVAL="${COLLECTD_INTERVAL:-6000}"
 while sleep "$INTERVAL"
 do
  sleep $INTERVAL
@@ -18,7 +18,7 @@ do
         then
           metricname=`echo $output | sed 's/:.*//' | sed 's/[,"]//g'`
           used=`echo $output | sed 's/.*://' | sed 's/[,"]//g'`
-          echo "PUTVAL \"$HOSTNAME/volumemetrics.$volumename.$metricname/counter\" interval=$INTERVAL N:$used"
+          echo "PUTVAL \"$HOSTNAME/mapr.volume/$metricname-$volumename\" interval=$INTERVAL N:$used"
         fi
       done
     fi
