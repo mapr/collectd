@@ -15,7 +15,6 @@ cache_operation		value:DERIVE:0:U
 cache_ratio		value:GAUGE:0:100
 cache_result		value:DERIVE:0:U
 cache_size		value:GAUGE:0:U
-capacity	value:GAUGE:0:U
 ceph_bytes		value:GAUGE:U:U
 ceph_latency	value:GAUGE:U:U
 ceph_rate			value:DERIVE:0:U
@@ -298,6 +297,15 @@ pending-vcores      value:COUNTER:U:U
 reserved-containers     value:COUNTER:U:U
 reserved-MB     value:COUNTER:U:U
 reserved-vcores     value:COUNTER:U:U
+used-memory value:COUNTER:U:U
+used-disks value:COUNTER:U:U
+used-vcores value:COUNTER:U:U
+allocated-memory value:COUNTER:U:U
+allocated-disks value:COUNTER:U:U
+allocated-vcores value:COUNTER:U:U
+appmaster-used-memory value:COUNTER:U:U
+appmaster-used-disks value:COUNTER:U:U
+appmaster-used-vcores value:COUNTER:U:U
 
 # NodeManager
 containers-launched     value:COUNTER:U:U
@@ -329,9 +337,14 @@ volumes value:COUNTER:U:U
 nodes-offline   value:COUNTER:U:U
 disk-space-available    value:COUNTER:U:U
 
+# Volume
+logicalUsed value:COUNTER:U:U
+used        value:COUNTER:U:U
+snapshotused value:COUNTER:U:U
+totalused value:COUNTER:U:U
+
 
 ########## END MAPR TYPES ################
-
 #
 # Legacy types
 # (required for the v5 upgrade target)
