@@ -49,10 +49,22 @@ SCRIPTNAME=/etc/init.d/$NAME
 #
 # Now add to LD_LIBRARY_PATH the path to libjvm.so
 #
-# XXX: Need to use a variable for the architecture
 # XXX: Need to use a variable for /opt/mapr - __xx__
 #
-export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${JAVA_HOME}/jre/lib/amd64/server
+ARCH=`uname -m`
+J_ARCH=""
+case "${ARCH}" in
+   "x86_64") J_ARCH="amd64" ;;
+   *) echo "Unknown architecture - exiting " ; exit 1 ;;
+esac
+
+# XXX: hack to workaround a bug in /opt/mapr/conf/env.sh
+
+if [ "${JAVA_HOME##*/}" = "jre" ] ; then
+	export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${JAVA_HOME}/lib/${J_ARCH}/server
+else
+	export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${JAVA_HOME}/jre/lib/${J_ARCH}/server
+fi
 
 
 #
