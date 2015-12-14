@@ -289,7 +289,6 @@ apps_failed     value:COUNTER:U:U
 apps_pending        value:COUNTER:U:U
 apps_submitted      value:COUNTER:U:U
 available_MB        value:COUNTER:U:U
-allocated_vcores        value:COUNTER:U:U
 available_vcores        value:COUNTER:U:U
 pending_containers      value:COUNTER:U:U
 pending_MB      value:COUNTER:U:U
@@ -297,15 +296,33 @@ pending_vcores      value:COUNTER:U:U
 reserved_containers     value:COUNTER:U:U
 reserved_MB     value:COUNTER:U:U
 reserved_vcores     value:COUNTER:U:U
-used_memory value:COUNTER:U:U
-used_disks value:COUNTER:U:U
-used_vcores value:COUNTER:U:U
 allocated_memory value:COUNTER:U:U
 allocated_disks value:COUNTER:U:U
 allocated_vcores value:COUNTER:U:U
+used_memory value:COUNTER:U:U
+used_disks value:COUNTER:U:U
+used_vcores value:COUNTER:U:U
 appmaster_used_memory value:COUNTER:U:U
 appmaster_used_disks value:COUNTER:U:U
 appmaster_used_vcores value:COUNTER:U:U
+fairshare_memory value:COUNTER:U:U
+fairshare_disks value:COUNTER:U:U
+fairshare_vcores value:COUNTER:U:U
+# Per user metrics
+user_used_memory value:COUNTER:U:U
+user_used_disks value:COUNTER:U:U
+user_used_vcores value:COUNTER:U:U
+user_apps_pending value:COUNTER:U:U
+user_apps_running value:COUNTER:U:U
+user_appmaster_used_memory value:COUNTER:U:U
+user_appmaster_used_disks value:COUNTER:U:U
+user_appmaster_used_vcores value:COUNTER:U:U
+user_allocated_memory value:COUNTER:U:U
+user_allocated_disks value:COUNTER:U:U
+user_allocated_vcores value:COUNTER:U:U
+
+
+
 
 # NodeManager
 containers_launched     value:COUNTER:U:U
