@@ -436,6 +436,19 @@ static int wt_send_message (const char* key, const char* value,
         }
     }
 
+    /* Spyglass - Adding clusterid to all metrics being pushed to opentsdb
+     * Read the cluster id from the file
+     * Append the host_tags with clusterid
+     */
+    char *clusterId = "";
+    File *fp;
+    fp = fopen("/opt/mapr/conf/clusterid","r");
+    if (fp != NULL) {
+      fscanf(fp,"%s",clusterId);
+      strcat(host_tags,clusterId);
+      fclose(fp);
+    }
+
     message_len = ssnprintf (message,
                              sizeof(message),
                              "put %s %.0f %s fqdn=%s %s %s\r\n",
