@@ -417,6 +417,8 @@ static int wt_send_message (const char* key, const char* value,
     char message[1024];
     char *host_tags = cb->host_tags ? cb->host_tags : "";
     const char *meta_tsdb = "tsdb_tags";
+    char *clusterId = "";
+    File *fp;
 
     /* skip if value is NaN */
     if (value[0] == 'n')
@@ -440,8 +442,6 @@ static int wt_send_message (const char* key, const char* value,
      * Read the cluster id from the file
      * Append the host_tags with clusterid
      */
-    char *clusterId = "";
-    File *fp;
     fp = fopen("/opt/mapr/conf/clusterid","r");
     if (fp != NULL) {
     	fscanf(fp,"%s",clusterId);
