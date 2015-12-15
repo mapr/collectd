@@ -417,8 +417,6 @@ static int wt_send_message (const char* key, const char* value,
     char message[1024];
     char *host_tags = cb->host_tags ? cb->host_tags : "";
     const char *meta_tsdb = "tsdb_tags";
-    char *clusterId = "";
-    FILE *fp;
 
     /* skip if value is NaN */
     if (value[0] == 'n')
@@ -436,17 +434,6 @@ static int wt_send_message (const char* key, const char* value,
         } else {
             tags = temp;
         }
-    }
-
-    /* Spyglass - Adding clusterid to all metrics being pushed to opentsdb
-     * Read the cluster id from the file
-     * Append the host_tags with clusterid
-     */
-    fp = fopen("/opt/mapr/conf/clusterid","r");
-    if (fp != NULL) {
-    	fscanf(fp,"%s",clusterId);
-    	strcat(host_tags,clusterId);
-    	fclose(fp);
     }
 
     message_len = ssnprintf (message,
