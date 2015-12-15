@@ -418,7 +418,7 @@ static int wt_send_message (const char* key, const char* value,
     char *host_tags = cb->host_tags ? cb->host_tags : "";
     const char *meta_tsdb = "tsdb_tags";
     char *clusterId = "";
-    File *fp;
+    FILE *fp;
 
     /* skip if value is NaN */
     if (value[0] == 'n')
