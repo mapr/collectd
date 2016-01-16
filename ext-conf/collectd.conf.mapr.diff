@@ -1,0 +1,540 @@
+--- ../../collectd-test/src/collectd.conf	2015-10-08 22:07:38.400539352 +0000
++++ /tmp/c.new	2015-10-09 21:00:15.963324557 +0000
+@@ -15,7 +15,7 @@
+ #BaseDir     "${prefix}/var/lib/collectd"
+ #PIDFile     "${prefix}/var/run/collectd.pid"
+ #PluginDir   "${exec_prefix}/lib/collectd"
+-#TypesDB     "/opt/mapr/collectd/collectd-5.5.0/share/collectd/types.db"
++#TypesDB     "${prefix}/share/collectd/types.db"
+ 
+ #----------------------------------------------------------------------------#
+ # When enabled, plugins are loaded automatically with the default options    #
+@@ -62,12 +62,12 @@
+ #LoadPlugin logfile
+ ##LoadPlugin log_logstash
+ 
+-#<Plugin logfile>
+-#	LogLevel info
+-#	File STDOUT
+-#	Timestamp true
+-#	PrintSeverity false
+-#</Plugin>
++<Plugin logfile>
++	LogLevel info
++	File "${prefix}/var/log/collectd.log"
++	Timestamp true
++	PrintSeverity true
++</Plugin>
+ 
+ #<Plugin log_logstash>
+ #	LogLevel info
+@@ -88,7 +88,7 @@
+ # to missing dependencies or because they have been deactivated explicitly.  #
+ ##############################################################################
+ 
+-#LoadPlugin aggregation
++LoadPlugin aggregation
+ ##LoadPlugin amqp
+ ##LoadPlugin apache
+ #LoadPlugin apcups
+@@ -109,14 +109,14 @@
+ ##LoadPlugin curl_json
+ ##LoadPlugin curl_xml
+ ##LoadPlugin dbi
+-#LoadPlugin df
+-#LoadPlugin disk
++LoadPlugin df
++LoadPlugin disk
+ ##LoadPlugin dns
+ #LoadPlugin drbd
+ #LoadPlugin email
+ #LoadPlugin entropy
+ #LoadPlugin ethstat
+-#LoadPlugin exec
++LoadPlugin exec
+ #LoadPlugin fhcount
+ #LoadPlugin filecount
+ #LoadPlugin fscache
+@@ -128,7 +128,7 @@
+ ##LoadPlugin iptables
+ #LoadPlugin ipvs
+ #LoadPlugin irq
+-#LoadPlugin java
++LoadPlugin java
+ LoadPlugin load
+ ##LoadPlugin lpar
+ ##LoadPlugin lvm
+@@ -176,7 +176,7 @@
+ ##LoadPlugin smart
+ ##LoadPlugin snmp
+ #LoadPlugin statsd
+-#LoadPlugin swap
++LoadPlugin swap
+ #LoadPlugin table
+ #LoadPlugin tail
+ #LoadPlugin tail_csv
+@@ -193,13 +193,13 @@
+ #LoadPlugin uuid
+ ##LoadPlugin varnish
+ ##LoadPlugin virt
+-#LoadPlugin vmem
++LoadPlugin vmem
+ #LoadPlugin vserver
+ #LoadPlugin wireless
+ #LoadPlugin write_graphite
+ ##LoadPlugin write_http
+ ##LoadPlugin write_kafka
+-#LoadPlugin write_log
++LoadPlugin write_log
+ ##LoadPlugin write_mongodb
+ ##LoadPlugin write_redis
+ ##LoadPlugin write_riemann
+@@ -217,25 +217,25 @@
+ # ription of those options is available in the collectd.conf(5) manual page. #
+ ##############################################################################
+ 
+-#<Plugin aggregation>
+-#  <Aggregation>
+-#    #Host "unspecified"
+-#    Plugin "cpu"
+-#    #PluginInstance "unspecified"
+-#    Type "cpu"
+-#    #TypeInstance "unspecified"
+-#
+-#    GroupBy "Host"
+-#    GroupBy "TypeInstance"
+-#
+-#    CalculateNum false
+-#    CalculateSum false
+-#    CalculateAverage true
++<Plugin aggregation>
++  <Aggregation>
++    #Host "unspecified"
++    Plugin "cpu"
++    #PluginInstance "unspecified"
++    Type "cpu"
++    #TypeInstance "unspecified"
++
++    GroupBy "Host"
++    GroupBy "TypeInstance"
++
++    CalculateNum true
++    CalculateSum true
++    CalculateAverage true
+ #    CalculateMinimum false
+ #    CalculateMaximum false
+ #    CalculateStddev false
+-#  </Aggregation>
+-#</Plugin>
++  </Aggregation>
++</Plugin>
+ 
+ #<Plugin amqp>
+ #  <Publish "name">
+@@ -265,7 +265,6 @@
+ #	Host "localhost"
+ #	Port "3551"
+ #	ReportSeconds true
+-#	PersistentConnection true
+ #</Plugin>
+ 
+ #<Plugin aquaero>
+@@ -336,11 +335,11 @@
+ #  IgnoreSelected false
+ #</Plugin>
+ 
+-#<Plugin cpu>
+-#  ReportByCpu true
+-#  ReportByState true
+-#  ValuesPercentage false
+-#</Plugin>
++<Plugin cpu>
++  ReportByCpu true
++  ReportByState true
++  ValuesPercentage true
++</Plugin>
+ #
+ #<Plugin csv>
+ #	DataDir "${prefix}/var/lib/collectd/csv"
+@@ -480,10 +479,11 @@
+ #	</Database>
+ #</Plugin>
+ 
+-#<Plugin df>
+-#	Device "/dev/hda1"
++<Plugin df>
++	Device "/dev/sda1"
++        Device "/dev/sda2"
+ #	Device "192.168.0.2:/mnt/nfs"
+-#	MountPoint "/home"
++	MountPoint "/"
+ #	FSType "ext3"
+ #	IgnoreSelected false
+ #	ReportByDevice false
+@@ -491,14 +491,14 @@
+ #	ReportInodes false
+ #	ValuesAbsolute true
+ #	ValuesPercentage false
+-#</Plugin>
++</Plugin>
+ 
+-#<Plugin disk>
+-#	Disk "/^[hs]d[a-f][0-9]?$/"
+-#	IgnoreSelected false
+-#	UseBSDName false
+-#	UdevNameAttr "DEVNAME"
+-#</Plugin>
++<Plugin disk>
++	Disk "/^[hs]d[a-f][0-9]?$/"
++	IgnoreSelected false
++	#UseBSDName false
++	#UdevNameAttr "DEVNAME"
++</Plugin>
+ 
+ #<Plugin dns>
+ #	Interface "eth0"
+@@ -520,10 +520,10 @@
+ #	MappedOnly false
+ #</Plugin>
+ 
+-#<Plugin exec>
+-#	Exec "user:group" "/path/to/exec"
+-#	NotificationExec "user:group" "/path/to/exec"
+-#</Plugin>
++<Plugin exec>
++	#Exec "mapr:mapr"  "${prefix}/exec-mfs-plugin.sh"
++        Exec "mapr:mapr"  "${prefix}/exec-volume-plugin.sh"
++</Plugin>
+ 
+ #<Plugin fhcount>
+ #	ValuesAbsolute true
+@@ -560,10 +560,10 @@
+ #  Port "7634"
+ #</Plugin>
+ 
+-#<Plugin interface>
+-#	Interface "eth0"
+-#	IgnoreSelected false
+-#</Plugin>
++<Plugin interface>
++	Interface "eth0"
++	IgnoreSelected false
++</Plugin>
+ 
+ #<Plugin ipmi>
+ #	Sensor "some_sensor"
+@@ -585,15 +585,195 @@
+ #	IgnoreSelected true
+ #</Plugin>
+ 
++### **** MAPR_CONF_TAG: MAPR CONFIGURATION - DO NOT EDIT or REMOVE TAG/BLOCK ***
+ #<Plugin java>
+-#	JVMArg "-verbose:jni"
+-#	JVMArg "-Djava.class.path=/opt/mapr/collectd/collectd-5.5.0/share/collectd/java/collectd-api.jar"
++#	JVMArg "-Djava.class.path=/opt/mapr/collectd/share/collectd/java/collectd-api.jar:/root/collectd-fast-jmx/target/fast-jmx-1.1-SNAPSHOT.jar"  
++#   
++#  LoadPlugin "org.collectd.FastJMX"
++#
++#  <Plugin "FastJMX">
++#    ForceLoggingTo INFO
++#    LogLevel FINEST
++#    MaxThreads 256
++#    
++#    <MBean "QueueMetrics">
++#      ObjectName "Hadoop:service=ResourceManager,name=QueueMetrics,q0=root" 
++#      InstancePrefix "resourcemanager"
++#    
++#      <Value "AppsRunning">
++#        Type "apps-running"
++#        InstancePrefix "default-queue"
++#      </Value>
++#
++#      <Value "ActiveApplications">
++#        Type "active-applications"
++#        InstancePrefix "default-queue"
++#      </Value>
++#      
++#      <Value "ActiveUsers">
++#        Type "active-users"
++#        InstancePrefix "default-queue"
++#      </Value>
++#      
++#      <Value "AggregateContainersAllocated">
++#        Type "aggregate-containers-allocated"
++#        InstancePrefix "default-queue"
++#      </Value>
++#      
++#      <Value "AggregateContainersReleased">
++#        Type "aggregate-containers-released"
++#        InstancePrefix "default-queue"
++#      </Value>
++#      
++#      <Value "AllocatedMB">
++#        Type "allocated-MB"
++#        InstancePrefix "default-queue"
++#      </Value>
++#      
++#      <Value "AppsCompleted">
++#        Type "apps-completed"
++#        InstancePrefix "default-queue"
++#      </Value>
++#      
++#      <Value "AppsFailed">
++#        Type "apps-failed"
++#        InstancePrefix "default-queue"
++#      </Value>
++#      
++#      <Value "AppsPending">
++#        Type "apps-pending"
++#        InstancePrefix "default-queue"
++#      </Value>
++#      
++#      <Value "AppsSubmitted">
++#        Type "apps-submitted"
++#        InstancePrefix "default-queue"
++#      </Value>
++#      
++#      <Value "AvailableMB">
++#        Type "available-MB"
++#        InstancePrefix "default-queue"
++#      </Value>
++#      
++#      <Value "AllocatedVCores">
++#        Type "allocated-vcores"
++#        InstancePrefix "default-queue"
++#      </Value>
++#      
++#      <Value "AvailableVCores">
++#        Type "available-vcores"
++#        InstancePrefix "default-queue"
++#      </Value>
++#      
++#      <Value "PendingContainers">
++#        Type "pending-containers"
++#        InstancePrefix "default-queue"
++#      </Value>
++#      
++#      <Value "PendingMB">
++#        Type "pending-MB"
++#        InstancePrefix "default-queue"
++#      </Value>
++#      
++#      <Value "PendingVCores">
++#        Type "pending-vcores"
++#        InstancePrefix "default-queue"
++#      </Value>
++#      
++#      <Value "ReservedContainers">
++#        Type "reserved-containers"
++#        InstancePrefix "default-queue"
++#      </Value>
++#      
++#      <Value "ReservedMB">
++#        Type "reserved-MB"
++#        InstancePrefix "default-queue"
++#      </Value>
++#      
++#      <Value "ReservedVCores">
++#        Type "reserved-vcores"
++#        InstancePrefix "default-queue"
++#      </Value>
++#      
++#    </MBean>
++#    
++#    <MBean "NodeManagerMetrics">
++#       InstancePrefix "nodemanager"
++#       ObjectName "Hadoop:service=NodeManager,name=NodeManagerMetrics"
++#       <Value "ContainersLaunched">
++#          Type "containers-launched"
++#          InstancePrefix "default-queue"
++#       </Value>
++#       
++#      <Value "ContainersKilled">
++#        Type "containers-killed"
++#        InstancePrefix "default-queue"
++#      </Value>
++#      
++#      <Value "AllocatedContainers">
++#          Type "allocated-containers"
++#	  InstancePrefix "default-queue"
++#       </Value>
++#       
++#      <Value "AllocatedGB">
++#        Type "allocated-GB"
++#	InstancePrefix "default-queue"
++#      </Value>
++#      
++#      <Value "AllocatedVCores">
++#          Type "allocated-vcores"
++#	  InstancePrefix "default-queue"
++#       </Value>
++#       
++#      <Value "AvailableGB">
++#        Type "available-GB"
++#	InstancePrefix "default-queue"
++#      </Value>
++#      
++#      <Value "AvailableVCores">
++#          Type "available-GB"
++#	  InstancePrefix "default-queue"
++#       </Value>
++#       
++#      <Value "ContainersCompleted">
++#        Type "containers-completed"
++#	InstancePrefix "default-queue"
++#      </Value>
++#      
++#      <Value "ContainersFailed">
++#          Type "containers-failed"
++#	  InstancePrefix "default-queue"
++#       </Value>
++#       
++#      <Value "ContainersIniting">
++#        Type "containers-initing"
++# 	InstancePrefix "default-queue"
++#      </Value>
++#      
++#      <Value "ContainersRunning">
++#          Type "containers-running"
++#	  InstancePrefix "default-queue"
++#       </Value>
++#       
++#    </MBean> 
++#
++#### **** MAPR_CONN_CONF_TAG: 
++#    <Connection>
++#      ServiceURL "service:jmx:rmi:///jndi/rmi://10.10.88.96:8025/jmxrmi"
++#      #IncludePortInHostname true
++#      Collect "QueueMetrics"
++#    </Connection>
++#  
++#    <Connection>
++#      ServiceURL "service:jmx:rmi:///jndi/rmi://10.10.88.96:8027/jmxrmi"
++#      #IncludePortInHostname true
++#      Collect "NodeManagerMetrics"
++#    </Connection>
++#### **** MAPR_CONN_CONF_TAG_END: 
+ #
+-#	LoadPlugin "org.collectd.java.Foobar"
+-#	<Plugin "org.collectd.java.Foobar">
+-#	  # To be parsed by the plugin
+-#	</Plugin>
++#  </Plugin>
+ #</Plugin>
++### **** MAPR_CONF_TAG_END: MAPR CONFIGURATION - DO NOT EDIT or REMOVE TAG *** 
+ 
+ #<Plugin load>
+ #        ReportRelative true
+@@ -990,7 +1170,7 @@
+ #    Collect "cache-hits" "cache-misses"
+ #    Socket "/var/run/pdns_recursor.controlsocket"
+ #  </Recursor>
+-#  LocalSocket "/opt/collectd/var/run/collectd-powerdns"
++#  LocalSocket "${prefix}/var/run/collectd-powerdns"
+ #</Plugin>
+ 
+ #<Plugin processes>
+@@ -1044,16 +1224,16 @@
+ #	CollectStatistics true
+ #</Plugin>
+ 
+-#<Plugin rrdtool>
+-#	DataDir "${prefix}/var/lib/collectd/rrd"
+-#	CreateFilesAsync false
+-#	CacheTimeout 120
+-#	CacheFlush   900
+-#	WritesPerSecond 50
+-#</Plugin>
++<Plugin rrdtool>
++	DataDir "${prefix}/var/lib/collectd/rrd"
++	CreateFilesAsync false
++	CacheTimeout 120
++	CacheFlush   900
++	WritesPerSecond 50
++</Plugin>
+ 
+ #<Plugin sensors>
+-#	SensorConfigFile "/etc/sensors.conf"
++#	SensorConfigFile "${prefix}/etc/sensors.conf"
+ #	Sensor "it8712-isa-0290/temperature-temp1"
+ #	Sensor "it8712-isa-0290/fanspeed-fan3"
+ #	Sensor "it8712-isa-0290/voltage-in8"
+@@ -1258,7 +1438,7 @@
+ #</Plugin>
+ 
+ #<Plugin unixsock>
+-#	SocketFile "/opt/mapr/collectd/collectd-5.5.0/var/run/collectd-unixsock"
++#	SocketFile "${prefix}/var/run/collectd-unixsock"
+ #	SocketGroup "collectd"
+ #	SocketPerms "0660"
+ #	DeleteSocket false
+@@ -1328,9 +1508,9 @@
+ #	PluginInstanceFormat name
+ #</Plugin>
+ 
+-#<Plugin vmem>
+-#	Verbose false
+-#</Plugin>
++<Plugin vmem>
++ Verbose false
++</Plugin>
+ 
+ #<Plugin write_graphite>
+ #  <Node "example">
+@@ -1391,7 +1571,6 @@
+ #		Host "localhost"
+ #		Port "6379"
+ #		Timeout 1000
+-#		Prefix "collectd/"
+ #	</Node>
+ #</Plugin>
+ 
+@@ -1431,15 +1610,18 @@
+ #	Attribute "foo" "bar"
+ #</Plugin>
+ 
++
++### **** MAPR_CONF_TAG: MAPR CONFIGURATION - DO NOT EDIT or REMOVE TAG/BLOCK ***
+ #<Plugin write_tsdb>
+ #	<Node>
+ #		Host "localhost"
+ #		Port "4242"
+ #		HostTags "status=production"
+-#		StoreRates false
++#		StoreRates true
+ #		AlwaysAppendDS false
+ #	</Node>
+ #</Plugin>
++### **** MAPR_CONF_END_TAG: MAPR CONFIGURATION - DO NOT EDIT or REMOVE TAG *** 
+ 
+ #<Plugin zookeeper>
+ #    Host "localhost"
+@@ -1457,7 +1639,7 @@
+ # Load required matches:
+ #LoadPlugin match_empty_counter
+ #LoadPlugin match_hashed
+-#LoadPlugin match_regex
++LoadPlugin match_regex
+ #LoadPlugin match_value
+ #LoadPlugin match_timediff
+ 
+@@ -1473,8 +1655,19 @@
+ # configured at all: All values will be sent to all available write plugins. #
+ #----------------------------------------------------------------------------#
+ 
++# Comment out for now to see both aggregates and individual cores
+ #<Chain "PostCache">
+ #  Target "write"
++#  <Rule> # Send "cpu" values to the aggregation plugin.
++#    <Match regex>
++#      Plugin "^cpu$"
++#      PluginInstance "^[0-9]+$"
++#    </Match>
++#    <Target write>
++#      Plugin "aggregation"
++#    </Target>
++#    Target stop
++#  </Rule>
+ #</Chain>
+ 
+ ##############################################################################
