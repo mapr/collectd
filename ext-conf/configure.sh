@@ -110,7 +110,7 @@ function configureHostname() {
    # Changes this global
    # #Hostname    "localhost"
    hostn=`hostname -fqdn`
-   sed -ie 's/#Hostname.*$/Hostname' ${hostn}/ ${NEW_CONF_FILE}
+   sed -i -e 's/#Hostname.*$/Hostname' ${hostn}/ ${NEW_CONF_FILE}
 }
 
 #############################################################################
