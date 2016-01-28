@@ -239,7 +239,8 @@ function configurejavajmxplugin()
    #     </connection>
    #
 
-  if [ -f "${MAPR_HOME}/roles/resourcemanager" ] ; then
+  # XXX need more TAGS
+  if [ -f "${MAPR_HOME}/roles/resourcemanager" -o -f "${MAPR_HOME}/roles/nodemananager" ] ; then
     enableSection MAPR_CONF_TAG
     MyRM_ip=`hostname -i` #  XXX Needs to verify against rm_ip/hs_ip
     configureConnections MAPR_CONN_CONF_TAG $MyRM_ip $MyRM_ip $MyRM_ip
