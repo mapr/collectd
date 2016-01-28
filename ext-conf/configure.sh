@@ -1,4 +1,4 @@
-!/bin/bash
+#!/bin/bash
 # Copyright (c) 2009 & onwards. MapR Tech, Inc., All rights reserved
 
 #############################################################################
