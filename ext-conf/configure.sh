@@ -270,7 +270,7 @@ function configureHadoopJMX() {
 
 function configureClusterId() {
 CLUSTER_ID=`cat /opt/mapr/conf/clusterid`
-sed -i 's/\("clusterid= \).*"/\1'$CLUSTER_ID'"/g' ${NEW_CONF_FILE}
+sed -i 's/\"clusterid=.*/\"clusterid='$CLUSTER_ID'\"/g' ${NEW_CD_CONF_FILE}
 }
 
 function installWardenConfFile()
