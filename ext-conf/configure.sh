@@ -31,9 +31,9 @@
 #############################################################################
 
 COLLECTD_HOME=${COLLECTD_HOME:-__INSTALL__}
-CONF_FILE=${CONF_FILE:-${COLLECTD_HOME}/etc/collectd.conf}
-NEW_CONF_FILE=${NEW_CONF_FILE:-${COLLECTD_HOME}/etc/collectd.conf.progress}
-CONF_FILE_SAVE_AGE="30"
+CD_CONF_FILE=${CD_CONF_FILE:-${COLLECTD_HOME}/etc/collectd.conf}
+NEW_CD_CONF_FILE=${NEW_CD_CONF_FILE:-${COLLECTD_HOME}/etc/collectd.conf.progress}
+CD_CONF_FILE_SAVE_AGE="30"
 AWKLIBPATH=${AWKLIBPATH:-$COLLECTD_HOME/lib/awk}
 NOW=`date "+%Y%m%d_%H%M%S"`
 HADOOP_VER="hadoop-2.7.0"
@@ -51,9 +51,9 @@ YARN_JMX_NM_OPT_STR='$JMX_OPTS='${NM_JMX_PORT}
 function enableSection()
 {
    # $1 is the sectionTag prefix we will use to determine section to uncomment  
-   cat ${NEW_CONF_FILE} | awk -f ${AWKLIBPATH}/uncommentSection.awk -v tag="$1" > ${NEW_CONF_FILE}.t
+   cat ${NEW_CD_CONF_FILE} | awk -f ${AWKLIBPATH}/uncommentSection.awk -v tag="$1" > ${NEW_CD_CONF_FILE}.t
    if [[ $? -eq 0 ]] ; then
-      mv ${NEW_CONF_FILE}.t ${NEW_CONF_FILE}
+      mv ${NEW_CD_CONF_FILE}.t ${NEW_CD_CONF_FILE}
    fi
 }
 
@@ -64,10 +64,10 @@ function enableSection()
 function disableSection()
 {
    # $1 is the sectionTag prefix we will use to determine section to comment out
-   cat ${CONF_FILE} | awk -f ${AWKLIBPATH}/commentOutSection.awk -v tag="$1" > ${CONF_FILE}.progress
+   cat ${CD_CONF_FILE} | awk -f ${AWKLIBPATH}/commentOutSection.awk -v tag="$1" > ${CD_CONF_FILE}.progress
    if [[ $? -eq 0 ]] ; then
-      mv ${CONF_FILE} ${CONF_FILE}.${NOW}
-      mv ${CONF_FILE}.progress ${CONF_FILE}
+      mv ${CD_CONF_FILE} ${CD_CONF_FILE}.${NOW}
+      mv ${CD_CONF_FILE}.progress ${CD_CONF_FILE}
    fi
 }
 
@@ -78,10 +78,10 @@ function disableSection()
 #############################################################################
 function removeSection()
 {
-   cat ${CONF_FILE} | awk -f ${AWKLIBPATH}/removeSection.awk -v tag="$1" > ${CONF_FILE}.progress
+   cat ${CD_CONF_FILE} | awk -f ${AWKLIBPATH}/removeSection.awk -v tag="$1" > ${CD_CONF_FILE}.progress
    if [[ $? -eq 0 ]] ; then
-      mv ${CONF_FILE} ${CONF_FILE}.${NOW}
-      mv ${CONF_FILE}.progress ${CONF_FILE}
+      mv ${CD_CONF_FILE} ${CD_CONF_FILE}.${NOW}
+      mv ${CD_CONF_FILE}.progress ${CD_CONF_FILE}
    fi
 }
 #############################################################################
@@ -93,10 +93,10 @@ function removeSection()
 function fillSection()
 {
    removeSection $1
-   cat ${CONF_FILE} | awk -f ${AWKLIBPATH}/replaceSection.awk -v tag="$1" -v newSectionContentFile="$2" > ${CONF_FILE}.progress
+   cat ${CD_CONF_FILE} | awk -f ${AWKLIBPATH}/replaceSection.awk -v tag="$1" -v newSectionContentFile="$2" > ${CD_CONF_FILE}.progress
    if [[ $? -eq 0 ]] ; then
-      mv ${CONF_FILE} ${CONF_FILE}.${NOW}
-      mv ${CONF_FILE}.progress ${CONF_FILE}
+      mv ${CD_CONF_FILE} ${CD_CONF_FILE}.${NOW}
+      mv ${CD_CONF_FILE}.progress ${CD_CONF_FILE}
    fi
 }
 
@@ -110,7 +110,7 @@ function configureHostname() {
    # Changes this global
    # #Hostname    "localhost"
    hostn=`hostname -fqdn`
-   sed -i -e 's/#Hostname.*$/Hostname' ${hostn}/ ${NEW_CONF_FILE}
+   sed -i -e 's/#Hostname.*$/Hostname' ${hostn}/ ${NEW_CD_CONF_FILE}
 }
 
 #############################################################################
@@ -127,8 +127,8 @@ function configureInterfacePlugin() {
    #     IgnoreSelected true
    # </Plugin>
    loopifs=`ls /dev/loop[0-9]*`
-   awk '/<Plugin interface>/ { next;next; print \tInterface \"${loopifs}\"; print \tIngoreSelection true' ${NEW_CONF_FILE} > ${NEW_CONF_FILE}.t
-   mv ${NEW_CONF_FILE}.t ${NEW_CONF_FILE}
+   awk '/<Plugin interface>/ { next;next; print \tInterface \"${loopifs}\"; print \tIngoreSelection true' ${NEW_CD_CONF_FILE} > ${NEW_CD_CONF_FILE}.t
+   mv ${NEW_CD_CONF_FILE}.t ${NEW_CD_CONF_FILE}
 }
  
 
@@ -160,8 +160,8 @@ function configureZookeeperConfig() {
    #
    zoohost=${zkNodesList%%,*}
    zoohost=${zoohost%%:*}
-   awk -v hostname=$zoohost -v port=$zkClientPort -v plugin=zookeeper -f ${AWKLIBPATH}/condfigurePlugin.awk ${NEW_CONF_FILE} > ${NEW_CONFIG_FILE}.t
-   mv ${NEW_CONF_FILE}.t ${NEW_CONF_FILE}
+   awk -v hostname=$zoohost -v port=$zkClientPort -v plugin=zookeeper -f ${AWKLIBPATH}/condfigurePlugin.awk ${NEW_CD_CONF_FILE} > ${NEW_CONFIG_FILE}.t
+   mv ${NEW_CD_CONF_FILE}.t ${NEW_CD_CONF_FILE}
 
 }
 
@@ -171,7 +171,7 @@ function configureZookeeperConfig() {
 # $1 is the name of the plugin
 #############################################################################
 function pluginEnable() {
-  sed -i -e "s/#LoadPlugin $1/LoadPlugin $1/;" ${NEW_CONF_FILE}
+  sed -i -e "s/#LoadPlugin $1/LoadPlugin $1/;" ${NEW_CD_CONF_FILE}
 }
 
 #############################################################################
@@ -196,8 +196,8 @@ function configureopentsdbplugin()
    # </Plugin>
    tsdbhost=${nodelist%%,*}
    tsdbhost=${tsdbhost%%:*}
-   awk -v hostname=$tsdbhost -v port=$nodeport -v plugin=write_tsdb -f ${AWKLIBPATH}/configurePlugin.awk ${NEW_CONF_FILE} > ${NEW_CONF_FILE}.t
-   mv ${NEW_CONF_FILE}.t ${NEW_CONF_FILE}
+   awk -v hostname=$tsdbhost -v port=$nodeport -v plugin=write_tsdb -f ${AWKLIBPATH}/configurePlugin.awk ${NEW_CD_CONF_FILE} > ${NEW_CD_CONF_FILE}.t
+   mv ${NEW_CD_CONF_FILE}.t ${NEW_CD_CONF_FILE}
 
    return 0
 }
@@ -252,7 +252,7 @@ function configureConnections() {
   # #2 is the RM IP address to replace
   # #3 is the NM IP address to replace
   # #4 is the CLDB IP address to replace
-  sed -i -e "s/RESOURCEMGR_IP/$2/g;s/NODEMGR_IP/$3/g;s/CLDB_IP/$4/g" ${NEW_CONF_FILE}
+  sed -i -e "s/RESOURCEMGR_IP/$2/g;s/NODEMGR_IP/$3/g;s/CLDB_IP/$4/g" ${NEW_CD_CONF_FILE}
 }
 
 
@@ -332,7 +332,7 @@ else
    return 2 2>/dev/null || exit 2
 fi
 
-cp ${CONF_FILE} ${NEW_CONF_FILE}
+cp ${CD_CONF_FILE} ${NEW_CD_CONF_FILE}
 
 # These are disabled for now
 #configurehostname
@@ -344,8 +344,8 @@ configureopentsdbplugin
 configureHadoopJMX
 configureClusterId
 
-cp -p ${CONF_FILE} ${CONF_FILE}.${NOW}
-cp ${NEW_CONF_FILE} ${CONF_FILE}
+cp -p ${CD_CONF_FILE} ${CD_CONF_FILE}.${NOW}
+cp ${NEW_CD_CONF_FILE} ${CD_CONF_FILE}
 installWardenConfFile
 
 true # make sure we have a good return
