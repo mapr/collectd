@@ -242,6 +242,7 @@ function configurejavajmxplugin()
   # XXX need more TAGS
   if [ -f "${MAPR_HOME}/roles/resourcemanager" -o -f "${MAPR_HOME}/roles/nodemananager" ] ; then
     enableSection MAPR_CONF_TAG
+    sed -i 's/${fastjmx_prefix}/'$COLLECTD_HOME'/g' ${NEW_CD_CONF_FILE}
     MyRM_ip=`hostname -i` #  XXX Needs to verify against rm_ip/hs_ip
     configureConnections MAPR_CONN_CONF_TAG $MyRM_ip $MyRM_ip $MyRM_ip
   fi
@@ -252,7 +253,8 @@ function configureConnections() {
   # #2 is the RM IP address to replace
   # #3 is the NM IP address to replace
   # #4 is the CLDB IP address to replace
-  sed -i -e "s/RESOURCEMGR_IP/$2/g;s/NODEMGR_IP/$3/g;s/CLDB_IP/$4/g" ${NEW_CD_CONF_FILE}
+  host_name=`host '$2' | tail -n 1 | sed -e "s/^.* //;s/[[:punct:]]*$//"`
+  sed -i -e "s/RESOURCEMGR_IP/'${host_name}'/g;s/NODEMGR_IP/'${host_name}'/g;s/CLDB_IP/'${host_name}'/g" ${NEW_CD_CONF_FILE}
 }
 
 
