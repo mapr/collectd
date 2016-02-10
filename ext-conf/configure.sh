@@ -260,16 +260,19 @@ function configureConnections() {
 function configureHadoopJMX() {
   # Enable JMX for RM and NM only if they are installed 
   if [ -f "${MAPR_HOME}/roles/resourcemanager" -o -f "${MAPR_HOME}/roles/nodemananager" ] ; then
-   cp -p ${YARN_BIN} ${YARN_BIN}.prejmx
+    cp -p ${YARN_BIN} ${YARN_BIN}.prejmx
 
-   awk -v jmx_ins_after='JAVA_HEAP_MAX' -v jmx_insert="$JMX_INSERT" -v jmx_opts_pattern='"\\$COMMAND" = "resourcemanager"' -v yarn_opts="$YARN_JMX_RM_OPT_STR" -f ${AWKLIBPATH}/configureYarnJmx.awk ${YARN_BIN}.prejmx > ${YARN_BIN}
+    awk -v jmx_ins_after='JAVA_HEAP_MAX' -v jmx_insert="$JMX_INSERT" -v jmx_opts_pattern='"\\$COMMAND" = "resourcemanager"' -v yarn_opts="$YARN_JMX_RM_OPT_STR" -f ${AWKLIBPATH}/configureYarnJmx.awk ${YARN_BIN}.prejmx > ${YARN_BIN}
 
-   cp -p ${YARN_BIN} ${YARN_BIN}.prejmx
-   awk  -v jmx_opts_pattern='"\\$COMMAND" = "nodemanager"' -v yarn_opts="$YARN_JMX_NM_OPT_STR" -f ${AWKLIBPATH}/configureYarnJmx.awk ${YARN_BIN}.prejmx > ${YARN_BIN}
+    cp -p ${YARN_BIN} ${YARN_BIN}.prejmx
+    awk  -v jmx_opts_pattern='"\\$COMMAND" = "nodemanager"' -v yarn_opts="$YARN_JMX_NM_OPT_STR" -f ${AWKLIBPATH}/configureYarnJmx.awk ${YARN_BIN}.prejmx > ${YARN_BIN}
 
-   MyNM_ip=`hostname -i`
-   maprcli node services -nodes ${MyNM_ip} -name resourcemanager -action restart
-   maprcli node services -nodes ${MyNM_ip} -name nodemanager -action restart
+    MyNM_ip=`hostname -i`
+    timeout -s HUP 30s $MAPR_HOME/bin/maprcli node cldbmaster -noheader 2> /dev/null
+    if [ $? -eq 0 ] ; then
+      maprcli node services -nodes ${MyNM_ip} -name resourcemanager -action restart
+      maprcli node services -nodes ${MyNM_ip} -name nodemanager -action restart
+    fi
   fi
 }
 
