@@ -240,7 +240,7 @@ function configurejavajmxplugin()
    #
 
   # XXX need more TAGS
-  if [ -f "${MAPR_HOME}/roles/resourcemanager" -o -f "${MAPR_HOME}/roles/nodemananager" ] ; then
+  if [ -f "${MAPR_HOME}/roles/resourcemanager" -o -f "${MAPR_HOME}/roles/nodemananager"  -o -f "${MAPR_HOME}/roles/cldb ] ; then
     enableSection MAPR_CONF_TAG
     sed -i 's@${fastjmx_prefix}@'$COLLECTD_HOME'@g' ${NEW_CD_CONF_FILE}
     configureConnections MAPR_CONN_CONF_TAG
@@ -258,6 +258,8 @@ function configureConnections() {
 
 
 function configureHadoopJMX() {
+  # Enable JMX for RM and NM only if they are installed 
+  if [ -f "${MAPR_HOME}/roles/resourcemanager" -o -f "${MAPR_HOME}/roles/nodemananager" ] ; then
    cp -p ${YARN_BIN} ${YARN_BIN}.prejmx
 
    awk -v jmx_ins_after='JAVA_HEAP_MAX' -v jmx_insert="$JMX_INSERT" -v jmx_opts_pattern='"\\$COMMAND" = "resourcemanager"' -v yarn_opts="$YARN_JMX_RM_OPT_STR" -f ${AWKLIBPATH}/configureYarnJmx.awk ${YARN_BIN}.prejmx > ${YARN_BIN}
@@ -266,7 +268,9 @@ function configureHadoopJMX() {
    awk  -v jmx_opts_pattern='"\\$COMMAND" = "nodemanager"' -v yarn_opts="$YARN_JMX_NM_OPT_STR" -f ${AWKLIBPATH}/configureYarnJmx.awk ${YARN_BIN}.prejmx > ${YARN_BIN}
 
    MyNM_ip=`hostname -i`
+   maprcli node services -nodes ${MyNM_ip} -name resourcemanager -action restart
    maprcli node services -nodes ${MyNM_ip} -name nodemanager -action restart
+  fi
 }
 
 function configureClusterId() {
