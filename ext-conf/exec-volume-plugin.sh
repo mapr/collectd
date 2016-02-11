@@ -19,7 +19,7 @@ do
           metricvalue=`echo $output | sed 's/.*://' | sed 's/[,"]//g'`
         elif [[ ( $output == *"rackpath"* ) ]];
         then
-        topology=`echo $output | sed 's/.*://' | sed 's/[,"]//g' | sed 's/\//./g'`
+          topology=`echo $output | sed 's/.*://' | sed 's/[,"]//g' | sed 's/\//./g'`
         fi
         # Collect metrics per volume
         echo "PUTVAL \"$HOSTNAME/mapr.volume/$metricname-$volumename\" interval=$INTERVAL N:$metricvalue"
