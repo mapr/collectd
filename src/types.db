@@ -359,6 +359,7 @@ logicalUsed value:COUNTER:U:U
 used        value:COUNTER:U:U
 snapshotused value:COUNTER:U:U
 totalused value:COUNTER:U:U
+quota value:COUNTER:U:U
 
 
 ########## END MAPR TYPES ################

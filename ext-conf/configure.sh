@@ -240,7 +240,7 @@ function configurejavajmxplugin()
    #
 
   # XXX need more TAGS
-  if [ -f "${MAPR_HOME}/roles/resourcemanager" -o -f "${MAPR_HOME}/roles/nodemananager"  -o -f "${MAPR_HOME}/roles/cldb ] ; then
+  if [ -f "${MAPR_HOME}/roles/resourcemanager" -o -f "${MAPR_HOME}/roles/nodemananager"  -o -f "${MAPR_HOME}/roles/cldb" ] ; then
     enableSection MAPR_CONF_TAG
     sed -i 's@${fastjmx_prefix}@'$COLLECTD_HOME'@g' ${NEW_CD_CONF_FILE}
     configureConnections MAPR_CONN_CONF_TAG
