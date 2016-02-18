@@ -277,8 +277,19 @@ function configureHadoopJMX() {
 }
 
 function configureClusterId() {
-CLUSTER_ID=`cat /opt/mapr/conf/clusterid`
-sed -i 's/\"clusterid=.*/\"clusterid='$CLUSTER_ID'\"/g' ${NEW_CD_CONF_FILE}
+    cldbretries=12   # give it a minute
+    cldbrunning=1
+    until [ $cldbrunning -eq 0 -o $cldbretries -lt 0 ] ; do
+        maprcli node cldbmaster > /dev/null 2>&1 
+        cldbrunning=$?
+        [ $cldbrunning -ne 0 ] &&  sleep 5
+        let cldbretries=cldbretries-1
+    done
+
+    if [ $cldbrunning -eq 0 ] ; then
+        CLUSTER_ID=`cat /opt/mapr/conf/clusterid`
+        sed -i 's/\"clusterid=.*/\"clusterid='$CLUSTER_ID'\"/g' ${NEW_CD_CONF_FILE}
+    fi
 }
 
 function installWardenConfFile()
