@@ -44,7 +44,7 @@ JMX_INSERT='#Enable JMX\nJMX_OPTS=\"-Dcom.sun.management.jmxremote -Dcom.sun.man
 YARN_JMX_RM_OPT_STR='$JMX_OPTS='${RM_JMX_PORT}
 YARN_JMX_NM_OPT_STR='$JMX_OPTS='${NM_JMX_PORT}
 MAPR_HOME=${MAPR_HOME:-/opt/mapr}
-MAPR_CONF_DIR="${MAPR_HOME}/conf.conf.d"
+MAPR_CONF_DIR="${MAPR_HOME}/conf/conf.d"
 
 #############################################################################
 # Function to uncomment a section
