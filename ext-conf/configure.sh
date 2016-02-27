@@ -43,6 +43,8 @@ NM_JMX_PORT=8027
 JMX_INSERT='#Enable JMX\nJMX_OPTS=\"-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.port\"'
 YARN_JMX_RM_OPT_STR='$JMX_OPTS='${RM_JMX_PORT}
 YARN_JMX_NM_OPT_STR='$JMX_OPTS='${NM_JMX_PORT}
+MAPR_HOME=${MAPR_HOME:-/opt/mapr}
+MAPR_CONF_DIR="${MAPR_HOME}/conf.conf.d"
 
 #############################################################################
 # Function to uncomment a section
@@ -294,8 +296,11 @@ function configureClusterId() {
 
 function installWardenConfFile()
 {
+   if  ! [ -d ${MAPR_CONF_DIR} ]; then
+       mkdir -p ${MAPR_CONF_DIR} > /dev/null 2>&1
+   fi
 
-   cp ${COLLECTD_HOME}/etc/conf/warden.collectd.conf ${MAPR_HOME}/conf/conf.d
+   cp ${COLLECTD_HOME}/etc/conf/warden.collectd.conf ${MAPR_CONF_DIR}
 }
 
 function cleanupoldconffiles
