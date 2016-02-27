@@ -10,7 +10,9 @@
 # pidfile: /var/run/collectd.pid
 
 # Source function library.
-. /etc/init.d/functions
+if [ -f /etc/init.d/functions ]; then
+   . /etc/init.d/functions
+fi
 
 RETVAL=0
 ARGS=""
