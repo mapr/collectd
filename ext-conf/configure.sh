@@ -11,7 +11,7 @@
 # TODO: add support to tweak other collection facilities, like disk, fs, network
 # TODO: Need to add support to clean up old copies
 #
-# __INSTALL__ gets expanded to /opt/mapr/collectd/collectd-5.5 during pakcaging
+# __INSTALL_ (two _ at the end) gets expanded to __INSTALL__ during pakcaging
 # set COLLECTD_HOME explicitly if running this in a source built env.
 #
 # This script is sourced by the master configure.sh to setup collectd during
@@ -45,6 +45,9 @@ YARN_JMX_RM_OPT_STR='$JMX_OPTS='${RM_JMX_PORT}
 YARN_JMX_NM_OPT_STR='$JMX_OPTS='${NM_JMX_PORT}
 MAPR_HOME=${MAPR_HOME:-/opt/mapr}
 MAPR_CONF_DIR="${MAPR_HOME}/conf/conf.d"
+CD_NM_ROLE=0
+CD_CLDB_ROLE=0
+CD_RM_ROLE=0
 
 #############################################################################
 # Function to uncomment a section
@@ -113,6 +116,20 @@ function configureHostname() {
    # #Hostname    "localhost"
    hostn=`hostname -fqdn`
    sed -i -e 's/#Hostname.*$/Hostname' ${hostn}/ ${NEW_CD_CONF_FILE}
+}
+
+#############################################################################
+# Function to figure out what roles this node has
+#
+# sets globals
+# CD_NM_ROLE
+# CD_CLDB_ROLE
+# CD_RM_ROLE
+#############################################################################
+function getRoles() {
+   [ -f ${MAPR_HOME}/roles/resourcemanager ] && CD_RM_ROLE=1
+   [ -f ${MAPR_HOME}/roles/nodemanager ] && CD_NM_ROLE=1
+   [ -f ${MAPR_HOME}/roles/cldb ] && CD_CLDB_ROLE=1
 }
 
 #############################################################################
@@ -198,6 +215,7 @@ function configureopentsdbplugin()
    # </Plugin>
    tsdbhost=${nodelist%%,*}
    tsdbhost=${tsdbhost%%:*}
+   enableSection MAPR_CONF_OT_TAG
    awk -v hostname=$tsdbhost -v port=$nodeport -v plugin=write_tsdb -f ${AWKLIBPATH}/configurePlugin.awk ${NEW_CD_CONF_FILE} > ${NEW_CD_CONF_FILE}.t
    mv ${NEW_CD_CONF_FILE}.t ${NEW_CD_CONF_FILE}
 
@@ -242,26 +260,32 @@ function configurejavajmxplugin()
    #
 
   # XXX need more TAGS
-  if [ -f "${MAPR_HOME}/roles/resourcemanager" -o -f "${MAPR_HOME}/roles/nodemanager"  -o -f "${MAPR_HOME}/roles/cldb" ] ; then
-    enableSection MAPR_CONF_TAG
+  if [ ${CD_RM_ROLE} -eq 1  -o ${CD_NM_ROLE} -eq 1  -o ${CD_CLDB_ROLE} -eq 1 ] ; then
+    enableSection MAPR_CONF_JMX_TAG
     sed -i 's@${fastjmx_prefix}@'$COLLECTD_HOME'@g' ${NEW_CD_CONF_FILE}
-    configureConnections MAPR_CONN_CONF_TAG
+    configureConnections
   fi
 }
 
 function configureConnections() {
-  # $1 is section to usbstitute in - ingored for now
-  # #2 is the RM IP address to replace
-  # #3 is the NM IP address to replace
-  # #4 is the CLDB IP address to replace
   host_name=`hostname`
+  if [ ${CD_CLDB_ROLE} -eq 1 ]; then
+      enableSection MAPR_CONF_CONN_CLDB_TAG
+  fi
+  if [ ${CD_NM_ROLE} -eq 1 ]; then
+      enableSection MAPR_CONF_CONN_NM_TAG
+  fi
+  if [ ${CD_RM_ROLE} -eq 1 ]; then
+      enableSection MAPR_CONF_CONN_RM_TAG
+  fi
+  # XXX Still need to make this stateless
   sed -i -e "s/RESOURCEMGR_IP/${host_name}/g;s/NODEMGR_IP/${host_name}/g;s/CLDB_IP/${host_name}/g" ${NEW_CD_CONF_FILE}
 }
 
 
 function configureHadoopJMX() {
   # Enable JMX for RM and NM only if they are installed 
-  if [ -f "${MAPR_HOME}/roles/resourcemanager" -o -f "${MAPR_HOME}/roles/nodemananager" ] ; then
+  if [ ${CD_RM_ROLE} -eq 1 -o ${CD_NM_ROLE} -eq 1 ] ; then
     cp -p ${YARN_BIN} ${YARN_BIN}.prejmx
 
     awk -v jmx_ins_after='JAVA_HEAP_MAX' -v jmx_insert="$JMX_INSERT" -v jmx_opts_pattern='"\\$COMMAND" = "resourcemanager"' -v yarn_opts="$YARN_JMX_RM_OPT_STR" -f ${AWKLIBPATH}/configureYarnJmx.awk ${YARN_BIN}.prejmx > ${YARN_BIN}
@@ -363,8 +387,9 @@ cp ${CD_CONF_FILE} ${NEW_CD_CONF_FILE}
 #configureinterfaceplugin
 #configurediskplugin
 #configurezookeeperconfig
+getRoles
+configureopentsdbplugin  # this ucomments everything between the MAPR_CONF_TAGs
 configurejavajmxplugin
-configureopentsdbplugin
 configureHadoopJMX
 configureClusterId
 
