@@ -308,6 +308,9 @@ appmaster_used_vcores value:COUNTER:U:U
 fairshare_memory value:COUNTER:U:U
 fairshare_disks value:COUNTER:U:U
 fairshare_vcores value:COUNTER:U:U
+max_memory value:COUNTER:U:U
+max_disks value:COUNTER:U:U
+max_vcores value:COUNTER:U:U
 # Per user metrics
 user_used_memory value:COUNTER:U:U
 user_used_disks value:COUNTER:U:U
