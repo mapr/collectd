@@ -270,13 +270,13 @@ function configurejavajmxplugin()
 function configureConnections() {
   host_name=`hostname`
   if [ ${CD_CLDB_ROLE} -eq 1 ]; then
-      enableSection MAPR_CONF_CONN_CLDB_TAG
+      enableSection MAPR_CONN_CONF_CLDB_TAG
   fi
   if [ ${CD_NM_ROLE} -eq 1 ]; then
-      enableSection MAPR_CONF_CONN_NM_TAG
+      enableSection MAPR_CONN_CONF_NM_TAG
   fi
   if [ ${CD_RM_ROLE} -eq 1 ]; then
-      enableSection MAPR_CONF_CONN_RM_TAG
+      enableSection MAPR_CONN_CONF_RM_TAG
   fi
   # XXX Still need to make this stateless
   sed -i -e "s/RESOURCEMGR_IP/${host_name}/g;s/NODEMGR_IP/${host_name}/g;s/CLDB_IP/${host_name}/g" ${NEW_CD_CONF_FILE}
