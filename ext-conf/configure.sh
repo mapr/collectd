@@ -48,6 +48,7 @@ MAPR_CONF_DIR="${MAPR_HOME}/conf/conf.d"
 CD_NM_ROLE=0
 CD_CLDB_ROLE=0
 CD_RM_ROLE=0
+CLDB_RUNNING=0
 
 #############################################################################
 # Function to uncomment a section
@@ -222,6 +223,10 @@ function configureopentsdbplugin()
    return 0
 }
 
+#############################################################################
+# Function to configure java jmx plugin
+#
+#############################################################################
 function configurejavajmxplugin()
 {
   # use the roles file to determine if this node is a Resource Manager
@@ -267,6 +272,11 @@ function configurejavajmxplugin()
   fi
 }
 
+#############################################################################
+# Function to configure connections
+#
+# uses global CLDB_ROLE, CD_RM_ROLE, CD_NM_ROLE
+#############################################################################
 function configureConnections() {
   host_name=`hostname`
   if [ ${CD_CLDB_ROLE} -eq 1 ]; then
@@ -283,6 +293,11 @@ function configureConnections() {
 }
 
 
+#############################################################################
+# Function to configure JMX
+#
+# uses global CLDB_RUNNING, CD_RM_ROLE, CD_NM_ROLE
+#############################################################################
 function configureHadoopJMX() {
   # Enable JMX for RM and NM only if they are installed 
   if [ ${CD_RM_ROLE} -eq 1 -o ${CD_NM_ROLE} -eq 1 ] ; then
@@ -292,36 +307,63 @@ function configureHadoopJMX() {
 
     cp -p ${YARN_BIN} ${YARN_BIN}.prejmx
     awk  -v jmx_opts_pattern='"\\$COMMAND" = "nodemanager"' -v yarn_opts="$YARN_JMX_NM_OPT_STR" -f ${AWKLIBPATH}/configureYarnJmx.awk ${YARN_BIN}.prejmx > ${YARN_BIN}
+  fi
+}
 
-    MyNM_ip=`hostname -i`
-    timeout -s HUP 30s $MAPR_HOME/bin/maprcli node cldbmaster -noheader 2> /dev/null
-    if [ $? -eq 0 ] ; then
-      if ${CD_NM_ROLE} -eq 1 ]; then
-          maprcli node services -nodes ${MyNM_ip} -name resourcemanager -action restart
-      fi
-      if ${CD_RM_ROLE} -eq 1 ]; then
-          maprcli node services -nodes ${MyNM_ip} -name nodemanager -action restart
+#############################################################################
+# Function to restart nodemanager and resourcemananger services
+#
+# uses global CLDB_RUNNING, CD_RM_ROLE, CD_NM_ROLE
+#############################################################################
+function restartNM_RM_service() {
+  if [ $CLDB_RUNNING -eq 1 ]; then
+    # Enable JMX for RM and NM only if they are installed 
+    if [ ${CD_RM_ROLE} -eq 1 -o ${CD_NM_ROLE} -eq 1 ] ; then
+      MyNM_ip=`hostname -i`
+      timeout -s HUP 30s $MAPR_HOME/bin/maprcli node cldbmaster -noheader 2> /dev/null
+      if [ $? -eq 0 ] ; then
+        if ${CD_RM_ROLE} -eq 1 ]; then
+            maprcli node services -nodes ${MyNM_ip} -name resourcemanager -action restart
+        fi
+        if ${CD_NM_ROLE} -eq 1 ]; then
+            maprcli node services -nodes ${MyNM_ip} -name nodemanager -action restart
+        fi
       fi
     fi
   fi
 }
 
-function configureClusterId() {
+#############################################################################
+# Function to wait for cldb to come up
+#
+#############################################################################
+function waitForCLDB() {
     cldbretries=12   # give it a minute
-    cldbrunning=1
-    until [ $cldbrunning -eq 0 -o $cldbretries -lt 0 ] ; do
+    until [ $CLDB_RUNNING -eq 1 -o $cldbretries -lt 0 ] ; do
         $MAPR_HOME/bin/maprcli node cldbmaster > /dev/null 2>&1 
-        cldbrunning=$?
-        [ $cldbrunning -ne 0 ] &&  sleep 5
+        [ $? -eq 0 ] && CLDB_RUNNING=1
+        [ $CLDB_RUNNING -ne 0 ] &&  sleep 5
         let cldbretries=cldbretries-1
     done
+    return $CLDB_RUNNING
+}
 
-    if [ $cldbrunning -eq 0 ] ; then
+#############################################################################
+# Function to configure clusterID
+#
+# uses global CLDB_RUNNING
+#############################################################################
+function configureClusterId() {
+    if [ $CLDB_RUNNING -eq 1 ] ; then
         CLUSTER_ID=`cat /opt/mapr/conf/clusterid`
         sed -i 's/\"clusterid=.*/\"clusterid='$CLUSTER_ID'\"/g' ${NEW_CD_CONF_FILE}
     fi
 }
 
+#############################################################################
+# Function to install warden config file in $MAPR_CONF_DIR
+#
+#############################################################################
 function installWardenConfFile()
 {
    if  ! [ -d ${MAPR_CONF_DIR} ]; then
@@ -331,6 +373,10 @@ function installWardenConfFile()
    cp ${COLLECTD_HOME}/etc/conf/warden.collectd.conf ${MAPR_CONF_DIR}
 }
 
+#############################################################################
+# Function to clean up old files
+# 
+#############################################################################
 function cleanupoldconffiles
 {
   :
@@ -395,6 +441,8 @@ getRoles
 configureopentsdbplugin  # this ucomments everything between the MAPR_CONF_TAGs
 configurejavajmxplugin
 configureHadoopJMX
+waitForCLDB
+restartNM_RM_service
 configureClusterId
 
 cp -p ${CD_CONF_FILE} ${CD_CONF_FILE}.${NOW}
