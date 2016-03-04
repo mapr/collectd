@@ -296,8 +296,12 @@ function configureHadoopJMX() {
     MyNM_ip=`hostname -i`
     timeout -s HUP 30s $MAPR_HOME/bin/maprcli node cldbmaster -noheader 2> /dev/null
     if [ $? -eq 0 ] ; then
-      maprcli node services -nodes ${MyNM_ip} -name resourcemanager -action restart
-      maprcli node services -nodes ${MyNM_ip} -name nodemanager -action restart
+      if ${CD_NM_ROLE} -eq 1 ]; then
+          maprcli node services -nodes ${MyNM_ip} -name resourcemanager -action restart
+      fi
+      if ${CD_RM_ROLE} -eq 1 ]; then
+          maprcli node services -nodes ${MyNM_ip} -name nodemanager -action restart
+      fi
     fi
   fi
 }
@@ -306,7 +310,7 @@ function configureClusterId() {
     cldbretries=12   # give it a minute
     cldbrunning=1
     until [ $cldbrunning -eq 0 -o $cldbretries -lt 0 ] ; do
-        maprcli node cldbmaster > /dev/null 2>&1 
+        $MAPR_HOME/bin/maprcli node cldbmaster > /dev/null 2>&1 
         cldbrunning=$?
         [ $cldbrunning -ne 0 ] &&  sleep 5
         let cldbretries=cldbretries-1
