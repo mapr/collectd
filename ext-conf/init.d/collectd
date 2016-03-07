@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 # Generic start script that can be used for services that are running under warden
 
@@ -10,11 +10,18 @@
 # If you have something different change the expression in the line below that
 # computes MAPR_HOME
 #
+# This script is assumed to be named using the application name or name with a .sh
+# if you change that, change how the APP variable is set below.
+#
+# There are two defines for log files APP_LOG_FILE and APP_LOG_START_FILE. The first
+# one is used when you pass the log file name into the application, the latter one
+# is used for this script to log the startup events.
+#
 # Set APP_REQUIRE_JAVA=1 if the app requires java  
 #
 # Set APP_STARTS_WITH_JAVA=1 if the is started using java directly  
 #
-# Set APP_SELF_CONTAINED if the has its on var/run, var/log, var/lock structure
+# Set APP_SELF_CONTAINED=1 if the has its on var/run, var/log, var/lock structure
 # like ecos, instead of using the system /var/log for example
 #
 # Set APP_RESOLVE_LINK=1 if you don't need the script to follow link to script to resolve
@@ -22,22 +29,27 @@
 #
 # Set APP_WARDEN_CONTROLLED=1 if this app is run under warden
 #
-# Set APP_DEAMONIZES=1 if this app forks itself
+# Set APP_DAEMONIZES=1 if this app forks itself
 # 
 # Set APP_DOES_NOT_MANAGE_PID_FILE=1 if this app does not create its own pidfile
 # 
 # Set APP_ROTATES_OWN_LOG_FILE=1 if this app has its own way of rotating logs 
 # 
+# **********************  PLEASE READ CAREFULLY ****************
 # Set APP_STOP_NEED_TO_KILL_GROUP=1 if you want use a hammer to make sure the daemon
 # and all its children go away. It does not allow the daemon to manage this on his own.
-# ----- Use with care.
+#
+# This option only works with bash, so make sure the she-bang line on top uses bash and
+# not sh.
+# ----- Use with care!!!!!.
+# **********************  PLEASE READ CAREFULLY ****************
 # 
 #
 # NB: Make sure you set APP_MAIN to something that is recongizable and distict
 # form the process command line. This string is used to verify that the pid matches 
 # the process. For Java apps, this variable should be set to the name of the main class
 # even if this script doesn't start the app directly. 
-# For regular processes the app name usually suffice, $APP_DEAMON should work fine
+# For regular processes the app name usually suffice, $APP_DAEMON should work fine
 #
 # If you are having trouble with the startup, it is often because we don't find the
 # string expected in /proc/<pid>/cmdline. Uncomment the line in check() that cats out
@@ -54,7 +66,7 @@ APP_STARTS_WITH_JAVA=0
 APP_SELF_CONTAINED=1
 APP_RESOLVE_LINK=0
 APP_WARDEN_CONTROLLED=1
-APP_DEAMONIZES=1
+APP_DAEMONIZES=1
 APP_DOES_NOT_MANAGE_PID_FILE=0
 APP_ROTATES_OWN_LOG_FILE=0
 APP_STOP_NEED_TO_KILL_GROUP=1
@@ -117,26 +129,21 @@ fi
 
 # CHOOSE BEHAVOR: Set to fit app if you need something different - should fit most scenarios
 if [ $APP_SELF_CONTAINED -eq 1 ]; then
-    APP_LOCK_DIR=${APP_HOME_DIR}/var/lock/subsys
-    APP_LOCK_FILE="$APP_LOCK_DIR/$APP"
     APP_LOG_DIR="$APP_HOME_DIR/var/log/$APP"
-    APP_LOG_FILE="$APP_LOG_DIR/$APP.log"                   # use this for aps own logging 
-    APP_LOG_START_FILE="$APP_LOG_DIR/${APP}_startup.log"   # use this for startup logging
     APP_CONF_DIR="$APP_HOME_DIR/etc"
     APP_CONF_FILE="$APP_CONF_DIR/$APP.conf"
     APP_DATA_DIR="$APP_HOME_DIR/var/lib/$APP"
     APP_PID_DIR="$APP_HOME_DIR/var/run/$APP"
-    APP_PID_FILE="$APP_PID_DIR/$APP.pid"
 else
-    APP_LOCK_DIR=${APP_HOME_DIR}/var/lock/subsys
-    APP_LOCK_FILE="$APP_LOCK_DIR/$APP"
     APP_LOG_DIR="$APP_HOME_DIR/logs"
-    APP_LOG_FILE="$APP_LOG_DIR/$APP.log"                   # use this for aps own logging 
-    APP_LOG_START_FILE="$APP_LOG_DIR/${APP}_startup.log"   # use this for startup logging
     APP_DATA_DIR="$APP_HOME_DIR/data"
     APP_PID_DIR="$APP_HOME_DIR/data"
-    APP_PID_FILE="$APP_PID_DIR/$APP.pid"
 fi
+APP_LOCK_DIR=$APP_HOME_DIR/var/lock/subsys
+APP_LOCK_FILE="$APP_LOCK_DIR/$APP"
+APP_LOG_FILE="$APP_LOG_DIR/$APP.log"                   # use this for apps own logging 
+APP_LOG_START_FILE="$APP_LOG_DIR/${APP}_startup.log"   # use this for startup logging
+APP_PID_FILE="$APP_PID_DIR/$APP.pid"
 
 # CHOOSE BEHAVOR: Set to fit app
 APP_OPTS_1=" -P $APP_PID_FILE -C $APP_CONF_FILE"
@@ -152,7 +159,7 @@ esac
 # need this to find the java jvm library
 export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${JAVA_HOME}/jre/lib/${J_ARCH}/server
 
-# CHOOSE BEHAVOR: alter for Application
+# CHOOSE BEHAVOR: Set to fit app
 if [ $APP_REQUIRE_JAVA -eq 1 -a $APP_STARTS_WITH_JAVA -eq 1 ]; then
     APP_JAVA_LIBRARY_PATH="$APP_HOME_DIR/lib"
     APP_CLASSPATH="$APP_HOME_DIR/data:$APP_HOME_DIR/conf:$APP_JAVA_LIBRARY_PATH/*"
@@ -162,7 +169,7 @@ else
 fi
 
 # FILL IN java main class - like com.mapr.installer.InstallerApplication if it is a
-# java app, otherwise set it to APP_DEAMON(usually)
+# java app, otherwise set it to APP_DAEMON(usually)
 
 APP_MAIN="$APP_DAEMON"
 
@@ -205,7 +212,7 @@ check() {
     [ -z "$sig" ] && sig=0
     if [ ! -r "$APP_PID_DIR" ]; then
         echo "$APP permission denied"
-    elif [ $APP_DEAMONIZES -eq 1 ] ; then
+    elif [ $APP_DAEMONIZES -eq 1 ] ; then
         APP_PID=$(cat $APP_PID_FILE 2> /dev/null)
     fi
     if [ -n "$APP_PID" ]; then
@@ -223,9 +230,17 @@ check() {
             # the string we need to grep for migh be very different than what we expect
             #
             # cat $file
-            grep -q $APP_MAIN $file && return
+            # For Java apps rely on jps to get around the 4k /proc/<pid>/cmdline limitation
+            # on older systems
+            if [ $APP_REQUIRE_JAVA -eq 1 ]; then 
+                jps -l | grep -q $APP_MAIN > /dev/null 2>&1 && return
+            else
+                grep -q $APP_MAIN $file && return
+            fi
         fi
-        rm -f $APP_PID_FILE
+        if [ $APP_DOES_NOT_MANAGE_PID_FILE -eq 0 ]; then
+            rm -f $APP_PID_FILE
+        fi
     fi
     false
 }
@@ -341,6 +356,7 @@ start() {
     check TERM && sleep 2 && check KILL
     wait $APP_PID
     echo "$APP ($APP_PID) start failed ($?). See $APP_LOG_START_FILE for details"
+    rm -f $APP_PID_FILE
     false
 }
 
@@ -377,7 +393,7 @@ stop() {
     false
 }
 
-if [ $APP_DOES_NOT_MANAGE_PID_FILE -eq 1 -a $APP_DEAMONIZES -eq 1 ] ;then
+if [ $APP_DOES_NOT_MANAGE_PID_FILE -eq 1 -a $APP_DAEMONIZES -eq 1 ] ;then
     echo "We have no way of managing the pid file"
     exit 3
 fi
