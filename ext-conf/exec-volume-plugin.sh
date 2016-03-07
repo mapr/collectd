@@ -1,6 +1,6 @@
 #!/bin/bash
 HOSTNAME="${COLLECTD_HOSTNAME:-`hostname -f`}"
-INTERVAL="6000"
+INTERVAL="60"
 while sleep "$INTERVAL"
 do
   # Run the maprcli command to get the volume list
