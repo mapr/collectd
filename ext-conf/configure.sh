@@ -294,6 +294,21 @@ function configureConnections() {
 
 
 #############################################################################
+# Function to create link for fast JMX jar
+#
+# uses global MAPR_HOME
+#############################################################################
+function createFastJMXLink() {
+
+  local jmx_jar
+  jmx_jar=$(find ${MAPR_HOME}/collectd-fast-jmx -name 'fast*SNAPSHOT.jar')
+  if [ -n "${jmx_jar}" ] ; then
+      ln -s ${jmx_jar} ${COLLECTD_HOME}/lib/fast-jmx-1.1-SNAPSHOT.jar
+  fi
+}
+ 
+
+#############################################################################
 # Function to configure JMX
 #
 # uses global CLDB_RUNNING, CD_RM_ROLE, CD_NM_ROLE
@@ -440,6 +455,7 @@ cp ${CD_CONF_FILE} ${NEW_CD_CONF_FILE}
 getRoles
 configureopentsdbplugin  # this ucomments everything between the MAPR_CONF_TAGs
 configurejavajmxplugin
+createFastJMXLink
 configureHadoopJMX
 waitForCLDB
 restartNM_RM_service
