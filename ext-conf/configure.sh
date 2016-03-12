@@ -337,10 +337,10 @@ function restartNM_RM_service() {
       MyNM_ip=`hostname -i`
       timeout -s HUP 30s $MAPR_HOME/bin/maprcli node cldbmaster -noheader 2> /dev/null
       if [ $? -eq 0 ] ; then
-        if ${CD_RM_ROLE} -eq 1 ]; then
+        if [ ${CD_RM_ROLE} -eq 1 ]; then
             maprcli node services -nodes ${MyNM_ip} -name resourcemanager -action restart
         fi
-        if ${CD_NM_ROLE} -eq 1 ]; then
+        if [ ${CD_NM_ROLE} -eq 1 ]; then
             maprcli node services -nodes ${MyNM_ip} -name nodemanager -action restart
         fi
       fi
