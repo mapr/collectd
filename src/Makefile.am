@@ -851,6 +851,13 @@ processes_la_LIBADD += -lkvm
 endif
 endif
 
+if BUILD_PLUGIN_MAPR_PROCESSES
+pkglib_LTLIBRARIES += mapr_processes.la
+mapr_processes_la_SOURCES = mapr_processes.c
+mapr_processes_la_LDFLAGS = $(PLUGIN_LDFLAGS)
+mapr_processes_la_LIBADD =
+endif
+
 if BUILD_PLUGIN_PROTOCOLS
 pkglib_LTLIBRARIES += protocols.la
 protocols_la_SOURCES = protocols.c
