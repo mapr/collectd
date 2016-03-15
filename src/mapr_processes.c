@@ -23,7 +23,7 @@
 #include "common.h"
 #include "plugin.h"
 #include "configfile.h"
-#include "stdio.h""
+#include "stdio.h"
 #include "sys/types.h"
 #include "dirent.h"
 
