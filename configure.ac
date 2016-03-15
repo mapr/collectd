@@ -5249,6 +5249,7 @@ plugin_nfs="no"
 plugin_numa="no"
 plugin_perl="no"
 plugin_processes="no"
+plugin_mapr_processes="no"
 plugin_protocols="no"
 plugin_serial="no"
 plugin_swap="no"
@@ -5289,6 +5290,7 @@ then
 	plugin_nfs="yes"
 	plugin_numa="yes"
 	plugin_processes="yes"
+	plugin_mapr_processes="yes"
 	plugin_protocols="yes"
 	plugin_serial="yes"
 	plugin_swap="yes"
@@ -5682,6 +5684,7 @@ AC_PLUGIN([ping],        [$with_liboping],     [Network latency statistics])
 AC_PLUGIN([postgresql],  [$with_libpq],        [PostgreSQL database statistics])
 AC_PLUGIN([powerdns],    [yes],                [PowerDNS statistics])
 AC_PLUGIN([processes],   [$plugin_processes],  [Process statistics])
+AC_PLUGIN([mapr_processes],   [$plugin_mapr_processes],  [MapR Process statistics])
 AC_PLUGIN([protocols],   [$plugin_protocols],  [Protocol (IP, TCP, ...) statistics])
 AC_PLUGIN([python],      [$with_python],       [Embed a Python interpreter])
 AC_PLUGIN([redis],       [$with_libhiredis],    [Redis plugin])
@@ -6059,6 +6062,7 @@ Configuration:
     postgresql  . . . . . $enable_postgresql
     powerdns  . . . . . . $enable_powerdns
     processes . . . . . . $enable_processes
+    mapr_processes  . . . $enable_mapr_processes
     protocols . . . . . . $enable_protocols
     python  . . . . . . . $enable_python
     redis . . . . . . . . $enable_redis
