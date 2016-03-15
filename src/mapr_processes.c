@@ -1278,7 +1278,7 @@ static int ps_read(void) {
 } /* int ps_read */
 
 void module_register(void) {
-plugin_register_complex_config("processes", ps_config);
-plugin_register_init("processes", ps_init);
-plugin_register_read("processes", ps_read);
+plugin_register_complex_config("mapr_processes", ps_config);
+plugin_register_init("mapr_processes", ps_init);
+plugin_register_read("mapr_processes", ps_read);
 } /* void module_register */
