@@ -42,7 +42,6 @@
 # include <stdio.h>
 # include <stdlib.h>
 # include <string.h>
-# include <procfs.h>
 # include <unistd.h>		/* For getopt() */
 # include <pwd.h>		/* For getpwnam() */
 # include <sys/ioctl.h>		/* For TIOCGSIZE/TIOCGWINSZ */
@@ -58,7 +57,6 @@ static char *input = NULL;
 
 # include <dirent.h>
 # include <regex.h>
-#include <kstat.h>
 
 
 struct Proc {
@@ -222,13 +220,6 @@ static int getProcesses(void) {
 			P[j].cmd[k] = '\0';
 		fclose(tn);
 
-#ifdef DEBUG
-		if (debug)
-			fprintf(stderr,
-					"uid=%5ld, name=%8s, pid=%5ld, ppid=%5ld, pgid=%5ld, thcount=%ld, cmd='%s'\n",
-					P[j].uid, P[j].name, P[j].pid, P[j].ppid, P[j].pgid,
-					P[j].thcount, P[j].cmd);
-#endif
 		P[j].parent = P[j].child = P[j].sister = -1;
 		j++;
 	}
@@ -279,19 +270,19 @@ static void getPids(const char *name) {
 	if (dp != NULL) {
 	  while (ep = readdir(dp)) {
 	    pidFP = fopen(dp->d_name, "r");
-		if (pidFP == NULL) {
-		  ERROR("mapr_process plugin failed to read pid file %s", dp->d_name);
-		} else {
-		  filename_length = strlen(dp->d_name);
-		  if (dp->d_name >= 4 && strcmp(dp->d_name + filename_len - 4, ".pid") == 0) {
-			fscanf(pidFP, "%d", &pid);
-			ps_list_register(pid, dp->d_name);
-		  }
-		  fclose(pidFP);
+	    if (pidFP == NULL) {
+	      ERROR("mapr_process plugin failed to read pid file %s", dp->d_name);
+	    } else {
+	      int filename_length = strlen(dp->d_name);
+	      if (filename_length >= 4 && strcmp(dp->d_name + filename_length - 4, ".pid") == 0) {
+	        fscanf(pidFP, "%d", &pid);
+	        ps_list_register(pid, dp->d_name);
+	      }
+	      fclose(pidFP);
 	    }
-	}
+	  }
   }
-closedir( dp);
+	closedir( dp);
 } /* void getPids */
 
 /* put name of process from config to list_head_g tree
