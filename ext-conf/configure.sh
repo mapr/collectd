@@ -356,7 +356,7 @@ function configureHadoopJMX() {
         else
             >&2 echo "WARNING: Failed to enable jmx for NM/RM - see ${YARN_BIN}.tmp.tmp"
         fi
-        rm -f ${YARN_BIN}.tmp 
+        rm -f ${YARN_BIN}.tmp
     fi
 }
 
