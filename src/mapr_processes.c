@@ -32,7 +32,7 @@
 # include <sys/sysinfo.h>
 #  if HAVE_LINUX_CONFIG_H
 #    include <linux/config.h>
-#  endif
+ #  endif
 # define PSCMD 	"ps -eo uid,pid,ppid,pgid,args"
 # define PSFORMAT 	"%ld %ld %ld %ld %[^\n]"
 # define PSVARS	&P[i].uid, &P[i].pid, &P[i].ppid, &P[i].pgid, P[i].cmd
