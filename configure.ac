@@ -5647,6 +5647,7 @@ AC_PLUGIN([log_logstash], [$plugin_log_logstash], [Logstash json_event compatibl
 AC_PLUGIN([lpar],        [$with_perfstat],     [AIX logical partitions statistics])
 AC_PLUGIN([lvm],         [$with_liblvm2app],   [LVM statistics])
 AC_PLUGIN([madwifi],     [$have_linux_wireless_h], [Madwifi wireless statistics])
+AC_PLUGIN([mapr_processes], [yes],             [MapR processes stats])
 AC_PLUGIN([match_empty_counter], [yes],        [The empty counter match])
 AC_PLUGIN([match_hashed], [yes],               [The hashed match])
 AC_PLUGIN([match_regex], [yes],                [The regex match])
@@ -6026,6 +6027,7 @@ Configuration:
     lpar  . . . . . . . . $enable_lpar
     lvm . . . . . . . . . $enable_lvm
     madwifi . . . . . . . $enable_madwifi
+    mapr_processes  . . . $enable_mapr_processes
     match_empty_counter . $enable_match_empty_counter
     match_hashed  . . . . $enable_match_hashed
     match_regex . . . . . $enable_match_regex
