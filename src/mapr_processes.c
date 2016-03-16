@@ -32,7 +32,7 @@
 # include <sys/sysinfo.h>
 #  if HAVE_LINUX_CONFIG_H
 #    include <linux/config.h>
- #  endif
+#  endif
 # define PSCMD 	"ps -eo uid,pid,ppid,pgid,args"
 # define PSFORMAT 	"%ld %ld %ld %ld %[^\n]"
 # define PSVARS	&P[i].uid, &P[i].pid, &P[i].ppid, &P[i].pgid, P[i].cmd
@@ -42,7 +42,6 @@
 # include <stdio.h>
 # include <stdlib.h>
 # include <string.h>
-# include <procfs.h>
 # include <unistd.h>		/* For getopt() */
 # include <pwd.h>		/* For getpwnam() */
 # include <sys/ioctl.h>		/* For TIOCGSIZE/TIOCGWINSZ */
@@ -52,13 +51,9 @@
 #  define FALSE 0
 #endif
 # define MAXLINE 8192
-static char *name = "", *str = NULL, *Progname;
-static long ipid = -1;
-static char *input = NULL;
 
 # include <dirent.h>
 # include <regex.h>
-#include <kstat.h>
 
 
 struct Proc {
@@ -184,7 +179,7 @@ static int getProcesses(void) {
 	for (i = j = 0; i < globbuf.gl_pathc; i++) {
 		char *pdir, name[32];
 		int c;
-		FILE *tn;
+		FILE *processFP;
 		int k = 0;
 
 		pdir = globbuf.gl_pathv[globbuf.gl_pathc - i - 1];
@@ -202,39 +197,35 @@ static int getProcesses(void) {
 
 		snprintf(name, sizeof(name), "%s%s",
 				globbuf.gl_pathv[globbuf.gl_pathc - i - 1], "/stat");
-		tn = fopen(name, "r");
-		if (tn == NULL)
+		processFP = fopen(name, "r");
+		if (processFP == NULL)
 			continue; /* process vanished since glob() */
-		fscanf(tn, "%ld %s %*c %ld %ld", &P[j].pid, P[j].cmd, &P[j].ppid,
+		int status = fscanf(processFP, "%ld %s %*c %ld %ld", &P[j].pid, P[j].cmd, &P[j].ppid,
 				&P[j].pgid);
-		fclose(tn);
+    if (status == 0) {
+	    ERROR("mapr_processes plugin: Failed to read from /proc/pid/stat.");
+      continue;
+    }
+		fclose(processFP);
 		P[j].thcount = 1;
 
 		snprintf(name, sizeof(name), "%s%s",
 				globbuf.gl_pathv[globbuf.gl_pathc - i - 1], "/cmdline");
-		tn = fopen(name, "r");
-		if (tn == NULL)
+		processFP = fopen(name, "r");
+		if (processFP == NULL)
 			continue; /* process vanished since glob() */
-		while (k < MAXLINE - 1 && EOF != (c = fgetc(tn))) {
+		while (k < MAXLINE - 1 && EOF != (c = fgetc(processFP))) {
 			P[j].cmd[k++] = c == '\0' ? ' ' : c;
 		}
 		if (k > 0)
 			P[j].cmd[k] = '\0';
-		fclose(tn);
-
-#ifdef DEBUG
-		if (debug)
-			fprintf(stderr,
-					"uid=%5ld, name=%8s, pid=%5ld, ppid=%5ld, pgid=%5ld, thcount=%ld, cmd='%s'\n",
-					P[j].uid, P[j].name, P[j].pid, P[j].ppid, P[j].pgid,
-					P[j].thcount, P[j].cmd);
-#endif
+		fclose(processFP);
 		P[j].parent = P[j].child = P[j].sister = -1;
 		j++;
 	}
 	globfree(&globbuf);
 	return j;
-} /* int GetProcessesDirect */
+} /* int getProcesses() */
 
 int get_pid_index(long pid) {
 	int me;
@@ -267,40 +258,12 @@ static void MakeTree(void) {
 	}
 }
 
-/*
- * get all the pids in this directory
- */
-static void getPids(const char *name) {
-	DIR *dp;
-	struct dirent *ep;
-	FILE *pidFP;
-	int pid = -1;
-	dp = opendir(name);
-	if (dp != NULL) {
-	  while (ep = readdir(dp)) {
-	    pidFP = fopen(dp->d_name, "r");
-		if (pidFP == NULL) {
-		  ERROR("mapr_process plugin failed to read pid file %s", dp->d_name);
-		} else {
-		  filename_length = strlen(dp->d_name);
-		  if (dp->d_name >= 4 && strcmp(dp->d_name + filename_len - 4, ".pid") == 0) {
-			fscanf(pidFP, "%d", &pid);
-			ps_list_register(pid, dp->d_name);
-		  }
-		  fclose(pidFP);
-	    }
-	}
-  }
-closedir( dp);
-} /* void getPids */
-
 /* put name of process from config to list_head_g tree
  * list_head_g is a list of 'procstat_t' structs with
  * processes names we want to watch */
-static void ps_list_register(int pid, const char *name) {
+static void ps_list_register(int pid, char *name) {
 procstat_t *new;
 procstat_t *ptr;
-int status;
 
 new = (procstat_t *) malloc(sizeof(procstat_t));
 if (new == NULL) {
@@ -320,7 +283,6 @@ for (ptr = list_head_g; ptr != NULL; ptr = ptr->next) {
 				"`ProcessMatch' with the same name. "
 				"All but the first setting will be "
 				"ignored.");
-		sfree(new->re);
 		sfree(new);
 		return;
 	}
@@ -335,6 +297,37 @@ else
 	ptr->next = new;
 } /* void ps_list_register */
 
+/*
+ * get all the pids in this directory
+ */
+static void getPids(const char *name) {
+  DIR *directory;
+  struct dirent *directoryEntry;
+  FILE *pidFP;
+  int pid = -1;
+  directory = opendir(name);
+  if (directory != NULL) {
+    while ((directoryEntry = readdir(directory))) {
+      pidFP = fopen(directoryEntry->d_name, "r");
+    if (pidFP == NULL) {
+      ERROR("mapr_process plugin failed to read pid file %s", directoryEntry->d_name);
+    } else {
+      int filename_length = strlen(directoryEntry->d_name);
+      if (filename_length >= 4 && strcmp(directoryEntry->d_name + filename_length - 4, ".pid") == 0) {
+        int status = fscanf(pidFP, "%d", &pid);
+        if ( status == 0 ) {
+          ERROR("mapr_process plugin failed to read pid file %s", directoryEntry->d_name);
+        continue;
+        }
+        ps_list_register(pid, directoryEntry->d_name);
+      }
+      fclose(pidFP);
+      }
+  }
+  }
+closedir(directory);
+} /* void getPids */
+
 static void ps_proc_list_prepend(procstat_t *ps)
 {
   if (proc_list_head_g == NULL) {
@@ -343,7 +336,7 @@ static void ps_proc_list_prepend(procstat_t *ps)
 		  ERROR ("mapr_processes plugin: error allocating memory");
 		  return;
 	  }
-	  ps->proc_next = NULL;
+	  ps->next = NULL;
 	  memcpy(proc_list_head_g, ps, sizeof(procstat_t));
   }
   else {
@@ -354,7 +347,7 @@ static void ps_proc_list_prepend(procstat_t *ps)
 		  return;
 	  }
 	  memcpy(new, ps, sizeof(procstat_t));
-	  new->proc_next = proc_list_head_g;
+	  new->next = proc_list_head_g;
 	  proc_list_head_g = new;
   }
 } /* void ps_proc_list_prepend */
@@ -366,7 +359,7 @@ static void ps_proc_list_reset (procstat_t **head)
   ps = *head;
   while (ps) {
 	  procstat_t *nps;
-  	nps = ps->proc_next;
+  	nps = ps->next;
 	  free(ps);
 	  ps = nps;
   }
@@ -1004,101 +997,6 @@ if ( report_ctx_switch )
 return (0);
 } /* int ps_read_process (...) */
 
-static char *ps_get_cmdline (pid_t pid, char *name, char *buf, size_t buf_len)
-{
-char *buf_ptr;
-size_t len;
-
-char file[PATH_MAX];
-int fd;
-
-size_t n;
-
-if ((pid < 1) || (NULL == buf) || (buf_len < 2))
-return NULL;
-
-ssnprintf (file, sizeof (file), "/proc/%u/cmdline",
-		(unsigned int) pid);
-
-errno = 0;
-fd = open (file, O_RDONLY);
-if (fd < 0) {
-	char errbuf[4096];
-	/* ENOENT means the process exited while we were handling it.
-	 * Don't complain about this, it only fills the logs. */
-	if (errno != ENOENT)
-	WARNING ("processes plugin: Failed to open `%s': %s.", file,
-			sstrerror (errno, errbuf, sizeof (errbuf)));
-	return NULL;
-}
-
-buf_ptr = buf;
-len = buf_len;
-
-n = 0;
-
-while (42) {
-	ssize_t status;
-
-	status = read (fd, (void *)buf_ptr, len);
-
-	if (status < 0) {
-		char errbuf[1024];
-
-		if ((EAGAIN == errno) || (EINTR == errno))
-		continue;
-
-		WARNING ("processes plugin: Failed to read from `%s': %s.", file,
-				sstrerror (errno, errbuf, sizeof (errbuf)));
-		close (fd);
-		return NULL;
-	}
-
-	n += status;
-
-	if (status == 0)
-	break;
-
-	buf_ptr += status;
-	len -= status;
-
-	if (len <= 0)
-	break;
-}
-
-close (fd);
-
-if (0 == n) {
-	/* cmdline not available; e.g. kernel thread, zombie */
-	if (NULL == name)
-	return NULL;
-
-	ssnprintf (buf, buf_len, "[%s]", name);
-	return buf;
-}
-
-assert (n <= buf_len);
-
-if (n == buf_len)
---n;
-buf[n] = '\0';
-
---n;
-/* remove trailing whitespace */
-while ((n > 0) && (isspace (buf[n]) || ('\0' == buf[n]))) {
-	buf[n] = '\0';
-	--n;
-}
-
-/* arguments are separated by '\0' in /proc/<pid>/cmdline */
-while (n > 0) {
-	if ('\0' == buf[n])
-	buf[n] = ' ';
-	--n;
-}
-return buf;
-} /* char *ps_get_cmdline (...) */
-
 static int read_fork_rate ()
 {
 FILE *proc_stat;
@@ -1158,7 +1056,7 @@ static void ps_find_cpu_delta(procstat_t *ps, unsigned long *out_userd, unsigned
 {
   procstat_t *ps_ptr;
 
-  for (ps_ptr=prev_proc_list_head_g; ps_ptr!=NULL; ps_ptr=ps_ptr->proc_next) {
+  for (ps_ptr=prev_proc_list_head_g; ps_ptr!=NULL; ps_ptr=ps_ptr->next) {
     if (ps_ptr->pid == ps->pid)
       break;
   }
@@ -1168,8 +1066,8 @@ static void ps_find_cpu_delta(procstat_t *ps, unsigned long *out_userd, unsigned
   }
   else
     *out_userd = *out_sysd = 0ULL;
-  }
 }
+
 
 static void ps_calc_mem_percent(sysstat_t *ss, procstat_t *ps)
 {
@@ -1264,7 +1162,7 @@ static int ps_read(void) {
   ps_submit_state ("paging", paging);
   ps_submit_state ("blocked", blocked);
 
-  for (ps_ptr = proc_list_head_g; ps_ptr != NULL; ps_ptr = ps_ptr->proc_next) {
+  for (ps_ptr = proc_list_head_g; ps_ptr != NULL; ps_ptr = ps_ptr->next) {
     if (config_threshold_exceeded(ps_ptr)) ps_submit_proc_list (ps_ptr);
   }
   ps_proc_list_reset(&prev_proc_list_head_g);
