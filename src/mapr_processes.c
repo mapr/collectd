@@ -300,7 +300,7 @@ else
 /*
  * get all the pids in this directory
  */
-static void getPids(const char *name) {
+static void getPids(char *name) {
   DIR *directory;
   struct dirent *directoryEntry;
   FILE *pidFP;
