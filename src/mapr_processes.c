@@ -1163,7 +1163,8 @@ static int ps_read(void) {
   ps_submit_state ("blocked", blocked);
 
   for (ps_ptr = proc_list_head_g; ps_ptr != NULL; ps_ptr = ps_ptr->next) {
-    if (config_threshold_exceeded(ps_ptr)) ps_submit_proc_list (ps_ptr);
+    if (config_threshold_exceeded(ps_ptr))
+      ps_submit_proc_list (ps_ptr);
   }
   ps_proc_list_reset(&prev_proc_list_head_g);
   prev_proc_list_head_g = proc_list_head_g;

@@ -7,7 +7,7 @@ DEB_PKGS="pkg-config libltdl-dev librrd2-dev libsensors4-dev libsnmp-dev libyajl
 RH_PKGS="libtool-ltdl-devel libatasmart-devel lm_sensors-devel lvm2-devel \
          rrdtool-devel perl-devel openldap-devel libgcrypt-devel libcap-devel yajl-devel \
          curl-devel libxml2-devel mysql-devel java-1.8.0-openjdk-devel perl-ExtUtils-Embed \
-         perl-ExtUtils-MakeMaker"
+         perl-ExtUtils-MakeMaker rpm-build"
 if uname -a | fgrep Ubuntu > /dev/null 2>&1 ; then
     apt-get install $COMMON_PKGS $DEB_PKGS
 elif [ -f /etc/redhat-release ] ; then
