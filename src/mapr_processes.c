@@ -308,7 +308,7 @@ static void getPids(char *name) {
   directory = opendir(name);
   if (directory != NULL) {
     while ((directoryEntry = readdir(directory))) {
-      pidFP = fopen(strcat(strcat(name,"/"),directoryEntry->d_name)), "r");
+      pidFP = fopen(strcat(strcat(name,"/"),directoryEntry->d_name), "r");
     if (pidFP == NULL) {
       ERROR("mapr_process plugin failed to open pid file %s", directoryEntry->d_name);
     } else {
