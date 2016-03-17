@@ -310,7 +310,7 @@ static void getPids(const char *name) {
     while ((directoryEntry = readdir(directory))) {
       pidFP = fopen(directoryEntry->d_name, "r");
     if (pidFP == NULL) {
-      ERROR("mapr_process plugin failed to read pid file %s", directoryEntry->d_name);
+      ERROR("mapr_process plugin failed to open pid file %s", directoryEntry->d_name);
     } else {
       int filename_length = strlen(directoryEntry->d_name);
       if (filename_length >= 4 && strcmp(directoryEntry->d_name + filename_length - 4, ".pid") == 0) {
