@@ -353,6 +353,7 @@ function configureHadoopJMX() {
         rc2=$?
         if [ $rc1 -eq 0 -a $rc2 -eq 0 ]; then
             mv ${YARN_BIN}.tmp.tmp ${YARN_BIN}
+            chmod a+x ${YARN_BIN}
         else
             >&2 echo "WARNING: Failed to enable jmx for NM/RM - see ${YARN_BIN}.tmp.tmp"
         fi
