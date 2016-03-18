@@ -107,6 +107,7 @@ static void uid2user(uid_t uid, char *name, int len) {
 #define PROCSTAT_NAME_LEN 256
 typedef struct procstat {
 	char name[PROCSTAT_NAME_LEN];
+	char processName[PROCSTAT_NAME_LEN];
 	unsigned long pid;
 	unsigned long ppid;
 	unsigned long starttime_secs;
@@ -262,40 +263,43 @@ static void MakeTree(void) {
  * list_head_g is a list of 'procstat_t' structs with
  * processes names we want to watch */
 static void ps_list_register(int pid, char *name) {
-procstat_t *new;
-procstat_t *ptr;
+  procstat_t *new;
+  procstat_t *ptr;
 
-new = (procstat_t *) malloc(sizeof(procstat_t));
-if (new == NULL) {
-	ERROR("mapr_processes plugin: ps_list_register: malloc failed.");
-	return;
-}
-memset(new, 0, sizeof(procstat_t));
-// Remove .pid from file name
-char *serviceName = strtok(name,".");
-sstrncpy(new->name, serviceName, sizeof(new->name));
-new->pid = pid;
+  new = (procstat_t *) malloc(sizeof(procstat_t));
+  if (new == NULL) {
+    ERROR("mapr_processes plugin: ps_list_register: malloc failed.");
+    return;
+  }
+  memset(new, 0, sizeof(procstat_t));
+  // Remove .pid from file name
+  char *serviceName = strtok(name,".");
+  sstrncpy(new->processName, serviceName, sizeof(new->processName));
+  new->pid = pid;
 
-for (ptr = list_head_g; ptr != NULL; ptr = ptr->next) {
-	if (strcmp(ptr->name, name) == 0) {
-		WARNING("mapr_processes plugin: You have configured more "
-				"than one `Process' or "
-				"`ProcessMatch' with the same name. "
-				"All but the first setting will be "
-				"ignored.");
-		sfree(new);
-		return;
-	}
+  for (ptr = list_head_g; ptr != NULL; ptr = ptr->next) {
+    if (strcmp(ptr->name, name) == 0) {
+      WARNING("mapr_processes plugin: You have configured more "
+          "than one `Process' or "
+          "`ProcessMatch' with the same name. "
+          "All but the first setting will be "
+          "ignored.");
+      sfree(new);
+      return;
+    }
 
-	if (ptr->next == NULL)
-		break;
-}
+    if (ptr->next == NULL)
+      break;
+  }
 
-if (ptr == NULL)
-	list_head_g = new;
-else
-	ptr->next = new;
-} /* void ps_list_register */
+  if (ptr == NULL) {
+    INFO ("List is empty adding to front of the list %d. %s", pid, name);
+    list_head_g = new;
+  } else {
+    INFO ("List is not empty adding to the back of the list %d, %s",pid,name);
+    ptr->next = new;
+  }
+}/* void ps_list_register */
 
 /*
  * get all the pids in this directory
@@ -308,24 +312,35 @@ static void getPids(char *name) {
   directory = opendir(name);
   if (directory != NULL) {
     while ((directoryEntry = readdir(directory))) {
-      pidFP = fopen(strcat(strcat(name,"/"),directoryEntry->d_name), "r");
-    if (pidFP == NULL) {
-      ERROR("mapr_process plugin failed to open pid file %s", directoryEntry->d_name);
-    } else {
-      int filename_length = strlen(directoryEntry->d_name);
-      if (filename_length >= 4 && strcmp(directoryEntry->d_name + filename_length - 4, ".pid") == 0) {
-        int status = fscanf(pidFP, "%d", &pid);
-        if ( status == 0 ) {
-          ERROR("mapr_process plugin failed to read pid file %s", directoryEntry->d_name);
-        continue;
+      char  *dirName=NULL;
+      dirName = malloc(sizeof(char) * strlen(name)+1);
+      strcpy(dirName,name);
+      strcat(dirName,"/");
+
+      char *fileName=NULL;
+      fileName = malloc(sizeof(char) * (strlen(dirName)+strlen(directoryEntry->d_name)));
+      fileName = strcat(dirName,directoryEntry->d_name);
+      pidFP = fopen(fileName, "r");
+
+      if (pidFP == NULL) {
+        ERROR("mapr_process plugin failed to open pid file %s", fileName);
+      } else {
+        int filename_length = strlen(directoryEntry->d_name);
+        if (filename_length >= 4 && strcmp(directoryEntry->d_name + filename_length - 4, ".pid") == 0) {
+          int status = fscanf(pidFP, "%d", &pid);
+          if ( status == 0 ) {
+            ERROR("mapr_process plugin failed to read pid file %s", fileName);
+          continue;
+          }
+          ps_list_register(pid, directoryEntry->d_name);
         }
-        ps_list_register(pid, directoryEntry->d_name);
+        fclose(pidFP);
       }
-      fclose(pidFP);
-      }
+      dirName = NULL;
+      fileName = NULL;
+    }
   }
-  }
-closedir(directory);
+  closedir(directory);
 } /* void getPids */
 
 static void ps_proc_list_prepend(procstat_t *ps)
@@ -397,6 +412,7 @@ for (i = 0; i < ci->children_num; ++i) {
 					"content (%i elements) of the <PID_Directory '%s'> block.",
 					c->children_num, c->values[0].value.string);
 		}
+		INFO("Getting PIDs for %s",c->values[0].value.string);
 		getPids(c->values[0].value.string);
 	} else {
 		ERROR("mapr_processes plugin: The `%s' configuration option is not "
@@ -442,11 +458,8 @@ vl.values = values;
 vl.values_len = 2;
 sstrncpy(vl.host, hostname_g, sizeof(vl.host));
 sstrncpy(vl.plugin, "mapr_processes", sizeof(vl.plugin));
-if (ps->pid)
-	ssnprintf(vl.plugin_instance, sizeof(vl.plugin_instance),
-			"%s[pid=%lu,ppid=%lu]", ps->name, ps->pid, ps->ppid);
-else
-	sstrncpy(vl.plugin_instance, ps->name, sizeof(vl.plugin_instance));
+ssnprintf(vl.type_instance,sizeof(vl.type_instance), "%lu", ps->pid);
+sstrncpy(vl.plugin_instance, ps->processName, sizeof(vl.plugin_instance));
 
 sstrncpy(vl.type, "ps_vm", sizeof(vl.type));
 vl.values[0].gauge = ps->vmem_size;
@@ -836,165 +849,165 @@ return ss;
 
 int ps_read_process (int pid, procstat_t *ps, char *state)
 {
-char filename[64];
-char buffer[1024];
+  char filename[64];
+  char buffer[1024];
 
-char *fields[64];
-char fields_len;
+  char *fields[64];
+  char fields_len;
 
-size_t buffer_len;
+  size_t buffer_len;
 
-char *buffer_ptr;
-size_t name_start_pos;
-size_t name_end_pos;
-size_t name_len;
+  char *buffer_ptr;
+  size_t name_start_pos;
+  size_t name_end_pos;
+  size_t name_len;
 
-derive_t cpu_user_counter;
-derive_t cpu_system_counter;
-long long unsigned vmem_size;
-long long unsigned vmem_rss;
-long long unsigned stack_size;
+  derive_t cpu_user_counter;
+  derive_t cpu_system_counter;
+  long long unsigned vmem_size;
+  long long unsigned vmem_rss;
+  long long unsigned stack_size;
 
-ssize_t status;
+  ssize_t status;
 
-memset (ps, 0, sizeof (procstat_t));
+  memset (ps, 0, sizeof (procstat_t));
 
-ssnprintf (filename, sizeof (filename), "/proc/%i/stat", pid);
+  ssnprintf (filename, sizeof (filename), "/proc/%i/stat", pid);
 
-status = read_file_contents (filename, buffer, sizeof(buffer) - 1);
-if (status <= 0)
-return (-1);
-buffer_len = (size_t) status;
-buffer[buffer_len] = 0;
+  status = read_file_contents (filename, buffer, sizeof(buffer) - 1);
+  if (status <= 0)
+  return (-1);
+  buffer_len = (size_t) status;
+  buffer[buffer_len] = 0;
 
-/* The name of the process is enclosed in parens. Since the name can
- * contain parens itself, spaces, numbers and pretty much everything
- * else, use these to determine the process name. We don't use
- * strchr(3) and strrchr(3) to avoid pointer arithmetic which would
- * otherwise be required to determine name_len. */
-name_start_pos = 0;
-while ((buffer[name_start_pos] != '(')
-		&& (name_start_pos < buffer_len))
-name_start_pos++;
+  /* The name of the process is enclosed in parens. Since the name can
+   * contain parens itself, spaces, numbers and pretty much everything
+   * else, use these to determine the process name. We don't use
+   * strchr(3) and strrchr(3) to avoid pointer arithmetic which would
+   * otherwise be required to determine name_len. */
+  name_start_pos = 0;
+  while ((buffer[name_start_pos] != '(')
+      && (name_start_pos < buffer_len))
+  name_start_pos++;
 
-name_end_pos = buffer_len;
-while ((buffer[name_end_pos] != ')')
-		&& (name_end_pos > 0))
-name_end_pos--;
+  name_end_pos = buffer_len;
+  while ((buffer[name_end_pos] != ')')
+      && (name_end_pos > 0))
+  name_end_pos--;
 
-/* Either '(' or ')' is not found or they are in the wrong order.
- * Anyway, something weird that shouldn't happen ever. */
-if (name_start_pos >= name_end_pos)
-{
-	ERROR ("processes plugin: name_start_pos = %zu >= name_end_pos = %zu",
-			name_start_pos, name_end_pos);
-	return (-1);
-}
+  /* Either '(' or ')' is not found or they are in the wrong order.
+   * Anyway, something weird that shouldn't happen ever. */
+  if (name_start_pos >= name_end_pos)
+  {
+    ERROR ("processes plugin: name_start_pos = %zu >= name_end_pos = %zu",
+        name_start_pos, name_end_pos);
+    return (-1);
+  }
 
-name_len = (name_end_pos - name_start_pos) - 1;
-if (name_len >= sizeof (ps->name))
-name_len = sizeof (ps->name) - 1;
+  name_len = (name_end_pos - name_start_pos) - 1;
+  if (name_len >= sizeof (ps->name))
+  name_len = sizeof (ps->name) - 1;
 
-sstrncpy (ps->name, &buffer[name_start_pos + 1], name_len + 1);
+  sstrncpy (ps->name, &buffer[name_start_pos + 1], name_len + 1);
 
-if ((buffer_len - name_end_pos) < 2)
-return (-1);
-buffer_ptr = &buffer[name_end_pos + 2];
+  if ((buffer_len - name_end_pos) < 2)
+  return (-1);
+  buffer_ptr = &buffer[name_end_pos + 2];
 
-fields_len = strsplit (buffer_ptr, fields, STATIC_ARRAY_SIZE (fields));
-if (fields_len < 22)
-{
-	DEBUG ("processes plugin: ps_read_process (pid = %i):"
-			" `%s' has only %i fields..",
-			(int) pid, filename, fields_len);
-	return (-1);
-}
+  fields_len = strsplit (buffer_ptr, fields, STATIC_ARRAY_SIZE (fields));
+  if (fields_len < 22)
+  {
+    DEBUG ("processes plugin: ps_read_process (pid = %i):"
+        " `%s' has only %i fields..",
+        (int) pid, filename, fields_len);
+    return (-1);
+  }
 
-*state = fields[0][0];
+  *state = fields[0][0];
 
-if (*state == 'Z')
-{
-	ps->num_lwp = 0;
-	ps->num_proc = 0;
-}
-else
-{
-	ps->num_lwp = strtoul (fields[17], /* endptr = */NULL, /* base = */10);
-	if ((ps_read_status(pid, ps)) == NULL)
-	{
-		/* No VMem data */
-		ps->vmem_data = -1;
-		ps->vmem_code = -1;
-		DEBUG("ps_read_process: did not get vmem data for pid %i",pid);
-	}
-	if (ps->num_lwp <= 0)
-	ps->num_lwp = 1;
-	ps->num_proc = 1;
-}
+  if (*state == 'Z')
+  {
+    ps->num_lwp = 0;
+    ps->num_proc = 0;
+  }
+  else
+  {
+    ps->num_lwp = strtoul (fields[17], /* endptr = */NULL, /* base = */10);
+    if ((ps_read_status(pid, ps)) == NULL)
+    {
+      /* No VMem data */
+      ps->vmem_data = -1;
+      ps->vmem_code = -1;
+      DEBUG("ps_read_process: did not get vmem data for pid %i",pid);
+    }
+    if (ps->num_lwp <= 0)
+    ps->num_lwp = 1;
+    ps->num_proc = 1;
+  }
 
-/* Leave the rest at zero if this is only a zombi */
-if (ps->num_proc == 0)
-{
-	DEBUG ("processes plugin: This is only a zombi: pid = %i; "
-			"name = %s;", pid, ps->name);
-	return (0);
-}
+  /* Leave the rest at zero if this is only a zombi */
+  if (ps->num_proc == 0)
+  {
+    DEBUG ("processes plugin: This is only a zombi: pid = %i; "
+        "name = %s;", pid, ps->name);
+    return (0);
+  }
 
-cpu_user_counter = atoll (fields[11]);
-cpu_system_counter = atoll (fields[12]);
-vmem_size = atoll (fields[20]);
-vmem_rss = atoll (fields[21]);
-ps->vmem_minflt_counter = atol (fields[7]);
-ps->vmem_majflt_counter = atol (fields[9]);
-ps->pid = pid;
-ps->ppid = atol (fields[1]);
-ps->starttime_secs = atoll (fields[19]) / CONFIG_HZ;
+  cpu_user_counter = atoll (fields[11]);
+  cpu_system_counter = atoll (fields[12]);
+  vmem_size = atoll (fields[20]);
+  vmem_rss = atoll (fields[21]);
+  ps->vmem_minflt_counter = atol (fields[7]);
+  ps->vmem_majflt_counter = atol (fields[9]);
+  ps->pid = pid;
+  ps->ppid = atol (fields[1]);
+  ps->starttime_secs = atoll (fields[19]) / CONFIG_HZ;
 
-{
-	unsigned long long stack_start = atoll (fields[25]);
-	unsigned long long stack_ptr = atoll (fields[26]);
+  {
+    unsigned long long stack_start = atoll (fields[25]);
+    unsigned long long stack_ptr = atoll (fields[26]);
 
-	stack_size = (stack_start > stack_ptr)
-	? stack_start - stack_ptr
-	: stack_ptr - stack_start;
-}
+    stack_size = (stack_start > stack_ptr)
+    ? stack_start - stack_ptr
+    : stack_ptr - stack_start;
+  }
 
-/* Convert jiffies to useconds */
-cpu_user_counter = cpu_user_counter * 1000000 / CONFIG_HZ;
-cpu_system_counter = cpu_system_counter * 1000000 / CONFIG_HZ;
-vmem_rss = vmem_rss * pagesize_g;
+  /* Convert jiffies to useconds */
+  cpu_user_counter = cpu_user_counter * 1000000 / CONFIG_HZ;
+  cpu_system_counter = cpu_system_counter * 1000000 / CONFIG_HZ;
+  vmem_rss = vmem_rss * pagesize_g;
 
-ps->cpu_user_counter = cpu_user_counter;
-ps->cpu_system_counter = cpu_system_counter;
-ps->vmem_size = (unsigned long) vmem_size;
-ps->vmem_rss = (unsigned long) vmem_rss;
-ps->stack_size = (unsigned long) stack_size;
+  ps->cpu_user_counter = cpu_user_counter;
+  ps->cpu_system_counter = cpu_system_counter;
+  ps->vmem_size = (unsigned long) vmem_size;
+  ps->vmem_rss = (unsigned long) vmem_rss;
+  ps->stack_size = (unsigned long) stack_size;
 
-if ( (ps_read_io (pid, ps)) == NULL)
-{
-	/* no io data */
-	ps->io_rchar = -1;
-	ps->io_wchar = -1;
-	ps->io_syscr = -1;
-	ps->io_syscw = -1;
+  if ( (ps_read_io (pid, ps)) == NULL)
+  {
+    /* no io data */
+    ps->io_rchar = -1;
+    ps->io_wchar = -1;
+    ps->io_syscr = -1;
+    ps->io_syscw = -1;
 
-	DEBUG("ps_read_process: not get io data for pid %i",pid);
-}
+    DEBUG("ps_read_process: not get io data for pid %i",pid);
+  }
 
-if ( report_ctx_switch )
-{
-	if ( (ps_read_tasks_status(pid, ps)) == NULL)
-	{
-		ps->cswitch_vol = -1;
-		ps->cswitch_invol = -1;
+  if ( report_ctx_switch )
+  {
+    if ( (ps_read_tasks_status(pid, ps)) == NULL)
+    {
+      ps->cswitch_vol = -1;
+      ps->cswitch_invol = -1;
 
-		DEBUG("ps_read_tasks_status: not get context "
-				"switch data for pid %i",pid);
-	}
-}
+      DEBUG("ps_read_tasks_status: not get context "
+          "switch data for pid %i",pid);
+    }
+  }
 
-/* success */
-return (0);
+  /* success */
+  return (0);
 } /* int ps_read_process (...) */
 
 static int read_fork_rate ()
@@ -1126,7 +1139,7 @@ static int ps_read(void) {
    */
   MakeTree();
 
-  // TODO -- Get the latest PIDs
+  // TODO -- Get the latest PIDs and Aggregate by parent PID
 
   ss = ps_read_sys_stat();
 
@@ -1140,6 +1153,7 @@ static int ps_read(void) {
     ps_calc_runtime(ss, &ps);
     ps_calc_mem_percent(ss, &ps);
     ps_calc_cpu_percent(ss, prev_ss, &ps);
+    sstrncpy(ps.processName, ps_ptr->processName, sizeof(ps.processName));
 
     switch (state)
     {
