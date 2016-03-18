@@ -263,8 +263,8 @@ static void MakeTree(void) {
  * list_head_g is a list of 'procstat_t' structs with
  * processes names we want to watch */
 static void ps_list_register(int pid, char *name) {
-  procstat_t *new;
-  procstat_t *ptr;
+  procstat_t *new=NULL;
+  procstat_t *ptr=NULL;
 
   new = (procstat_t *) malloc(sizeof(procstat_t));
   if (new == NULL) {
@@ -299,6 +299,7 @@ static void ps_list_register(int pid, char *name) {
     INFO ("List is not empty adding to the back of the list %d, %s",pid,name);
     ptr->next = new;
   }
+  sfree(new);
 }/* void ps_list_register */
 
 /*
