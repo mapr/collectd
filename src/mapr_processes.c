@@ -337,8 +337,6 @@ static void getPids(char *name) {
         }
         fclose(pidFP);
       }
-      directoryEntry = NULL;
-      fileName = NULL;
     }
   }
   closedir(directory);
