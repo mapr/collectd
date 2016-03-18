@@ -312,8 +312,7 @@ static void getPids(char *name) {
   directory = opendir(name);
   if (directory != NULL) {
     while ((directoryEntry = readdir(directory))) {
-      char  *fileName=NULL;
-      fileName = malloc(sizeof(PROCSTAT_NAME_LEN));
+      char *fileName = malloc(sizeof(MAXLINE));
       strcpy(fileName,name);
       strcat(fileName,"/");
       strcat(fileName,directoryEntry->d_name);
