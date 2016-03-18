@@ -313,20 +313,24 @@ static void getPids(char *name) {
   directory = opendir(name);
   if (directory != NULL) {
     while ((directoryEntry = readdir(directory))) {
-      char *fileName = malloc(sizeof(PATH_MAX));
-      memset(fileName, 0, sizeof(fileName));
+      if (!strcmp (directoryEntry->d_name, "."))
+        continue;
+      if (!strcmp (directoryEntry->d_name, ".."))
+        continue;
+      char fileName[PATH_MAX];
+      memset(fileName, '\0', sizeof(fileName));
       strcpy(fileName,name);
       strcat(fileName,"/");
       strcat(fileName,directoryEntry->d_name);
       pidFP = fopen(fileName, "r");
       int filename_length = strlen(fileName);
       if (pidFP == NULL) {
-        ERROR("mapr_process plugin failed to open pid file %s", fileName);
+        ERROR("mapr_process plugin failed to open pid file %s", directoryEntry->d_name);
       } else {
         if (filename_length >= 4 && strcmp(fileName + filename_length - 4, ".pid") == 0) {
           int status = fscanf(pidFP, "%d", &pid);
           if ( status == 0 ) {
-            ERROR("mapr_process plugin failed to read pid file %s", fileName);
+            ERROR("mapr_process plugin failed to read pid file %s", directoryEntry->d_name);
           continue;
           }
           ps_list_register(pid, directoryEntry->d_name);
@@ -334,7 +338,7 @@ static void getPids(char *name) {
         fclose(pidFP);
       }
       directoryEntry = NULL;
-      free(fileName);
+      fileName = NULL;
     }
   }
   closedir(directory);
