@@ -29,6 +29,7 @@
 
 # include <glob.h>
 # include <sys/stat.h>
+# include <linux/limits.h>
 # include <sys/sysinfo.h>
 #  if HAVE_LINUX_CONFIG_H
 #    include <linux/config.h>
@@ -312,7 +313,8 @@ static void getPids(char *name) {
   directory = opendir(name);
   if (directory != NULL) {
     while ((directoryEntry = readdir(directory))) {
-      char *fileName = malloc(sizeof(MAXLINE));
+      char *fileName = malloc(sizeof(PATH_MAX));
+      memset(fileName, 0, sizeof(fileName));
       strcpy(fileName,name);
       strcat(fileName,"/");
       strcat(fileName,directoryEntry->d_name);
@@ -331,6 +333,7 @@ static void getPids(char *name) {
         }
         fclose(pidFP);
       }
+      directoryEntry = NULL;
       free(fileName);
     }
   }
@@ -1119,7 +1122,7 @@ static int ps_read(void) {
   procstat_t ps;
   procstat_t *ps_ptr;
   sysstat_t *ss;
-  static sysstat_t *prev_ss;
+  static sysstat_t *prev_ss=NULL;
 
   running = sleeping = zombies = stopped = paging = blocked = 0;
 
