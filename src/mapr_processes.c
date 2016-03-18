@@ -263,8 +263,8 @@ static void MakeTree(void) {
  * list_head_g is a list of 'procstat_t' structs with
  * processes names we want to watch */
 static void ps_list_register(int pid, char *name) {
-  procstat_t *new=NULL;
-  procstat_t *ptr=NULL;
+  procstat_t *new;
+  procstat_t *ptr;
 
   new = (procstat_t *) malloc(sizeof(procstat_t));
   if (new == NULL) {
@@ -299,7 +299,6 @@ static void ps_list_register(int pid, char *name) {
     INFO ("List is not empty adding to the back of the list %d, %s",pid,name);
     ptr->next = new;
   }
-  sfree(new);
 }/* void ps_list_register */
 
 /*
@@ -313,21 +312,17 @@ static void getPids(char *name) {
   directory = opendir(name);
   if (directory != NULL) {
     while ((directoryEntry = readdir(directory))) {
-      char  *dirName=NULL;
-      dirName = malloc(sizeof(char) * strlen(name)+1);
-      strcpy(dirName,name);
-      strcat(dirName,"/");
-
-      char *fileName=NULL;
-      fileName = malloc(sizeof(char) * (strlen(dirName)+strlen(directoryEntry->d_name)));
-      fileName = strcat(dirName,directoryEntry->d_name);
+      char  *fileName=NULL;
+      fileName = malloc(sizeof(PROCSTAT_NAME_LEN));
+      strcpy(fileName,name);
+      strcat(fileName,"/");
+      strcat(fileName,directoryEntry->d_name);
       pidFP = fopen(fileName, "r");
-
+      int filename_length = strlen(fileName);
       if (pidFP == NULL) {
         ERROR("mapr_process plugin failed to open pid file %s", fileName);
       } else {
-        int filename_length = strlen(directoryEntry->d_name);
-        if (filename_length >= 4 && strcmp(directoryEntry->d_name + filename_length - 4, ".pid") == 0) {
+        if (filename_length >= 4 && strcmp(fileName + filename_length - 4, ".pid") == 0) {
           int status = fscanf(pidFP, "%d", &pid);
           if ( status == 0 ) {
             ERROR("mapr_process plugin failed to read pid file %s", fileName);
@@ -337,8 +332,7 @@ static void getPids(char *name) {
         }
         fclose(pidFP);
       }
-      dirName = NULL;
-      fileName = NULL;
+      free(fileName);
     }
   }
   closedir(directory);
