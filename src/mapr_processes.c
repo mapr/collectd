@@ -1121,11 +1121,12 @@ static int ps_read(void) {
   procstat_t ps;
   procstat_t *ps_ptr;
   sysstat_t *ss;
-  static sysstat_t *prev_ss;
+  static sysstat_t *prev_ss=NULL;
 
-  if (prev_ss == NULL) {
-    INFO ("Initializing prev_ss");
-    memset(prev_ss,0,sizeof(prev_ss));
+  if (prev_ss) {
+    INFO (" prev_ss values %lu %lu",prev_ss->sys_cpu_tot_time_counter, prev_ss->sys_tot_phys_mem);
+  } else {
+    INFO ("prev_ss is null");
   }
 
   running = sleeping = zombies = stopped = paging = blocked = 0;
