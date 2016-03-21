@@ -1065,15 +1065,23 @@ static void ps_find_cpu_delta(procstat_t *ps, unsigned long *out_userd, unsigned
 {
   procstat_t *ps_ptr;
 
+  if (prev_proc_list_head_g) {
+    INFO ("Prev process list is not null and head is %s", prev_proc_list_head_g->name);
+  } else {
+    INFO ("Prev process list is null");
+  }
+
   for (ps_ptr=prev_proc_list_head_g; ps_ptr!=NULL; ps_ptr=ps_ptr->next) {
     if (ps_ptr->pid == ps->pid)
       break;
   }
   if (ps_ptr) {
+    INFO ("Found process in the list %s ", ps_ptr->name);
     *out_userd = ps->cpu_user_counter - ps_ptr->cpu_user_counter;
     *out_sysd = ps->cpu_system_counter - ps_ptr->cpu_system_counter;
   }
   else
+    INFO ("Did not find process in the list %s ", ps_ptr->name);
     *out_userd = *out_sysd = 0ULL;
 }
 
