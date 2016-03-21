@@ -1124,7 +1124,7 @@ static int ps_read(void) {
   static sysstat_t *prev_ss=NULL;
 
   if (prev_ss) {
-    INFO (" prev_ss values %lu %llu",prev_ss->sys_cpu_tot_time_counter, prev_ss->sys_tot_phys_mem);
+    INFO (" prev_ss values %lu %lu",prev_ss->sys_cpu_system_counter, prev_ss->sys_cpu_user_counter);
   } else {
     INFO ("prev_ss is null");
   }
