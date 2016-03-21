@@ -151,10 +151,15 @@ typedef struct sysstat {
 	unsigned long sys_boot_time_secs; /* /proc/stat */
 } sysstat_t;
 
+typedef struct directorylist {
+  char directoryName[PATH_MAX];
+  struct directorylist *next;
+} directorylist_t;
+
 static procstat_t *list_head_g = NULL;
 static procstat_t *proc_list_head_g = NULL;
 static procstat_t *prev_proc_list_head_g = NULL;
-
+static directorylist_t *directory_list_head_g = NULL;
 
 /* configuration globals */
 static int filter_mincpupct_g = 0;
@@ -279,12 +284,9 @@ static void ps_list_register(int pid, char *name) {
   new->pid = pid;
 
   for (ptr = list_head_g; ptr != NULL; ptr = ptr->next) {
-    if (strcmp(ptr->name, name) == 0) {
-      WARNING("mapr_processes plugin: You have configured more "
-          "than one `Process' or "
-          "`ProcessMatch' with the same name. "
-          "All but the first setting will be "
-          "ignored.");
+    //PID is already in the list
+    if (ptr->pid == pid && strcmp(serviceName, ptr->processName) == 0) {
+      WARNING ("Found an entry for pid %li for service %s in the list",pid, serviceName);
       sfree(new);
       return;
     }
@@ -381,6 +383,7 @@ static void ps_proc_list_reset (procstat_t **head)
 /* put all pre-defined 'Process' names from config to list_head_g tree */
 static int ps_config(oconfig_item_t *ci) {
 int i;
+directorylist_t *dirlist;
 for (i = 0; i < ci->children_num; ++i) {
 	oconfig_item_t *c = ci->children + i;
 	if (strcasecmp(c->key, "MinCPUPercent") == 0) {
@@ -409,7 +412,33 @@ for (i = 0; i < ci->children_num; ++i) {
 					"content (%i elements) of the <PID_Directory '%s'> block.",
 					c->children_num, c->values[0].value.string);
 		}
-		getPids(c->values[0].value.string);
+
+		int found = 0;
+		for (dirlist=directory_list_head_g;dirlist != NULL;dirlist = dirlist->next) {
+		  // Either you have found the entry or you have reached end of the list
+		  if (strcmp(dirlist->directoryName, c->values[0].value.string) == 0) {
+		    WARNING("mapr_process plugin: Found more than one entry for directory name. Ignoring the current entry");
+		    found = 1;
+
+		  }
+		  if (dirlist->next == NULL) break;
+		}
+
+		if (found == 0) {
+		  directorylist_t *newEntry = (directorylist_t *) malloc(sizeof(directorylist_t));
+		  memset(newEntry, 0, sizeof(directorylist_t));
+		  newEntry->directoryName = c->values[0].value.string;
+		  if (newEntry == NULL) {
+		    ERROR("mapr_processes plugin: creating directory list malloc failed.");
+		    continue;
+		  }
+		  if (dirlist == NULL) {
+		    directory_list_head_g = newEntry;
+		  } else {
+		    dirlist->next = newEntry;
+		  }
+		  getPids(c->values[0].value.string);
+		}
 	} else {
 		ERROR("mapr_processes plugin: The `%s' configuration option is not "
 				"understood and will be ignored.", c->key);
@@ -1065,25 +1094,16 @@ static void ps_find_cpu_delta(procstat_t *ps, unsigned long *out_userd, unsigned
 {
   procstat_t *ps_ptr;
 
-  if (prev_proc_list_head_g) {
-    INFO ("Prev process list is not null and head is %s", prev_proc_list_head_g->name);
-  } else {
-    INFO ("Prev process list is null");
-  }
-
   for (ps_ptr=prev_proc_list_head_g; ps_ptr!=NULL; ps_ptr=ps_ptr->next) {
     if (ps_ptr->pid == ps->pid)
       break;
   }
+
   if (ps_ptr) {
-    INFO ("Found process in the list %s ", ps_ptr->name);
-    INFO ("cpu_user_counter: current = %lu, prev = %lu ",ps->cpu_user_counter, ps_ptr->cpu_user_counter);
     *out_userd = ps->cpu_user_counter - ps_ptr->cpu_user_counter;
-    INFO ("cpu_system_counter: current = %lu, prev = %lu ",ps->cpu_system_counter, ps_ptr->cpu_system_counter);
     *out_sysd = ps->cpu_system_counter - ps_ptr->cpu_system_counter;
   }
   else {
-    INFO ("Did not find process in the list %s ", ps_ptr->name);
     *out_userd = *out_sysd = 0ULL;
   }
 }
@@ -1132,13 +1152,8 @@ static int ps_read(void) {
   procstat_t ps;
   procstat_t *ps_ptr;
   sysstat_t *ss;
+  directorylist_t *dirlist;
   static sysstat_t *prev_ss=NULL;
-
-  if (prev_ss) {
-    INFO (" prev_ss values %lu %lu",prev_ss->sys_cpu_system_counter, prev_ss->sys_cpu_user_counter);
-  } else {
-    INFO ("prev_ss is null");
-  }
 
   running = sleeping = zombies = stopped = paging = blocked = 0;
 
@@ -1153,6 +1168,14 @@ static int ps_read(void) {
   MakeTree();
 
   // TODO -- Get the latest PIDs and Aggregate by parent PID
+
+  /*
+   * Check if the PIDs changed
+   */
+
+  for (dirlist=directory_list_head_g;dirlist != NULL;dirlist = dirlist->next) {
+     getPids(dirlist->directoryName);
+  }
 
   ss = ps_read_sys_stat();
 
