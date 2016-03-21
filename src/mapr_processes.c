@@ -1107,8 +1107,8 @@ static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *p
 	  double cpu_percent;
 
 	  ps_find_cpu_delta(ps, &ps_cpu_user_delta, &ps_cpu_system_delta);
-	  ss_cpu_tot_time_delta = ss->sys_cpu_tot_time_counter -
-	  prev_ss->sys_cpu_tot_time_counter;
+	  ss_cpu_tot_time_delta = ss->sys_cpu_tot_time_counter - prev_ss->sys_cpu_tot_time_counter;
+	  INFO ("Delta values cpu_user_delta = %lu, cpu_system_delta = %lu cpu_total_time_delta = %lu", ps_cpu_user_delta, ps_cpu_system_delta, ss_cpu_tot_time_delta);
 	  if (ps_cpu_user_delta || ps_cpu_system_delta) {
 		  INFO ("%s proc delta: u: %lu, s: %lu, tot: %lu\n", ps->name, ps_cpu_user_delta, ps_cpu_system_delta, ss_cpu_tot_time_delta);
 	  }
@@ -1162,10 +1162,10 @@ static int ps_read(void) {
       continue;
     }
 
-    sstrncpy(ps.processName, ps_ptr->processName, sizeof(ps.processName));
     ps_calc_runtime(ss, &ps);
     ps_calc_mem_percent(ss, &ps);
     ps_calc_cpu_percent(ss, prev_ss, &ps);
+    sstrncpy(ps.processName, ps_ptr->processName, sizeof(ps.processName));
 
     switch (state)
     {
