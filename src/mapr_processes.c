@@ -1077,7 +1077,9 @@ static void ps_find_cpu_delta(procstat_t *ps, unsigned long *out_userd, unsigned
   }
   if (ps_ptr) {
     INFO ("Found process in the list %s ", ps_ptr->name);
+    INFO ("cpu_user_counter: current = %lu, prev = %lu ",ps->cpu_user_counter, ps_ptr->cpu_user_counter);
     *out_userd = ps->cpu_user_counter - ps_ptr->cpu_user_counter;
+    INFO ("cpu_system_counter: current = %lu, prev = %lu ",ps->cpu_system_counter, ps_ptr->cpu_system_counter);
     *out_sysd = ps->cpu_system_counter - ps_ptr->cpu_system_counter;
   }
   else
@@ -1160,10 +1162,10 @@ static int ps_read(void) {
       continue;
     }
 
+    sstrncpy(ps.processName, ps_ptr->processName, sizeof(ps.processName));
     ps_calc_runtime(ss, &ps);
     ps_calc_mem_percent(ss, &ps);
     ps_calc_cpu_percent(ss, prev_ss, &ps);
-    sstrncpy(ps.processName, ps_ptr->processName, sizeof(ps.processName));
 
     switch (state)
     {
