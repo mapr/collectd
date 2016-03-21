@@ -1082,9 +1082,10 @@ static void ps_find_cpu_delta(procstat_t *ps, unsigned long *out_userd, unsigned
     INFO ("cpu_system_counter: current = %lu, prev = %lu ",ps->cpu_system_counter, ps_ptr->cpu_system_counter);
     *out_sysd = ps->cpu_system_counter - ps_ptr->cpu_system_counter;
   }
-  else
+  else {
     INFO ("Did not find process in the list %s ", ps_ptr->name);
     *out_userd = *out_sysd = 0ULL;
+  }
 }
 
 
