@@ -286,7 +286,7 @@ static void ps_list_register(int pid, char *name) {
   for (ptr = list_head_g; ptr != NULL; ptr = ptr->next) {
     //PID is already in the list
     if (ptr->pid == pid && strcmp(serviceName, ptr->processName) == 0) {
-      WARNING ("Found an entry for pid %li for service %s in the list",pid, serviceName);
+      WARNING ("Found an entry for pid %d for service %s in the list",pid, serviceName);
       sfree(new);
       return;
     }
@@ -427,7 +427,7 @@ for (i = 0; i < ci->children_num; ++i) {
 		if (found == 0) {
 		  directorylist_t *newEntry = (directorylist_t *) malloc(sizeof(directorylist_t));
 		  memset(newEntry, 0, sizeof(directorylist_t));
-		  newEntry->directoryName = c->values[0].value.string;
+		  strcpy(newEntry->directoryName,c->values[0].value.string);
 		  if (newEntry == NULL) {
 		    ERROR("mapr_processes plugin: creating directory list malloc failed.");
 		    continue;
