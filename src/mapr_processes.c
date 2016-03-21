@@ -294,10 +294,8 @@ static void ps_list_register(int pid, char *name) {
   }
 
   if (ptr == NULL) {
-    INFO ("List is empty adding to front of the list %d. %s", pid, name);
     list_head_g = new;
   } else {
-    INFO ("List is not empty adding to the back of the list %d, %s",pid,name);
     ptr->next = new;
   }
 }/* void ps_list_register */
@@ -411,7 +409,6 @@ for (i = 0; i < ci->children_num; ++i) {
 					"content (%i elements) of the <PID_Directory '%s'> block.",
 					c->children_num, c->values[0].value.string);
 		}
-		INFO("Getting PIDs for %s",c->values[0].value.string);
 		getPids(c->values[0].value.string);
 	} else {
 		ERROR("mapr_processes plugin: The `%s' configuration option is not "
@@ -1124,7 +1121,12 @@ static int ps_read(void) {
   procstat_t ps;
   procstat_t *ps_ptr;
   sysstat_t *ss;
-  static sysstat_t *prev_ss=NULL;
+  static sysstat_t *prev_ss;
+
+  if (prev_ss == NULL) {
+    INFO ("Initializing prev_ss");
+    memset(prev_ss,0,sizeof(prev_ss));
+  }
 
   running = sleeping = zombies = stopped = paging = blocked = 0;
 
