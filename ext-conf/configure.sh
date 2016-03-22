@@ -40,9 +40,7 @@ HADOOP_VER="hadoop-2.7.0"
 YARN_BIN="/opt/mapr/hadoop/${HADOOP_VER}/bin/yarn"
 RM_JMX_PORT=8025
 NM_JMX_PORT=8027
-JMX_INSERT='#Enable JMX\nJMX_OPTS=\"-Dcom.sun.management.jmxremote \
-            -Dcom.sun.management.jmxremote.authenticate=false \
-            -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.port\"'
+JMX_INSERT='#Enable JMX\nJMX_OPTS=\"-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.port\"'
 YARN_JMX_RM_OPT_STR='$JMX_OPTS='${RM_JMX_PORT}
 YARN_JMX_NM_OPT_STR='$JMX_OPTS='${NM_JMX_PORT}
 MAPR_HOME=${MAPR_HOME:-/opt/mapr}
