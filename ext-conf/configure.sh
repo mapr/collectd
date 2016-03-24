@@ -45,7 +45,7 @@ YARN_JMX_RM_OPT_STR='$JMX_OPTS='${RM_JMX_PORT}
 YARN_JMX_NM_OPT_STR='$JMX_OPTS='${NM_JMX_PORT}
 MAPR_HOME=${MAPR_HOME:-/opt/mapr}
 MAPR_CONF_DIR="${MAPR_HOME}/conf/conf.d"
-CD_CONF_ASSUME_RUNNING_CORE=${$isOnlyRoles:-0}
+CD_CONF_ASSUME_RUNNING_CORE=${isOnlyRoles:-0}
 CD_NM_ROLE=0
 CD_CLDB_ROLE=0
 CD_RM_ROLE=0
@@ -506,7 +506,7 @@ if [ $CD_CONF_ASSUME_RUNNING_CORE -eq 1 ] ; then
     # documented that jmx stats will not be available until next warden/nm/rm restart
     #restartNM_RM_service
     configureClusterId
-    CD_ENABLE_SERVICE=$?
+    [ $? -eq 0] && CD_ENABLE_SERVICE=1
 fi
 
 # XXX we need to check to make sure we want to install the new conf file
