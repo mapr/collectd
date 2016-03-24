@@ -506,7 +506,7 @@ if [ $CD_CONF_ASSUME_RUNNING_CORE -eq 1 ] ; then
     # documented that jmx stats will not be available until next warden/nm/rm restart
     #restartNM_RM_service
     configureClusterId
-    [ $? -eq 0] && CD_ENABLE_SERVICE=1
+    [ $? -eq 0 ] && CD_ENABLE_SERVICE=1
 fi
 
 # XXX we need to check to make sure we want to install the new conf file
