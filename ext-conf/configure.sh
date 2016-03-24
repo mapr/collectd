@@ -45,11 +45,13 @@ YARN_JMX_RM_OPT_STR='$JMX_OPTS='${RM_JMX_PORT}
 YARN_JMX_NM_OPT_STR='$JMX_OPTS='${NM_JMX_PORT}
 MAPR_HOME=${MAPR_HOME:-/opt/mapr}
 MAPR_CONF_DIR="${MAPR_HOME}/conf/conf.d"
+CD_CONF_ASSUME_RUNNING_CORE=${$isOnlyRoles:-0}
 CD_NM_ROLE=0
 CD_CLDB_ROLE=0
 CD_RM_ROLE=0
 CLDB_RUNNING=0
 CLDB_RETRIES=12
+CD_ENABLE_SERVICE=0
 
 #############################################################################
 # Function to uncomment a section
@@ -280,10 +282,12 @@ function configurejavajmxplugin()
     #     </connection>
     #
 
-    # XXX need more TAGS
     if [ ${CD_RM_ROLE} -eq 1  -o ${CD_NM_ROLE} -eq 1  -o ${CD_CLDB_ROLE} -eq 1 ] ; then
         enableSection MAPR_CONF_JMX_TAG
         sed -i 's@${fastjmx_prefix}@'$COLLECTD_HOME'@g' ${NEW_CD_CONF_FILE}
+        if [ ${CD_RM_ROLE} -eq 1 ]; then 
+            enableSection MAPR_CONF_RM_REST_TAG
+        fi
         configureConnections
     fi
 }
@@ -406,6 +410,9 @@ function configureClusterId() {
     if [ $CLDB_RUNNING -eq 1 ] ; then
         CLUSTER_ID=`cat /opt/mapr/conf/clusterid`
         sed -i 's/\"clusterid=.*/\"clusterid='$CLUSTER_ID'\"/g' ${NEW_CD_CONF_FILE}
+        return 0
+    else
+        return 1
     fi
 }
 
@@ -426,10 +433,10 @@ function installWardenConfFile()
 # Function to clean up old files
 #
 #############################################################################
-function cleanupoldconffiles
+function cleanupOldConfFiles
 {
     # XXX should to remove a subset of the dated backups
-    rm ${NEW_CD_CONF_FILE}
+    rm -f ${NEW_CD_CONF_FILE}
 }
 
 
@@ -493,15 +500,20 @@ configureopentsdbplugin  # this ucomments everything between the MAPR_CONF_TAGs
 configurejavajmxplugin
 createFastJMXLink
 configureHadoopJMX
-waitForCLDB
-# we are not going to restart automatically
-# documented that jmx stats will not be available until next warden/nm/rm restart
-#restartNM_RM_service
-configureClusterId
+if [ $CD_CONF_ASSUME_RUNNING_CORE -eq 1 ] ; then
+    waitForCLDB
+    # we are not going to restart automatically
+    # documented that jmx stats will not be available until next warden/nm/rm restart
+    #restartNM_RM_service
+    configureClusterId
+    CD_ENABLE_SERVICE=$?
+fi
 
 # XXX we need to check to make sure we want to install the new conf file
 cp -p ${CD_CONF_FILE} ${CD_CONF_FILE}.${CD_NOW}
 cp ${NEW_CD_CONF_FILE} ${CD_CONF_FILE}
-installWardenConfFile
-cleanupoldconffiles
+if [ $CD_ENABLE_SERVICE -eq 1 ] ; then
+    installWardenConfFile
+fi
+cleanupOldConfFiles
 true # make sure we have a good return
