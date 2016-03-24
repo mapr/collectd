@@ -17,6 +17,7 @@ do
       totalused=""
       quota=""
       topology=""
+      entity=""
       # Run the maprcli volume info
       maprcli volume info -name  $volumename -json | while read output; do
         if [[ ( $output == \"logicalUsed* )  ]];
@@ -37,8 +38,11 @@ do
         elif [[ ( $output == \"rackpath* ) ]];
         then
           topology=`echo $output | sed 's/.*://' | sed 's/[,"]//g' | sed 's/\//./g'`
+        elif [[ ( $output == \"aename* ) ]];
+        then
+          entity=`echo $output | sed 's/.*://' | sed 's/[,"]//g'`
         fi
-        if [[ -n "$logicalUsed" && -n "$used" && -n "$snapshotused" && -n "$totalused" && -n  "$quota" && -n "$topology" ]]
+        if [[ -n "$logicalUsed" && -n "$used" && -n "$snapshotused" && -n "$totalused" && -n  "$quota" && -n "$topology"  && -n "$entity" ]]
         then
           # Collect metrics per volume
           echo "PUTVAL \"$HOSTNAME/mapr.volume-${topology:1}/logicalUsed-$volumename\" interval=$INTERVAL N:$logicalUsed"
@@ -46,6 +50,12 @@ do
           echo "PUTVAL \"$HOSTNAME/mapr.volume-${topology:1}/snapshotused-$volumename\" interval=$INTERVAL N:$snapshotused"
           echo "PUTVAL \"$HOSTNAME/mapr.volume-${topology:1}/totalused-$volumename\" interval=$INTERVAL N:$totalused"
           echo "PUTVAL \"$HOSTNAME/mapr.volume-${topology:1}/quota-$volumename\" interval=$INTERVAL N:$quota"
+          # Tag by entity
+          echo "PUTVAL \"$HOSTNAME/mapr.volume_by_entity/logicalUsed-$entity\" interval=$INTERVAL N:$logicalUsed"
+          echo "PUTVAL \"$HOSTNAME/mapr.volume_by_entity/used-$entity\" interval=$INTERVAL N:$used"
+          echo "PUTVAL \"$HOSTNAME/mapr.volume_by_entity/snapshotused-$entity\" interval=$INTERVAL N:$snapshotused"
+          echo "PUTVAL \"$HOSTNAME/mapr.volume_by_entity/totalused-$entity\" interval=$INTERVAL N:$totalused"
+          echo "PUTVAL \"$HOSTNAME/mapr.volume_by_entity/quota-$entity\" interval=$INTERVAL N:$quota"
           break
         fi
       done
