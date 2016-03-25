@@ -51,6 +51,7 @@ CD_CLDB_ROLE=0
 CD_RM_ROLE=0
 CLDB_RUNNING=0
 CLDB_RETRIES=12
+CLDB_RETRY_DLY=5
 CD_ENABLE_SERVICE=0
 
 #############################################################################
@@ -62,7 +63,7 @@ function enableSection()
     # $1 is the sectionTag prefix we will use to determine section to uncomment
     awk -f ${AWKLIBPATH}/uncommentSection.awk -v tag="$1" \
         ${NEW_CD_CONF_FILE} > ${NEW_CD_CONF_FILE}.tmp
-    if [[ $? -eq 0 ]] ; then
+    if [[ $? -eq 0 ]]; then
         mv ${NEW_CD_CONF_FILE}.tmp ${NEW_CD_CONF_FILE}
     fi
 }
@@ -76,7 +77,7 @@ function disableSection()
     # $1 is the sectionTag prefix we will use to determine section to comment out
     awk -f ${AWKLIBPATH}/commentOutSection.awk -v tag="$1" \
         ${NEW_CD_CONF_FILE} > ${NEW_CD_CONF_FILE}.tmp
-    if [[ $? -eq 0 ]] ; then
+    if [[ $? -eq 0 ]]; then
         mv ${NEW_CD_CONF_FILE}.tmp ${NEW_CD_CONF_FILE}
     fi
 }
@@ -90,7 +91,7 @@ function removeSection()
 {
     awk -f ${AWKLIBPATH}/removeSection.awk -v tag="$1" \
         ${NEW_CD_CONF_FILE} > ${NEW_CD_CONF_FILE}.tmp
-    if [[ $? -eq 0 ]] ; then
+    if [[ $? -eq 0 ]]; then
         mv ${NEW_CD_CONF_FILE}.tmp ${NEW_CD_CONF_FILE}
     fi
 }
@@ -105,7 +106,7 @@ function fillSection()
     removeSection $1
     awk -f ${AWKLIBPATH}/replaceSection.awk -v tag="$1" -v newSectionContentFile="$2" \
         ${NEW_CD_CONF_FILE} > ${NEW_CD_CONF_FILE}.tmp
-    if [[ $? -eq 0 ]] ; then
+    if [[ $? -eq 0 ]]; then
         mv ${NEW_CD_CONF_FILE}.tmp ${NEW_CD_CONF_FILE}
     fi
 }
@@ -155,7 +156,7 @@ function configureInterfacePlugin() {
     loopifs=$(ls /dev/loop[0-9]*)
     awk '/<Plugin interface>/ { next;next; print \tInterface \"${loopifs}\"; \
         print \tIngoreSelection true' ${NEW_CD_CONF_FILE} > ${NEW_CD_CONF_FILE}.tmp
-    if [[ $? -eq 0 ]] ; then
+    if [[ $? -eq 0 ]]; then
         mv ${NEW_CD_CONF_FILE}.tmp ${NEW_CD_CONF_FILE}
     fi
 }
@@ -192,7 +193,7 @@ function configureZookeeperConfig() {
     zoohost=${zoohost%%:*}
     awk -v hostname=$zoohost -v port=$zkClientPort -v plugin=zookeeper \
         -f ${AWKLIBPATH}/condfigurePlugin.awk ${NEW_CD_CONF_FILE} > ${NEW_CONFIG_FILE}.tmp
-    if [[ $? -eq 0 ]] ; then
+    if [[ $? -eq 0 ]]; then
         mv ${NEW_CD_CONF_FILE}.tmp ${NEW_CD_CONF_FILE}
     fi
 
@@ -234,7 +235,7 @@ function configureopentsdbplugin()
     enableSection MAPR_CONF_OT_TAG
     awk -v hostname=$tsdbhost -v port=$nodeport -v plugin=write_tsdb \
         -f ${AWKLIBPATH}/configurePlugin.awk ${NEW_CD_CONF_FILE} > ${NEW_CD_CONF_FILE}.tmp
-    if [[ $? -eq 0 ]] ; then
+    if [[ $? -eq 0 ]]; then
         mv ${NEW_CD_CONF_FILE}.tmp ${NEW_CD_CONF_FILE}
     fi
 
@@ -282,10 +283,10 @@ function configurejavajmxplugin()
     #     </connection>
     #
 
-    if [ ${CD_RM_ROLE} -eq 1  -o ${CD_NM_ROLE} -eq 1  -o ${CD_CLDB_ROLE} -eq 1 ] ; then
+    if [ ${CD_RM_ROLE} -eq 1  -o ${CD_NM_ROLE} -eq 1  -o ${CD_CLDB_ROLE} -eq 1 ]; then
         enableSection MAPR_CONF_JMX_TAG
         sed -i 's@${fastjmx_prefix}@'$COLLECTD_HOME'@g' ${NEW_CD_CONF_FILE}
-        if [ ${CD_RM_ROLE} -eq 1 ]; then 
+        if [ ${CD_RM_ROLE} -eq 1 ]; then
             enableSection MAPR_CONF_RM_REST_TAG
         fi
         configureConnections
@@ -325,7 +326,7 @@ function createFastJMXLink() {
     local jmx_jar
     # XXX WIll the release jar have SNAPSHOT in it??
     jmx_jar=$(find ${MAPR_HOME}/collectd-fast-jmx -name 'fast*SNAPSHOT.jar')
-    if [ -n "${jmx_jar}" ] ; then
+    if [ -n "${jmx_jar}" ]; then
         ln -s ${jmx_jar} ${COLLECTD_HOME}/lib/fast-jmx-1.1-SNAPSHOT.jar
     fi
 }
@@ -340,7 +341,7 @@ function configureHadoopJMX() {
     local rc1
     local rc2
     # Enable JMX for RM and NM only if they are installed
-    if [ ${CD_RM_ROLE} -eq 1 -o ${CD_NM_ROLE} -eq 1 ] ; then
+    if [ ${CD_RM_ROLE} -eq 1 -o ${CD_NM_ROLE} -eq 1 ]; then
         cp -p ${YARN_BIN} ${YARN_BIN}.prejmx
 
         awk -v jmx_ins_after='JAVA_HEAP_MAX' -v jmx_insert="$JMX_INSERT" \
@@ -371,7 +372,7 @@ function configureHadoopJMX() {
 function restartNM_RM_service() {
     if [ $CLDB_RUNNING -eq 1 ]; then
         # Enable JMX for RM and NM only if they are installed
-        if [ ${CD_RM_ROLE} -eq 1 -o ${CD_NM_ROLE} -eq 1 ] ; then
+        if [ ${CD_RM_ROLE} -eq 1 -o ${CD_NM_ROLE} -eq 1 ]; then
             MyNM_ip=`hostname -i`
             if [ ${CD_RM_ROLE} -eq 1 ]; then
                 maprcli node services -nodes ${MyNM_ip} -name resourcemanager \
@@ -392,10 +393,10 @@ function restartNM_RM_service() {
 function waitForCLDB() {
     local cldbretries
     cldbretries=${CLDB_RETRIES}   # give it a minute
-    until [ $CLDB_RUNNING -eq 1 -o $cldbretries -lt 0 ] ; do
+    until [ $CLDB_RUNNING -eq 1 -o $cldbretries -lt 0 ]; do
         $MAPR_HOME/bin/maprcli node cldbmaster > /dev/null 2>&1
         [ $? -eq 0 ] && CLDB_RUNNING=1
-        [ $CLDB_RUNNING -ne 0 ] &&  sleep 5
+        [ $CLDB_RUNNING -ne 0 ] &&  sleep $CLDB_RETRY_DLY
         let cldbretries=cldbretries-1
     done
     return $CLDB_RUNNING
@@ -407,7 +408,7 @@ function waitForCLDB() {
 # uses global CLDB_RUNNING
 #############################################################################
 function configureClusterId() {
-    if [ $CLDB_RUNNING -eq 1 ] ; then
+    if [ $CLDB_RUNNING -eq 1 ]; then
         CLUSTER_ID=`cat /opt/mapr/conf/clusterid`
         sed -i 's/\"clusterid=.*/\"clusterid='$CLUSTER_ID'\"/g' ${NEW_CD_CONF_FILE}
         return 0
@@ -452,11 +453,11 @@ function cleanupOldConfFiles
 #
 
 usage="usage: $0 -nodeCount <cnt> -OT \"ip:port,ip1:port,\" -nodePort <port> "
-if [ ${#} -gt 1 ] ; then
+if [ ${#} -gt 1 ]; then
     # we have arguments - run as as standalone - need to get params and
     # XXX why do we need the -o to make this work?
     OPTS=`getopt -a -o h -l nodeCount: -l nodePort: -l OT: -- "$@"`
-    if [ $? != 0 ] ; then
+    if [ $? != 0 ]; then
         echo ${usage}
         return 2 2>/dev/null || exit 2
     fi
@@ -500,7 +501,7 @@ configureopentsdbplugin  # this ucomments everything between the MAPR_CONF_TAGs
 configurejavajmxplugin
 createFastJMXLink
 configureHadoopJMX
-if [ $CD_CONF_ASSUME_RUNNING_CORE -eq 1 ] ; then
+if [ $CD_CONF_ASSUME_RUNNING_CORE -eq 1 ]; then
     waitForCLDB
     # we are not going to restart automatically
     # documented that jmx stats will not be available until next warden/nm/rm restart
@@ -509,10 +510,9 @@ if [ $CD_CONF_ASSUME_RUNNING_CORE -eq 1 ] ; then
     [ $? -eq 0 ] && CD_ENABLE_SERVICE=1
 fi
 
-# XXX we need to check to make sure we want to install the new conf file
 cp -p ${CD_CONF_FILE} ${CD_CONF_FILE}.${CD_NOW}
 cp ${NEW_CD_CONF_FILE} ${CD_CONF_FILE}
-if [ $CD_ENABLE_SERVICE -eq 1 ] ; then
+if [ $CD_ENABLE_SERVICE -eq 1 ]; then
     installWardenConfFile
 fi
 cleanupOldConfFiles
