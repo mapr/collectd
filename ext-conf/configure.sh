@@ -327,7 +327,9 @@ function createFastJMXLink() {
     # XXX WIll the release jar have SNAPSHOT in it??
     jmx_jar=$(find ${MAPR_HOME}/collectd-fast-jmx -name 'fast*SNAPSHOT.jar')
     if [ -n "${jmx_jar}" ]; then
-        ln -s ${jmx_jar} ${COLLECTD_HOME}/lib/fast-jmx-1.1-SNAPSHOT.jar
+        if [ ! -h ${COLLECTD_HOME}/lib/fast-jmx-1.1-SNAPSHOT.jar ]; then
+            ln -s ${jmx_jar} ${COLLECTD_HOME}/lib/fast-jmx-1.1-SNAPSHOT.jar
+        fi
     fi
 }
 
