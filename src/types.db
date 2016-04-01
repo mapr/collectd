@@ -276,11 +276,11 @@ write_bytes         value:GAUGE:0:U
 calls_recd         value:COUNTER:U:U
 bytes_recd         value:GAUGE:0:U
 bytes_sent         value:GAUGE:0:U
-percent_idle         value:GAUGE:0:100.1
-percent_busy         value:GAUGE:0:100.1
-percent_system         value:GAUGE:0:100.1
-percent_nice       value:GAUGE:0:100.1
-percent_user         value:GAUGE:0:100.1
+#percent_idle         value:GAUGE:0:100.1
+#percent_busy         value:GAUGE:0:100.1
+#percent_system         value:GAUGE:0:100.1
+#percent_nice       value:GAUGE:0:100.1
+#percent_user         value:GAUGE:0:100.1
 
 # ResourceManager
 apps_running        value:COUNTER:U:U
