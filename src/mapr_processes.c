@@ -1115,7 +1115,7 @@ static void ps_find_cpu_delta(procstat_t *ps, unsigned long *out_userd, unsigned
 static void ps_calc_mem_percent(sysstat_t *ss, procstat_t *ps)
 {
   /* +0.5 to round off to nearest int */
-  ps->mem_percent = (int)((ps->vmem_rss*100.0 / ss->sys_tot_phys_mem) + 0.5);
+  ps->mem_percent = ((ps->vmem_rss*100.0 / ss->sys_tot_phys_mem) + 0.5);
 }
 
 static void ps_calc_runtime(sysstat_t *ss, procstat_t *ps)
@@ -1138,7 +1138,7 @@ static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *p
 	  }
 	  cpu_percent = (ps_cpu_user_delta + ps_cpu_system_delta) * 100.0 / (ss_cpu_tot_time_delta);
 	  /* +0.5 to round it off to nearest int */
-	  ps->cpu_percent = (int)(cpu_percent + 0.5);
+	  ps->cpu_percent = cpu_percent + 0.5;
   }
 }
 
