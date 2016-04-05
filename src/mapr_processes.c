@@ -128,8 +128,8 @@ typedef struct procstat {
 	derive_t cpu_user_counter;
 	derive_t cpu_system_counter;
 
-	unsigned float cpu_percent;
-	unsigned float mem_percent;
+	float cpu_percent;
+	float mem_percent;
 
 	/* io data */
 	derive_t io_rchar;
