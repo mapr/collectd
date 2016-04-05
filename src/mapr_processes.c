@@ -1093,7 +1093,7 @@ static _Bool config_threshold_exceeded(procstat_t *ps)
 static void ps_find_cpu_delta(procstat_t *ps, unsigned long *out_userd, unsigned long *out_sysd)
 {
   procstat_t *ps_ptr;
-
+  INFO (" Find the previous data for process");
   for (ps_ptr=prev_proc_list_head_g; ps_ptr!=NULL; ps_ptr=ps_ptr->next) {
     if (ps_ptr->pid == ps->pid)
       break;
@@ -1127,7 +1127,7 @@ static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *p
 {
   INFO("Previous system stats for cpu percent: %ld, %ld",prev_ss->sys_cpu_system_counter, prev_ss->sys_cpu_tot_time_counter);
   if (ss && prev_ss) {
-	  unsigned long ps_cpu_user_delta, ps_cpu_system_delta;
+    unsigned long ps_cpu_user_delta, ps_cpu_system_delta;
 	  unsigned long ss_cpu_tot_time_delta;
 	  double cpu_percent;
     INFO (" Calculating the delta");
