@@ -128,8 +128,8 @@ typedef struct procstat {
 	derive_t cpu_user_counter;
 	derive_t cpu_system_counter;
 
-	unsigned long cpu_percent;
-	unsigned long mem_percent;
+	unsigned double cpu_percent;
+	unsigned double mem_percent;
 
 	/* io data */
 	derive_t io_rchar;
@@ -162,8 +162,8 @@ static procstat_t *prev_proc_list_head_g = NULL;
 static directorylist_t *directory_list_head_g = NULL;
 
 /* configuration globals */
-static int filter_mincpupct_g = 0;
-static int filter_minmempct_g = 0;
+static float filter_mincpupct_g = 0.0;
+static float filter_minmempct_g = 0.0;
 static int numOfProcesses = 0;
 static _Bool report_ctx_switch = 0;
 
@@ -388,13 +388,13 @@ for (i = 0; i < ci->children_num; ++i) {
 	oconfig_item_t *c = ci->children + i;
 	if (strcasecmp(c->key, "MinCPUPercent") == 0) {
 		filter_mincpupct_g = c->values[0].value.number;
-		if (filter_mincpupct_g < 0 || filter_mincpupct_g > 100) {
+		if (filter_mincpupct_g < 0.0 || filter_mincpupct_g > 100.0) {
 			ERROR("mapr_processes plugin: MinCPUPercent out of [0,100] range");
 			continue;
 		}
 	} else if (strcasecmp(c->key, "MinMemoryPercent") == 0) {
 		filter_minmempct_g = c->values[0].value.number;
-		if (filter_minmempct_g < 0 || filter_minmempct_g > 100) {
+		if (filter_minmempct_g < 0.0 || filter_minmempct_g > 100.0) {
 			ERROR("mapr_processes plugin: MinMemoryPercent out of [0,100] range");
 			continue;
 		}
@@ -582,7 +582,7 @@ DEBUG ("name = %s; num_proc = %lu; num_lwp = %lu; "
 		"io_rchar = %"PRIi64"; io_wchar = %"PRIi64"; "
 		"io_syscr = %"PRIi64"; io_syscw = %"PRIi64"; "
 		"cswitch_vol = %"PRIi64"; cswitch_invol = %"PRIi64"; "
-		"cpu_percent = %lu; mem_percent = %lu; pid = %lu; ppid = %lu; "
+		"cpu_percent = %e; mem_percent = %e; pid = %lu; ppid = %lu; "
 		"runtime = %lu secs",
 		ps->name, ps->num_proc, ps->num_lwp,
 		ps->vmem_size, ps->vmem_rss,
@@ -1103,7 +1103,7 @@ static void ps_find_cpu_delta(procstat_t *ps, unsigned long *out_userd, unsigned
     INFO ("Found PID %ld",ps_ptr->pid);
     INFO ("Current cpu user counter %"PRIi64" , previous counter %"PRIi64" ",ps->cpu_user_counter, ps_ptr->cpu_user_counter);
     *out_userd = ps->cpu_user_counter - ps_ptr->cpu_user_counter;
-    INFO ("Current cpu system counter %"PRIi64" , previous counter %"PRIi64" ",ps->cpu_user_counter, ps_ptr->cpu_user_counter);
+    INFO ("Current cpu system counter %"PRIi64" , previous counter %"PRIi64" ",ps->cpu_system_counter, ps_ptr->cpu_system_counter);
     *out_sysd = ps->cpu_system_counter - ps_ptr->cpu_system_counter;
   }
   else {
