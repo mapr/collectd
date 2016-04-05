@@ -1130,7 +1130,7 @@ static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *p
 	  unsigned long ps_cpu_user_delta, ps_cpu_system_delta;
 	  unsigned long ss_cpu_tot_time_delta;
 	  double cpu_percent;
-
+    INFO (" Calculating the delta");
 	  ps_find_cpu_delta(ps, &ps_cpu_user_delta, &ps_cpu_system_delta);
 	  ss_cpu_tot_time_delta = ss->sys_cpu_tot_time_counter - prev_ss->sys_cpu_tot_time_counter;
 	  if (ps_cpu_user_delta || ps_cpu_system_delta) {
