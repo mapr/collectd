@@ -302,32 +302,32 @@ reserved_containers     value:COUNTER:U:U
 reserved_MB     value:COUNTER:U:U
 reserved_vcores     value:COUNTER:U:U
 allocated_memory value:COUNTER:U:U
-allocated_disks value:COUNTER:U:U
+allocated_disks value:GAUGE:U:U
 allocated_vcores value:COUNTER:U:U
 used_memory value:COUNTER:U:U
-used_disks value:COUNTER:U:U
+used_disks value:GAUGE:U:U
 used_vcores value:COUNTER:U:U
 appmaster_used_memory value:COUNTER:U:U
-appmaster_used_disks value:COUNTER:U:U
+appmaster_used_disks value:GAUGE:U:U
 appmaster_used_vcores value:COUNTER:U:U
 fairshare_memory value:COUNTER:U:U
-fairshare_disks value:COUNTER:U:U
+fairshare_disks value:GAUGE:U:U
 fairshare_vcores value:COUNTER:U:U
 max_memory value:COUNTER:U:U
-max_disks value:COUNTER:U:U
+max_disks value:GAUGE:U:U
 max_vcores value:COUNTER:U:U
 active_nodes value:COUNTER:U:U
 # Per user metrics
 user_used_memory value:COUNTER:U:U
-user_used_disks value:COUNTER:U:U
+user_used_disks value:GAUGE:U:U
 user_used_vcores value:COUNTER:U:U
 user_apps_pending value:COUNTER:U:U
 user_apps_running value:COUNTER:U:U
 user_appmaster_used_memory value:COUNTER:U:U
-user_appmaster_used_disks value:COUNTER:U:U
+user_appmaster_used_disks value:GAUGE:U:U
 user_appmaster_used_vcores value:COUNTER:U:U
 user_allocated_memory value:COUNTER:U:U
-user_allocated_disks value:COUNTER:U:U
+user_allocated_disks value:GAUGE:U:U
 user_allocated_vcores value:COUNTER:U:U
 
 
