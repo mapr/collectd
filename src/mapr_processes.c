@@ -1188,7 +1188,7 @@ static int ps_read(void) {
       DEBUG ("ps_read_process failed: %i", status);
       continue;
     }
-
+    INFO ("Collecting stats for process %s with pid %lu: ",ps_ptr->name, ps_ptr->pid);
     ps_calc_runtime(ss, &ps);
     ps_calc_mem_percent(ss, &ps);
     ps_calc_cpu_percent(ss, prev_ss, &ps);
