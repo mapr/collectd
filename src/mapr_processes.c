@@ -128,8 +128,8 @@ typedef struct procstat {
 	derive_t cpu_user_counter;
 	derive_t cpu_system_counter;
 
-	unsigned long cpu_percent;
-	unsigned long mem_percent;
+	float cpu_percent;
+	float mem_percent;
 
 	/* io data */
 	derive_t io_rchar;
@@ -162,8 +162,8 @@ static procstat_t *prev_proc_list_head_g = NULL;
 static directorylist_t *directory_list_head_g = NULL;
 
 /* configuration globals */
-static int filter_mincpupct_g = 0;
-static int filter_minmempct_g = 0;
+static float filter_mincpupct_g = 0.0;
+static float filter_minmempct_g = 0.0;
 static int numOfProcesses = 0;
 static _Bool report_ctx_switch = 0;
 
@@ -327,7 +327,7 @@ static void getPids(char *name) {
       if (pidFP == NULL) {
         ERROR("mapr_process plugin failed to open pid file %s", directoryEntry->d_name);
       } else {
-        if (filename_length >= 4 && strcmp(fileName + filename_length - 4, ".pid") == 0) {
+        if (filename_length >= 4 && strcmp(fileName + filename_length - 4, ".pid") == 0 && !strcmp(fileName + filename_length - 7, ".sh.pid") == 0) {
           int status = fscanf(pidFP, "%d", &pid);
           if ( status == 0 ) {
             ERROR("mapr_process plugin failed to read pid file %s", directoryEntry->d_name);
@@ -388,13 +388,13 @@ for (i = 0; i < ci->children_num; ++i) {
 	oconfig_item_t *c = ci->children + i;
 	if (strcasecmp(c->key, "MinCPUPercent") == 0) {
 		filter_mincpupct_g = c->values[0].value.number;
-		if (filter_mincpupct_g < 0 || filter_mincpupct_g > 100) {
+		if (filter_mincpupct_g < 0.0 || filter_mincpupct_g > 100.0) {
 			ERROR("mapr_processes plugin: MinCPUPercent out of [0,100] range");
 			continue;
 		}
 	} else if (strcasecmp(c->key, "MinMemoryPercent") == 0) {
 		filter_minmempct_g = c->values[0].value.number;
-		if (filter_minmempct_g < 0 || filter_minmempct_g > 100) {
+		if (filter_minmempct_g < 0.0 || filter_minmempct_g > 100.0) {
 			ERROR("mapr_processes plugin: MinMemoryPercent out of [0,100] range");
 			continue;
 		}
@@ -582,7 +582,7 @@ DEBUG ("name = %s; num_proc = %lu; num_lwp = %lu; "
 		"io_rchar = %"PRIi64"; io_wchar = %"PRIi64"; "
 		"io_syscr = %"PRIi64"; io_syscw = %"PRIi64"; "
 		"cswitch_vol = %"PRIi64"; cswitch_invol = %"PRIi64"; "
-		"cpu_percent = %lu; mem_percent = %lu; pid = %lu; ppid = %lu; "
+		"cpu_percent = %f; mem_percent = %f; pid = %lu; ppid = %lu; "
 		"runtime = %lu secs",
 		ps->name, ps->num_proc, ps->num_lwp,
 		ps->vmem_size, ps->vmem_rss,
@@ -1093,14 +1093,15 @@ static _Bool config_threshold_exceeded(procstat_t *ps)
 static void ps_find_cpu_delta(procstat_t *ps, unsigned long *out_userd, unsigned long *out_sysd)
 {
   procstat_t *ps_ptr;
-
   for (ps_ptr=prev_proc_list_head_g; ps_ptr!=NULL; ps_ptr=ps_ptr->next) {
     if (ps_ptr->pid == ps->pid)
       break;
   }
 
   if (ps_ptr) {
+    INFO ("Current cpu user counter %"PRIi64" , previous counter %"PRIi64" ",ps->cpu_user_counter, ps_ptr->cpu_user_counter);
     *out_userd = ps->cpu_user_counter - ps_ptr->cpu_user_counter;
+    INFO ("Current cpu system counter %"PRIi64" , previous counter %"PRIi64" ",ps->cpu_system_counter, ps_ptr->cpu_system_counter);
     *out_sysd = ps->cpu_system_counter - ps_ptr->cpu_system_counter;
   }
   else {
@@ -1112,7 +1113,7 @@ static void ps_find_cpu_delta(procstat_t *ps, unsigned long *out_userd, unsigned
 static void ps_calc_mem_percent(sysstat_t *ss, procstat_t *ps)
 {
   /* +0.5 to round off to nearest int */
-  ps->mem_percent = (int)((ps->vmem_rss*100.0 / ss->sys_tot_phys_mem) + 0.5);
+  ps->mem_percent = ((ps->vmem_rss*100.0 / ss->sys_tot_phys_mem) + 0.5);
 }
 
 static void ps_calc_runtime(sysstat_t *ss, procstat_t *ps)
@@ -1123,18 +1124,19 @@ static void ps_calc_runtime(sysstat_t *ss, procstat_t *ps)
 static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *ps)
 {
   if (ss && prev_ss) {
-	  unsigned long ps_cpu_user_delta, ps_cpu_system_delta;
+    INFO("Previous system stats for cpu percent: %ld, %ld",prev_ss->sys_cpu_system_counter, prev_ss->sys_cpu_tot_time_counter);
+    INFO("Current system stats for cpu percent: %ld, %ld",ss->sys_cpu_system_counter, ss->sys_cpu_tot_time_counter);
+    unsigned long ps_cpu_user_delta, ps_cpu_system_delta;
 	  unsigned long ss_cpu_tot_time_delta;
 	  double cpu_percent;
-
-	  ps_find_cpu_delta(ps, &ps_cpu_user_delta, &ps_cpu_system_delta);
+    ps_find_cpu_delta(ps, &ps_cpu_user_delta, &ps_cpu_system_delta);
 	  ss_cpu_tot_time_delta = ss->sys_cpu_tot_time_counter - prev_ss->sys_cpu_tot_time_counter;
 	  if (ps_cpu_user_delta || ps_cpu_system_delta) {
 		  INFO ("%s proc with %lu pid delta: u: %lu, s: %lu, tot: %lu\n", ps->name, ps->pid,ps_cpu_user_delta, ps_cpu_system_delta, ss_cpu_tot_time_delta);
 	  }
 	  cpu_percent = (ps_cpu_user_delta + ps_cpu_system_delta) * 100.0 / (ss_cpu_tot_time_delta);
 	  /* +0.5 to round it off to nearest int */
-	  ps->cpu_percent = (int)(cpu_percent + 0.5);
+	  ps->cpu_percent = cpu_percent + 0.5;
   }
 }
 
@@ -1184,7 +1186,7 @@ static int ps_read(void) {
       DEBUG ("ps_read_process failed: %i", status);
       continue;
     }
-
+    INFO ("Collecting stats for process %s with pid %lu: ",ps_ptr->name, ps_ptr->pid);
     ps_calc_runtime(ss, &ps);
     ps_calc_mem_percent(ss, &ps);
     ps_calc_cpu_percent(ss, prev_ss, &ps);
@@ -1220,6 +1222,7 @@ static int ps_read(void) {
   if (prev_ss)
     free(prev_ss);
   prev_ss = ss;
+  INFO("Current system stats: %ld, %ld",prev_ss->sys_cpu_system_counter, prev_ss->sys_cpu_tot_time_counter);
   proc_list_head_g = NULL;
 
   read_fork_rate();
