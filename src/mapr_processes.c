@@ -1101,9 +1101,9 @@ static void ps_find_cpu_delta(procstat_t *ps, unsigned long *out_userd, unsigned
 
   if (ps_ptr) {
     INFO ("Found PID %ld",ps_ptr->pid);
-    INFO ("Current cpu user counter %d, previous counter %d",ps->cpu_user_counter, ps_ptr->cpu_user_counter);
+    INFO ("Current cpu user counter %"PRIi64" , previous counter %"PRIi64" ",ps->cpu_user_counter, ps_ptr->cpu_user_counter);
     *out_userd = ps->cpu_user_counter - ps_ptr->cpu_user_counter;
-    INFO ("Current cpu system counter %d, previous counter %d",ps->cpu_system_counter, ps_ptr->cpu_system_counter);
+    INFO ("Current cpu system counter %"PRIi64" , previous counter %"PRIi64" ",ps->cpu_user_counter, ps_ptr->cpu_user_counter);
     *out_sysd = ps->cpu_system_counter - ps_ptr->cpu_system_counter;
   }
   else {
