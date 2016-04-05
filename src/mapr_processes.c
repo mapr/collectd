@@ -327,7 +327,7 @@ static void getPids(char *name) {
       if (pidFP == NULL) {
         ERROR("mapr_process plugin failed to open pid file %s", directoryEntry->d_name);
       } else {
-        if (filename_length >= 4 && strcmp(fileName + filename_length - 4, ".pid") == 0) {
+        if (filename_length >= 4 && strcmp(fileName + filename_length - 4, ".pid") == 0 && !strcmp(fileName + filename_length - 7, ".sh.pid") == 0) {
           int status = fscanf(pidFP, "%d", &pid);
           if ( status == 0 ) {
             ERROR("mapr_process plugin failed to read pid file %s", directoryEntry->d_name);
@@ -1100,7 +1100,10 @@ static void ps_find_cpu_delta(procstat_t *ps, unsigned long *out_userd, unsigned
   }
 
   if (ps_ptr) {
+    INFO ("Found PID %ld",ps_ptr->pid);
+    INFO ("Current cpu user counter %d, previous counter %d",ps->cpu_user_counter, ps_ptr->cpu_user_counter);
     *out_userd = ps->cpu_user_counter - ps_ptr->cpu_user_counter;
+    INFO ("Current cpu system counter %d, previous counter %d",ps->cpu_system_counter, ps_ptr->cpu_system_counter);
     *out_sysd = ps->cpu_system_counter - ps_ptr->cpu_system_counter;
   }
   else {
@@ -1122,6 +1125,7 @@ static void ps_calc_runtime(sysstat_t *ss, procstat_t *ps)
 
 static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *ps)
 {
+  INFO("Previous system stats for cpu percent: %ld, %ld",prev_ss->sys_cpu_system_counter, prev_ss->sys_cpu_tot_time_counter);
   if (ss && prev_ss) {
 	  unsigned long ps_cpu_user_delta, ps_cpu_system_delta;
 	  unsigned long ss_cpu_tot_time_delta;
@@ -1220,6 +1224,7 @@ static int ps_read(void) {
   if (prev_ss)
     free(prev_ss);
   prev_ss = ss;
+  INFO("Previous system stats: %ld, %ld",prev_ss->sys_cpu_system_counter, prev_ss->sys_cpu_tot_time_counter);
   proc_list_head_g = NULL;
 
   read_fork_rate();
