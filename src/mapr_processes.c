@@ -1224,7 +1224,7 @@ static int ps_read(void) {
   if (prev_ss)
     free(prev_ss);
   prev_ss = ss;
-  INFO("Previous system stats: %ld, %ld",prev_ss->sys_cpu_system_counter, prev_ss->sys_cpu_tot_time_counter);
+  INFO("Current system stats: %ld, %ld",prev_ss->sys_cpu_system_counter, prev_ss->sys_cpu_tot_time_counter);
   proc_list_head_g = NULL;
 
   read_fork_rate();
