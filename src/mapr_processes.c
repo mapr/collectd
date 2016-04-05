@@ -128,8 +128,8 @@ typedef struct procstat {
 	derive_t cpu_user_counter;
 	derive_t cpu_system_counter;
 
-	unsigned double cpu_percent;
-	unsigned double mem_percent;
+	unsigned float cpu_percent;
+	unsigned float mem_percent;
 
 	/* io data */
 	derive_t io_rchar;
@@ -582,7 +582,7 @@ DEBUG ("name = %s; num_proc = %lu; num_lwp = %lu; "
 		"io_rchar = %"PRIi64"; io_wchar = %"PRIi64"; "
 		"io_syscr = %"PRIi64"; io_syscw = %"PRIi64"; "
 		"cswitch_vol = %"PRIi64"; cswitch_invol = %"PRIi64"; "
-		"cpu_percent = %e; mem_percent = %e; pid = %lu; ppid = %lu; "
+		"cpu_percent = %f; mem_percent = %f; pid = %lu; ppid = %lu; "
 		"runtime = %lu secs",
 		ps->name, ps->num_proc, ps->num_lwp,
 		ps->vmem_size, ps->vmem_rss,
