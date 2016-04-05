@@ -1127,6 +1127,7 @@ static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *p
 {
   if (ss && prev_ss) {
     INFO("Previous system stats for cpu percent: %ld, %ld",prev_ss->sys_cpu_system_counter, prev_ss->sys_cpu_tot_time_counter);
+    INFO("Current system stats for cpu percent: %ld, %ld",ss->sys_cpu_system_counter, ss->sys_cpu_tot_time_counter);
     unsigned long ps_cpu_user_delta, ps_cpu_system_delta;
 	  unsigned long ss_cpu_tot_time_delta;
 	  double cpu_percent;
