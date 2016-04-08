@@ -40,7 +40,7 @@ HADOOP_VER="hadoop-2.7.0"
 YARN_BIN="/opt/mapr/hadoop/${HADOOP_VER}/bin/yarn"
 RM_JMX_PORT=8025
 NM_JMX_PORT=8027
-JMX_INSERT='#Enable JMX\nJMX_OPTS=\"-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.port\"'
+JMX_INSERT='#Enable JMX for MaprMonitoring\nJMX_OPTS=\"-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.port\"'
 YARN_JMX_RM_OPT_STR='$JMX_OPTS='${RM_JMX_PORT}
 YARN_JMX_NM_OPT_STR='$JMX_OPTS='${NM_JMX_PORT}
 MAPR_HOME=${MAPR_HOME:-/opt/mapr}
@@ -344,25 +344,28 @@ function configureHadoopJMX() {
     local rc2
     # Enable JMX for RM and NM only if they are installed
     if [ ${CD_RM_ROLE} -eq 1 -o ${CD_NM_ROLE} -eq 1 ]; then
-        cp -p ${YARN_BIN} ${YARN_BIN}.prejmx
-
-        awk -v jmx_ins_after='JAVA_HEAP_MAX' -v jmx_insert="$JMX_INSERT" \
-            -v jmx_opts_pattern='"\\$COMMAND" = "resourcemanager"' \
-            -v yarn_opts="$YARN_JMX_RM_OPT_STR" \
-            -f ${AWKLIBPATH}/configureYarnJmx.awk ${YARN_BIN} > ${YARN_BIN}.tmp
-        rc1=$?
-
-        awk  -v jmx_opts_pattern='"\\$COMMAND" = "nodemanager"' \
-             -v yarn_opts="$YARN_JMX_NM_OPT_STR" \
-             -f ${AWKLIBPATH}/configureYarnJmx.awk ${YARN_BIN}.tmp > ${YARN_BIN}.tmp.tmp
-        rc2=$?
-        if [ $rc1 -eq 0 -a $rc2 -eq 0 ]; then
-            mv ${YARN_BIN}.tmp.tmp ${YARN_BIN}
-            chmod a+x ${YARN_BIN}
-        else
-            >&2 echo "WARNING: Failed to enable jmx for NM/RM - see ${YARN_BIN}.tmp.tmp"
+        # only change the script once
+        if ! grep "^#Enable JMX for MaprMonitoring" ${YARN_BIN} > /dev/null 2>&1; then
+            cp -p ${YARN_BIN} ${YARN_BIN}.prejmx
+    
+            awk -v jmx_ins_after='JAVA_HEAP_MAX' -v jmx_insert="$JMX_INSERT" \
+                -v jmx_opts_pattern='"\\$COMMAND" = "resourcemanager"' \
+                -v yarn_opts="$YARN_JMX_RM_OPT_STR" \
+                -f ${AWKLIBPATH}/configureYarnJmx.awk ${YARN_BIN} > ${YARN_BIN}.tmp
+            rc1=$?
+    
+            awk  -v jmx_opts_pattern='"\\$COMMAND" = "nodemanager"' \
+                 -v yarn_opts="$YARN_JMX_NM_OPT_STR" \
+                 -f ${AWKLIBPATH}/configureYarnJmx.awk ${YARN_BIN}.tmp > ${YARN_BIN}.tmp.tmp
+            rc2=$?
+            if [ $rc1 -eq 0 -a $rc2 -eq 0 ]; then
+                mv ${YARN_BIN}.tmp.tmp ${YARN_BIN}
+                chmod a+x ${YARN_BIN}
+            else
+                >&2 echo "WARNING: Failed to enable jmx for NM/RM - see ${YARN_BIN}.tmp.tmp"
+            fi
+            rm -f ${YARN_BIN}.tmp
         fi
-        rm -f ${YARN_BIN}.tmp
     fi
 }
 
@@ -429,7 +432,7 @@ function installWardenConfFile()
         mkdir -p ${MAPR_CONF_DIR} > /dev/null 2>&1
     fi
 
-    cp ${COLLECTD_HOME}/etc/conf/warden.collectd.conf ${MAPR_CONF_DIR}
+    cp ${COLLECTD_HOME}/etc/conf/warden.collectd.conf ${MAPR_CONF_DIR}/
 }
 
 #############################################################################
