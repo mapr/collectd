@@ -464,7 +464,7 @@ value_list_t vl = VALUE_LIST_INIT;
 vl.values = values;
 vl.values_len = 2;
 sstrncpy(vl.host, hostname_g, sizeof(vl.host));
-sstrncpy(vl.plugin, "mapr_processes", sizeof(vl.plugin));
+sstrncpy(vl.plugin, "mapr.processes", sizeof(vl.plugin));
 sstrncpy(vl.plugin_instance, ps->processName, sizeof(vl.plugin_instance));
 
 sstrncpy(vl.type, "ps_vm", sizeof(vl.type));
