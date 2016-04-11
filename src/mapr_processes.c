@@ -456,24 +456,6 @@ DEBUG ("pagesize_g = %li; CONFIG_HZ = %i;",
 return (0);
 } /* int ps_init */
 
-/* submit global state (e.g.: qty of zombies, running, etc..) */
-static void ps_submit_state(const char *state, double value) {
-value_t values[1];
-value_list_t vl = VALUE_LIST_INIT;
-
-values[0].gauge = value;
-
-vl.values = values;
-vl.values_len = 1;
-sstrncpy(vl.host, hostname_g, sizeof(vl.host));
-sstrncpy(vl.plugin, "mapr_processes", sizeof(vl.plugin));
-sstrncpy(vl.plugin_instance, "", sizeof(vl.plugin_instance));
-sstrncpy(vl.type, "ps_state", sizeof(vl.type));
-sstrncpy(vl.type_instance, state, sizeof(vl.type_instance));
-
-plugin_dispatch_values(&vl);
-}
-
 /* submit info about specific process (e.g.: memory taken, cpu usage, etc..) */
 static void ps_submit_proc_list(procstat_t *ps) {
 value_t values[2];
@@ -483,7 +465,6 @@ vl.values = values;
 vl.values_len = 2;
 sstrncpy(vl.host, hostname_g, sizeof(vl.host));
 sstrncpy(vl.plugin, "mapr_processes", sizeof(vl.plugin));
-ssnprintf(vl.type_instance,sizeof(vl.type_instance), "%lu", ps->pid);
 sstrncpy(vl.plugin_instance, ps->processName, sizeof(vl.plugin_instance));
 
 sstrncpy(vl.type, "ps_vm", sizeof(vl.type));
@@ -593,24 +574,6 @@ DEBUG ("name = %s; num_proc = %lu; num_lwp = %lu; "
 		ps->cswitch_vol, ps->cswitch_invol, ps->cpu_percent,
 		ps->mem_percent, ps->pid, ps->ppid, ps->runtime_secs);
 } /* void ps_submit_proc_list */
-
-static void ps_submit_fork_rate (derive_t value)
-{
-value_t values[1];
-value_list_t vl = VALUE_LIST_INIT;
-
-values[0].derive = value;
-
-vl.values = values;
-vl.values_len = 1;
-sstrncpy(vl.host, hostname_g, sizeof (vl.host));
-sstrncpy(vl.plugin, "mapr_processes", sizeof (vl.plugin));
-sstrncpy(vl.plugin_instance, "", sizeof (vl.plugin_instance));
-sstrncpy(vl.type, "fork_rate", sizeof (vl.type));
-sstrncpy(vl.type_instance, "", sizeof (vl.type_instance));
-
-plugin_dispatch_values(&vl);
-}
 
 static procstat_t *ps_read_tasks_status (int pid, procstat_t *ps)
 {
@@ -1035,51 +998,6 @@ int ps_read_process (int pid, procstat_t *ps, char *state)
   return (0);
 } /* int ps_read_process (...) */
 
-static int read_fork_rate ()
-{
-FILE *proc_stat;
-char buffer[1024];
-value_t value;
-_Bool value_valid = 0;
-
-proc_stat = fopen ("/proc/stat", "r");
-if (proc_stat == NULL)
-{
-	char errbuf[1024];
-	ERROR ("processes plugin: fopen (/proc/stat) failed: %s",
-			sstrerror (errno, errbuf, sizeof (errbuf)));
-	return (-1);
-}
-
-while (fgets (buffer, sizeof (buffer), proc_stat) != NULL)
-{
-	int status;
-	char *fields[3];
-	int fields_num;
-
-	fields_num = strsplit (buffer, fields,
-			STATIC_ARRAY_SIZE (fields));
-	if (fields_num != 2)
-	continue;
-
-	if (strcmp ("processes", fields[0]) != 0)
-	continue;
-
-	status = parse_value (fields[1], &value, DS_TYPE_DERIVE);
-	if (status == 0)
-	value_valid = 1;
-
-	break;
-}
-fclose(proc_stat);
-
-if (!value_valid)
-return (-1);
-
-ps_submit_fork_rate (value.derive);
-return (0);
-}
-
 
 static _Bool config_threshold_exceeded(procstat_t *ps)
 {
@@ -1142,21 +1060,12 @@ static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *p
 
 /* do actual readings from kernel */
 static int ps_read(void) {
-  int running = 0;
-  int sleeping = 0;
-  int zombies = 0;
-  int stopped = 0;
-  int paging = 0;
-  int blocked = 0;
   int status;
-  char state;
   procstat_t ps;
   procstat_t *ps_ptr;
   sysstat_t *ss;
   directorylist_t *dirlist;
   static sysstat_t *prev_ss=NULL;
-
-  running = sleeping = zombies = stopped = paging = blocked = 0;
 
   /*
    * Read /proc file and get the number of processes and
@@ -1192,26 +1101,9 @@ static int ps_read(void) {
     ps_calc_cpu_percent(ss, prev_ss, &ps);
     sstrncpy(ps.processName, ps_ptr->processName, sizeof(ps.processName));
 
-    switch (state)
-    {
-		  case 'R': running++; break;
-		  case 'S': sleeping++; break;
-		  case 'D': blocked++; break;
-		  case 'Z': zombies++; break;
-		  case 'T': stopped++; break;
-		  case 'W': paging++; break;
-    }
-
     // Store the per process metrics so you can use them to compute deltas
     ps_proc_list_prepend(&ps);
   }
-
-  ps_submit_state ("running", running);
-  ps_submit_state ("sleeping", sleeping);
-  ps_submit_state ("zombies", zombies);
-  ps_submit_state ("stopped", stopped);
-  ps_submit_state ("paging", paging);
-  ps_submit_state ("blocked", blocked);
 
   for (ps_ptr = proc_list_head_g; ps_ptr != NULL; ps_ptr = ps_ptr->next) {
     if (config_threshold_exceeded(ps_ptr))
@@ -1225,7 +1117,6 @@ static int ps_read(void) {
   INFO("Current system stats: %ld, %ld",prev_ss->sys_cpu_system_counter, prev_ss->sys_cpu_tot_time_counter);
   proc_list_head_g = NULL;
 
-  read_fork_rate();
   free(P);
   return (0);
 } /* int ps_read */
