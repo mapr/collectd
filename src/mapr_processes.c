@@ -1064,6 +1064,7 @@ static int ps_read(void) {
   procstat_t ps;
   procstat_t *ps_ptr;
   sysstat_t *ss;
+  char state;
   directorylist_t *dirlist;
   static sysstat_t *prev_ss=NULL;
 
