@@ -324,12 +324,10 @@ static void getPids(char *name) {
       strcat(fileName,directoryEntry->d_name);
       int filename_length = strlen(fileName);
       if (filename_length >= 4 && strcmp(fileName + filename_length - 4, ".pid") == 0 && !strcmp(fileName + filename_length - 7, ".sh.pid") == 0) {
-        INFO ("Opening file %s",fileName);
         pidFP = fopen(fileName, "r");
         if (pidFP == NULL) {
           ERROR("mapr_process plugin failed to open pid file %s", directoryEntry->d_name);
         } else {
-          INFO ("Scanning file %s",fileName);
           int status = fscanf(pidFP, "%d", &pid);
           if ( status == 0 ) {
             ERROR("mapr_process plugin failed to read pid file %s", directoryEntry->d_name);
