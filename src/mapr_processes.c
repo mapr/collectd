@@ -1010,24 +1010,24 @@ static _Bool config_threshold_exceeded(procstat_t *ps)
   return 0;
 }
 
-static void ps_find_cpu_delta(procstat_t *ps, unsigned long *out_userd, unsigned long *out_sysd)
-{
-  procstat_t *ps_ptr;
-  for (ps_ptr=prev_proc_list_head_g; ps_ptr!=NULL; ps_ptr=ps_ptr->next) {
-    if (ps_ptr->pid == ps->pid)
-      break;
-  }
-
-  if (ps_ptr) {
-    INFO ("Current cpu user counter %"PRIi64" , previous counter %"PRIi64" ",ps->cpu_user_counter, ps_ptr->cpu_user_counter);
-    *out_userd = ps->cpu_user_counter - ps_ptr->cpu_user_counter;
-    INFO ("Current cpu system counter %"PRIi64" , previous counter %"PRIi64" ",ps->cpu_system_counter, ps_ptr->cpu_system_counter);
-    *out_sysd = ps->cpu_system_counter - ps_ptr->cpu_system_counter;
-  }
-  else {
-    *out_userd = *out_sysd = 0ULL;
-  }
-}
+//static void ps_find_cpu_delta(procstat_t *ps, unsigned long *out_userd, unsigned long *out_sysd)
+//{
+//  procstat_t *ps_ptr;
+//  for (ps_ptr=prev_proc_list_head_g; ps_ptr!=NULL; ps_ptr=ps_ptr->next) {
+//    if (ps_ptr->pid == ps->pid)
+//      break;
+//  }
+//
+//  if (ps_ptr) {
+//    INFO ("Current cpu user counter %"PRIi64" , previous counter %"PRIi64" ",ps->cpu_user_counter, ps_ptr->cpu_user_counter);
+//    *out_userd = ps->cpu_user_counter - ps_ptr->cpu_user_counter;
+//    INFO ("Current cpu system counter %"PRIi64" , previous counter %"PRIi64" ",ps->cpu_system_counter, ps_ptr->cpu_system_counter);
+//    *out_sysd = ps->cpu_system_counter - ps_ptr->cpu_system_counter;
+//  }
+//  else {
+//    *out_userd = *out_sysd = 0ULL;
+//  }
+//}
 
 
 static void ps_calc_mem_percent(sysstat_t *ss, procstat_t *ps)
