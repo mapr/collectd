@@ -325,6 +325,7 @@ static void getPids(char *name) {
       int filename_length = strlen(fileName);
       INFO ("File Name %s",fileName);
       if (filename_length >= 4 && strcmp(fileName + filename_length - 4, ".pid") == 0 && !strcmp(fileName + filename_length - 7, ".sh.pid") == 0) {
+        INFO ("Opening file %s",fileName);
         pidFP = fopen(fileName, "r");
         if (pidFP == NULL) {
           ERROR("mapr_process plugin failed to open pid file %s", directoryEntry->d_name);
@@ -339,7 +340,7 @@ static void getPids(char *name) {
         }
       }
     }
-  closedir(directory);
+    closedir(directory);
   }
 } /* void getPids */
 
