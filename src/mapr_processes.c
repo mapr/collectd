@@ -323,6 +323,7 @@ static void getPids(char *name) {
       strcat(fileName,"/");
       strcat(fileName,directoryEntry->d_name);
       int filename_length = strlen(fileName);
+      INFO ("File Name %s",fileName);
       if (filename_length >= 4 && strcmp(fileName + filename_length - 4, ".pid") == 0 && !strcmp(fileName + filename_length - 7, ".sh.pid") == 0) {
         pidFP = fopen(fileName, "r");
         if (pidFP == NULL) {
@@ -336,8 +337,8 @@ static void getPids(char *name) {
           ps_list_register(pid, directoryEntry->d_name);
           fclose(pidFP);
         }
-     }
-  }
+      }
+    }
   closedir(directory);
   }
 } /* void getPids */
