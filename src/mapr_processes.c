@@ -323,13 +323,13 @@ static void getPids(char *name) {
       strcat(fileName,"/");
       strcat(fileName,directoryEntry->d_name);
       int filename_length = strlen(fileName);
-      INFO ("File Name %s",fileName);
       if (filename_length >= 4 && strcmp(fileName + filename_length - 4, ".pid") == 0 && !strcmp(fileName + filename_length - 7, ".sh.pid") == 0) {
         INFO ("Opening file %s",fileName);
         pidFP = fopen(fileName, "r");
         if (pidFP == NULL) {
           ERROR("mapr_process plugin failed to open pid file %s", directoryEntry->d_name);
         } else {
+          INFO ("Scanning file %s",fileName);
           int status = fscanf(pidFP, "%d", &pid);
           if ( status == 0 ) {
             ERROR("mapr_process plugin failed to read pid file %s", directoryEntry->d_name);
@@ -1045,16 +1045,16 @@ static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *p
 {
   // Don't calculate the delta. Use actual values. Leaving this code for future.
   //if (ss && prev_ss) {
-    INFO("Previous system stats for cpu percent: %ld, %ld",prev_ss->sys_cpu_system_counter, prev_ss->sys_cpu_tot_time_counter);
-    INFO("Current system stats for cpu percent: %ld, %ld",ss->sys_cpu_system_counter, ss->sys_cpu_tot_time_counter);
-    unsigned long ps_cpu_user_delta, ps_cpu_system_delta;
-	  unsigned long ss_cpu_tot_time_delta;
+    //INFO("Previous system stats for cpu percent: %ld, %ld",prev_ss->sys_cpu_system_counter, prev_ss->sys_cpu_tot_time_counter);
+    //INFO("Current system stats for cpu percent: %ld, %ld",ss->sys_cpu_system_counter, ss->sys_cpu_tot_time_counter);
+    //unsigned long ps_cpu_user_delta, ps_cpu_system_delta;
+	  //unsigned long ss_cpu_tot_time_delta;
 	  double cpu_percent;
-    ps_find_cpu_delta(ps, &ps_cpu_user_delta, &ps_cpu_system_delta);
-	  ss_cpu_tot_time_delta = ss->sys_cpu_tot_time_counter - prev_ss->sys_cpu_tot_time_counter;
-	  if (ps_cpu_user_delta || ps_cpu_system_delta) {
-		  INFO ("%s proc with %lu pid delta: u: %lu, s: %lu, tot: %lu\n", ps->name, ps->pid,ps_cpu_user_delta, ps_cpu_system_delta, ss_cpu_tot_time_delta);
-	  }
+    //ps_find_cpu_delta(ps, &ps_cpu_user_delta, &ps_cpu_system_delta);
+	  //ss_cpu_tot_time_delta = ss->sys_cpu_tot_time_counter - prev_ss->sys_cpu_tot_time_counter;
+	  //if (ps_cpu_user_delta || ps_cpu_system_delta) {
+		  //INFO ("%s proc with %lu pid delta: u: %lu, s: %lu, tot: %lu\n", ps->name, ps->pid,ps_cpu_user_delta, ps_cpu_system_delta, ss_cpu_tot_time_delta);
+	  //}
 	  // Don't calculate the delta. Use actual values
 	  //cpu_percent = (ps_cpu_user_delta + ps_cpu_system_delta) * 100.0 / (ss_cpu_tot_time_delta);
 	  cpu_percent = (ps->cpu_user_counter + ps->cpu_system_counter) * 100.0 / (ss->sys_cpu_tot_time_counter);
