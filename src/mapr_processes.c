@@ -339,6 +339,7 @@ static void getPids(char *name) {
      }
   }
   closedir(directory);
+  }
 } /* void getPids */
 
 static void ps_proc_list_prepend(procstat_t *ps)
