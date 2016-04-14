@@ -1008,24 +1008,24 @@ static _Bool config_threshold_exceeded(procstat_t *ps)
   return 0;
 }
 
-//static void ps_find_cpu_delta(procstat_t *ps, unsigned long *out_userd, unsigned long *out_sysd)
-//{
-//  procstat_t *ps_ptr;
-//  for (ps_ptr=prev_proc_list_head_g; ps_ptr!=NULL; ps_ptr=ps_ptr->next) {
-//    if (ps_ptr->pid == ps->pid)
-//      break;
-//  }
-//
-//  if (ps_ptr) {
-//    INFO ("Current cpu user counter %"PRIi64" , previous counter %"PRIi64" ",ps->cpu_user_counter, ps_ptr->cpu_user_counter);
-//    *out_userd = ps->cpu_user_counter - ps_ptr->cpu_user_counter;
-//    INFO ("Current cpu system counter %"PRIi64" , previous counter %"PRIi64" ",ps->cpu_system_counter, ps_ptr->cpu_system_counter);
-//    *out_sysd = ps->cpu_system_counter - ps_ptr->cpu_system_counter;
-//  }
-//  else {
-//    *out_userd = *out_sysd = 0ULL;
-//  }
-//}
+static void ps_find_cpu_delta(procstat_t *ps, unsigned long *out_userd, unsigned long *out_sysd)
+{
+  procstat_t *ps_ptr;
+  for (ps_ptr=prev_proc_list_head_g; ps_ptr!=NULL; ps_ptr=ps_ptr->next) {
+    if (ps_ptr->pid == ps->pid)
+      break;
+  }
+
+  if (ps_ptr) {
+    INFO ("Current cpu user counter %"PRIi64" , previous counter %"PRIi64" ",ps->cpu_user_counter, ps_ptr->cpu_user_counter);
+    *out_userd = ps->cpu_user_counter - ps_ptr->cpu_user_counter;
+    INFO ("Current cpu system counter %"PRIi64" , previous counter %"PRIi64" ",ps->cpu_system_counter, ps_ptr->cpu_system_counter);
+    *out_sysd = ps->cpu_system_counter - ps_ptr->cpu_system_counter;
+  }
+  else {
+    *out_userd = *out_sysd = 0ULL;
+  }
+}
 
 
 static void ps_calc_mem_percent(sysstat_t *ss, procstat_t *ps)
@@ -1041,24 +1041,24 @@ static void ps_calc_runtime(sysstat_t *ss, procstat_t *ps)
 
 static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *ps)
 {
-  // Don't calculate the delta. Use actual values. Leaving this code for future.
-  //if (ss && prev_ss) {
-    //INFO("Previous system stats for cpu percent: %ld, %ld",prev_ss->sys_cpu_system_counter, prev_ss->sys_cpu_tot_time_counter);
-    //INFO("Current system stats for cpu percent: %ld, %ld",ss->sys_cpu_system_counter, ss->sys_cpu_tot_time_counter);
-    //unsigned long ps_cpu_user_delta, ps_cpu_system_delta;
-	  //unsigned long ss_cpu_tot_time_delta;
+  //Don't calculate the delta. Use actual values. Leaving this code for future.
+  if (ss && prev_ss) {
+    INFO("Previous system stats for cpu percent: %ld, %ld",prev_ss->sys_cpu_system_counter, prev_ss->sys_cpu_tot_time_counter);
+    INFO("Current system stats for cpu percent: %ld, %ld",ss->sys_cpu_system_counter, ss->sys_cpu_tot_time_counter);
+    unsigned long ps_cpu_user_delta, ps_cpu_system_delta;
+	  unsigned long ss_cpu_tot_time_delta;
 	  double cpu_percent;
-    //ps_find_cpu_delta(ps, &ps_cpu_user_delta, &ps_cpu_system_delta);
-	  //ss_cpu_tot_time_delta = ss->sys_cpu_tot_time_counter - prev_ss->sys_cpu_tot_time_counter;
-	  //if (ps_cpu_user_delta || ps_cpu_system_delta) {
-		  //INFO ("%s proc with %lu pid delta: u: %lu, s: %lu, tot: %lu\n", ps->name, ps->pid,ps_cpu_user_delta, ps_cpu_system_delta, ss_cpu_tot_time_delta);
-	  //}
-	  // Don't calculate the delta. Use actual values
-	  //cpu_percent = (ps_cpu_user_delta + ps_cpu_system_delta) * 100.0 / (ss_cpu_tot_time_delta);
-	  cpu_percent = (ps->cpu_user_counter + ps->cpu_system_counter) * 100.0 / (ss->sys_cpu_tot_time_counter);
+    ps_find_cpu_delta(ps, &ps_cpu_user_delta, &ps_cpu_system_delta);
+	  ss_cpu_tot_time_delta = ss->sys_cpu_tot_time_counter - prev_ss->sys_cpu_tot_time_counter;
+	  if (ps_cpu_user_delta || ps_cpu_system_delta) {
+		  INFO ("%s proc with %lu pid delta: u: %lu, s: %lu, tot: %lu\n", ps->name, ps->pid,ps_cpu_user_delta, ps_cpu_system_delta, ss_cpu_tot_time_delta);
+	  }
+	   Don't calculate the delta. Use actual values
+	  cpu_percent = (ps_cpu_user_delta + ps_cpu_system_delta) * 100.0 / (ss_cpu_tot_time_delta);
+	  //cpu_percent = (ps->cpu_user_counter + ps->cpu_system_counter) * 100.0 / (ss->sys_cpu_tot_time_counter);
 	  /* +0.5 to round it off to nearest int */
 	  ps->cpu_percent = cpu_percent;
-  //}
+  }
 }
 
 /* do actual readings from kernel */
