@@ -1053,7 +1053,7 @@ static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *p
 	  if (ps_cpu_user_delta || ps_cpu_system_delta) {
 		  INFO ("%s proc with %lu pid delta: u: %lu, s: %lu, tot: %lu\n", ps->name, ps->pid,ps_cpu_user_delta, ps_cpu_system_delta, ss_cpu_tot_time_delta);
 	  }
-	   Don't calculate the delta. Use actual values
+	  //Don't calculate the delta. Use actual values
 	  cpu_percent = (ps_cpu_user_delta + ps_cpu_system_delta) * 100.0 / (ss_cpu_tot_time_delta);
 	  //cpu_percent = (ps->cpu_user_counter + ps->cpu_system_counter) * 100.0 / (ss->sys_cpu_tot_time_counter);
 	  /* +0.5 to round it off to nearest int */
