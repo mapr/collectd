@@ -38,7 +38,7 @@
 # define PSFORMAT 	"%ld %ld %ld %ld %[^\n]"
 # define PSVARS	&P[i].uid, &P[i].pid, &P[i].ppid, &P[i].pgid, P[i].cmd
 # define PSVARSN	5
-# define CONFIG_HZ 100
+# define CONFIG_HZ 1000 /* HZ for kernels 2.6+ */
 # define CMDLINE_BUFFER_SIZE 4096
 # include <stdio.h>
 # include <stdlib.h>
@@ -960,7 +960,7 @@ int ps_read_process (int pid, procstat_t *ps, char *state)
     : stack_ptr - stack_start;
   }
 
-  /* Convert jiffies to useconds */
+  /* Convert jiffies to micro seconds */
   cpu_user_counter = cpu_user_counter * 1000000 / CONFIG_HZ;
   cpu_system_counter = cpu_system_counter * 1000000 / CONFIG_HZ;
   vmem_rss = vmem_rss * pagesize_g;
