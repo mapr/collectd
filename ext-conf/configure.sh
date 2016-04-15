@@ -53,6 +53,9 @@ CLDB_RUNNING=0
 CLDB_RETRIES=12
 CLDB_RETRY_DLY=5
 CD_ENABLE_SERVICE=0
+nodecount=0
+nodelist=""
+nodeport=4242
 
 #############################################################################
 # Function to uncomment a section
@@ -457,7 +460,7 @@ function cleanupOldConfFiles
 # is not the active one, we will be getting 0s for the stats.
 #
 
-usage="usage: $0 -nodeCount <cnt> -OT \"ip:port,ip1:port,\" -nodePort <port> "
+usage="usage: $0 [-nodeCount <cnt>] [-nodePort <port>]  -OT \"ip:port,ip1:port,\" "
 if [ ${#} -gt 1 ]; then
     # we have arguments - run as as standalone - need to get params and
     # XXX why do we need the -o to make this work?
@@ -489,6 +492,12 @@ if [ ${#} -gt 1 ]; then
     done
 
 else
+    echo "${usage}"
+    return 2 2>/dev/null || exit 2
+fi
+
+if [ -z "$nodelist" ]; then
+    echo "-OT is required"
     echo "${usage}"
     return 2 2>/dev/null || exit 2
 fi
