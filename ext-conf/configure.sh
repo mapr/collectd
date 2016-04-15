@@ -53,6 +53,9 @@ CLDB_RUNNING=0
 CLDB_RETRIES=12
 CLDB_RETRY_DLY=5
 CD_ENABLE_SERVICE=0
+nodecount=0
+nodelist=""
+nodeport=4242
 
 #############################################################################
 # Function to uncomment a section
