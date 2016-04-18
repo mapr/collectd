@@ -165,7 +165,7 @@ static directorylist_t *directory_list_head_g = NULL;
 static float filter_mincpupct_g = 0.0;
 static float filter_minmempct_g = 0.0;
 static int numOfProcesses = 0;
-static _Bool report_ctx_switch = 0;
+static _Bool report_ctx_switch = 1;
 
 static long pagesize_g;
 
