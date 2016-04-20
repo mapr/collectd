@@ -38,7 +38,6 @@
 # define PSFORMAT 	"%ld %ld %ld %ld %[^\n]"
 # define PSVARS	&P[i].uid, &P[i].pid, &P[i].ppid, &P[i].pgid, P[i].cmd
 # define PSVARSN	5
-# define CONFIG_HZ 1000 /* HZ for kernels 2.6+ */
 # define CMDLINE_BUFFER_SIZE 4096
 # include <stdio.h>
 # include <stdlib.h>
@@ -46,6 +45,8 @@
 # include <unistd.h>		/* For getopt() */
 # include <pwd.h>		/* For getpwnam() */
 # include <sys/ioctl.h>		/* For TIOCGSIZE/TIOCGWINSZ */
+#include <sys/times.h>
+#include <time.h>
 
 #ifndef TRUE
 #  define TRUE  1
@@ -56,7 +57,6 @@
 # include <dirent.h>
 # include <regex.h>
 
-
 struct Proc {
 	long uid, pid, ppid, pgid;
 	char name[32], cmd[MAXLINE];
@@ -64,7 +64,6 @@ struct Proc {
 	long parent, child, sister;
 	unsigned long thcount;
 }*P;
-
 
 static void uid2user(uid_t uid, char *name, int len) {
 #define NUMUN 128
@@ -127,6 +126,8 @@ typedef struct procstat {
 
 	derive_t cpu_user_counter;
 	derive_t cpu_system_counter;
+	derive_t cpu_child_user_counter;
+	derive_t cpu_child_system_counter;
 
 	float cpu_percent;
 	float mem_percent;
@@ -168,6 +169,8 @@ static int numOfProcesses = 0;
 static _Bool report_ctx_switch = 1;
 
 static long pagesize_g;
+static long clockTicks;
+static int numCores;
 
 
 /* Read /proc/ */
@@ -451,8 +454,10 @@ return (0);
 
 static int ps_init(void) {
 pagesize_g = sysconf(_SC_PAGESIZE);
-DEBUG ("pagesize_g = %li; CONFIG_HZ = %i;",
-		pagesize_g, CONFIG_HZ);
+clockTicks = sysconf(_SC_CLK_TCK);
+numCores = (uint)sysconf(_SC_NPROCESSORS_ONLN);
+DEBUG ("pagesize_g = %li; clockTicks = %li; numCores = %d;",
+		pagesize_g, clockTicks, numCores);
 return (0);
 } /* int ps_init */
 
@@ -547,7 +552,7 @@ if (report_ctx_switch) {
 	vl.values_len = 1;
 	plugin_dispatch_values(&vl);
 
-	sstrncpy(vl.type, "context_switch_invaluntary", sizeof(vl.type));
+	sstrncpy(vl.type, "context_switch_involuntary", sizeof(vl.type));
 	vl.values[0].derive = ps->cswitch_invol;
 	vl.values_len = 1;
 	plugin_dispatch_values(&vl);
@@ -803,10 +808,10 @@ if (strcmp(name, "cpu") != 0) {
 	ERROR ("processes plugin: unexpected string in /proc/stat");
 	return NULL;
 }
-sys_cpu_user_counter = sys_cpu_user_counter * 1000000 / CONFIG_HZ;
-sys_cpu_user_nice_counter = sys_cpu_user_nice_counter * 1000000 / CONFIG_HZ;
-sys_cpu_system_counter = sys_cpu_system_counter * 1000000 / CONFIG_HZ;
-sys_cpu_idle_counter = sys_cpu_idle_counter * 1000000 / CONFIG_HZ;
+sys_cpu_user_counter = sys_cpu_user_counter / clockTicks;
+sys_cpu_user_nice_counter = sys_cpu_user_nice_counter / clockTicks;
+sys_cpu_system_counter = sys_cpu_system_counter / clockTicks;
+sys_cpu_idle_counter = sys_cpu_idle_counter / clockTicks;
 if (sysinfo(&si) < 0) {
 	ERROR ("processes plugin: cannot obtain system info via sysinfo()");
 	return NULL;
@@ -850,6 +855,9 @@ int ps_read_process (int pid, procstat_t *ps, char *state)
 
   derive_t cpu_user_counter;
   derive_t cpu_system_counter;
+  derive_t cpu_child_user_counter;
+  derive_t cpu_child_system_counter;
+
   long long unsigned vmem_size;
   long long unsigned vmem_rss;
   long long unsigned stack_size;
@@ -941,13 +949,16 @@ int ps_read_process (int pid, procstat_t *ps, char *state)
 
   cpu_user_counter = atoll (fields[11]);
   cpu_system_counter = atoll (fields[12]);
+  cpu_child_user_counter = atoll (fields[13]);
+  cpu_child_system_counter = atoll (fields[14]);
+
   vmem_size = atoll (fields[20]);
   vmem_rss = atoll (fields[21]);
   ps->vmem_minflt_counter = atol (fields[7]);
   ps->vmem_majflt_counter = atol (fields[9]);
   ps->pid = pid;
   ps->ppid = atol (fields[1]);
-  ps->starttime_secs = atoll (fields[19]) / CONFIG_HZ;
+  ps->starttime_secs = atoll (fields[19]) / clockTicks;
 
   {
     unsigned long long stack_start = atoll (fields[25]);
@@ -958,9 +969,9 @@ int ps_read_process (int pid, procstat_t *ps, char *state)
     : stack_ptr - stack_start;
   }
 
-  /* Convert jiffies to micro seconds */
-  cpu_user_counter = cpu_user_counter * 1000000 / CONFIG_HZ;
-  cpu_system_counter = cpu_system_counter * 1000000 / CONFIG_HZ;
+  /* Convert clockticks to seconds */
+  cpu_user_counter = (cpu_user_counter + cpu_child_user_counter) / clockTicks;
+  cpu_system_counter = (cpu_system_counter + cpu_child_system_counter)   / clockTicks;
   vmem_rss = vmem_rss * pagesize_g;
 
   ps->cpu_user_counter = cpu_user_counter;
@@ -1052,7 +1063,8 @@ static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *p
 		  INFO ("%s proc with %lu pid delta: u: %lu, s: %lu, tot: %lu\n", ps->name, ps->pid,ps_cpu_user_delta, ps_cpu_system_delta, ss_cpu_tot_time_delta);
 	  }
 	  //Don't calculate the delta. Use actual values
-	  cpu_percent = (ps_cpu_user_delta + ps_cpu_system_delta) * 100.0 / (ss_cpu_tot_time_delta);
+	  unsigned long totalSeconds = ss->sys_boot_time_secs - ps->starttime_secs;
+	  cpu_percent = (ps->ps_cpu_user_counter + ps->ps_cpu_system_counter) * 100.0 / (totalSeconds * numCores);
 	  //cpu_percent = (ps->cpu_user_counter + ps->cpu_system_counter) * 100.0 / (ss->sys_cpu_tot_time_counter);
 	  /* +0.5 to round it off to nearest int */
 	  ps->cpu_percent = cpu_percent;
