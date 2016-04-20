@@ -1064,7 +1064,7 @@ static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *p
 	  }
 	  //Don't calculate the delta. Use actual values
 	  unsigned long totalSeconds = ss->sys_boot_time_secs - ps->starttime_secs;
-	  cpu_percent = (ps->ps_cpu_user_counter + ps->ps_cpu_system_counter) * 100.0 / (totalSeconds * numCores);
+	  cpu_percent = (ps->cpu_system_counter + ps->cpu_user_counter) * 100.0 / (totalSeconds * numCores);
 	  //cpu_percent = (ps->cpu_user_counter + ps->cpu_system_counter) * 100.0 / (ss->sys_cpu_tot_time_counter);
 	  /* +0.5 to round it off to nearest int */
 	  ps->cpu_percent = cpu_percent;
