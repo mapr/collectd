@@ -816,7 +816,7 @@ if (sysinfo(&si) < 0) {
 	ERROR ("processes plugin: cannot obtain system info via sysinfo()");
 	return NULL;
 }
-sys_boot_time_secs = si.uptime;
+
 sys_tot_phys_mem = si.totalram * si.mem_unit;
 
 ss = (sysstat_t *)malloc(sizeof(sysstat_t));
@@ -829,9 +829,10 @@ ss->sys_cpu_system_counter = sys_cpu_system_counter;
 ss->sys_cpu_tot_time_counter = sys_cpu_user_counter +
 sys_cpu_user_nice_counter + sys_cpu_system_counter +
 sys_cpu_idle_counter;
+ss->sys_boot_time_secs = si.uptime;
 ss->sys_tot_phys_mem = sys_tot_phys_mem;
-ss->sys_boot_time_secs = time(NULL) - sys_boot_time_secs;
-DEBUG ("%s sys u:%llu n:%llu s:%llu i:%llu physmem: %llu, boottime: %lu\n",
+//ss->sys_boot_time_secs = time(NULL) - sys_boot_time_secs;
+INFO ("%s sys u:%llu n:%llu s:%llu i:%llu physmem: %llu, boottime: %lu\n",
 		name, sys_cpu_user_counter, sys_cpu_user_nice_counter,
 		sys_cpu_system_counter, sys_cpu_idle_counter, sys_tot_phys_mem,
 		sys_boot_time_secs);
