@@ -1061,7 +1061,7 @@ static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *p
     unsigned long ps_cpu_user_delta, ps_cpu_system_delta, ps_starttime_delta;
 	  unsigned long ss_cpu_tot_time_delta;
 	  unsigned long ss_cpu_boot_time_delta;
-	  double cpu_percent, cpu_percent_delta;
+	  double cpu_percent;
     ps_find_cpu_delta(ps, &ps_cpu_user_delta, &ps_cpu_system_delta, &ps_starttime_delta);
 	  ss_cpu_tot_time_delta = ss->sys_cpu_tot_time_counter - prev_ss->sys_cpu_tot_time_counter;
 	  ss_cpu_boot_time_delta = ss->sys_boot_time_secs - prev_ss->sys_boot_time_secs;
