@@ -1,5 +1,5 @@
 /**
- * collectd - src/mapr_processes.c
+ * collectd - src/mapr_process.c
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -210,7 +210,7 @@ static int getProcesses(void) {
 		int status = fscanf(processFP, "%ld %s %*c %ld %ld", &P[j].pid, P[j].cmd, &P[j].ppid,
 				&P[j].pgid);
     if (status == 0) {
-	    ERROR("mapr_processes plugin: Failed to read from /proc/pid/stat.");
+	    ERROR("mapr_process plugin: Failed to read from /proc/pid/stat.");
       continue;
     }
 		fclose(processFP);
@@ -274,7 +274,7 @@ static void ps_list_register(int pid, char *name) {
 
   new = (procstat_t *) malloc(sizeof(procstat_t));
   if (new == NULL) {
-    ERROR("mapr_processes plugin: ps_list_register: malloc failed.");
+    ERROR("mapr_process plugin: ps_list_register: malloc failed.");
     return;
   }
   memset(new, 0, sizeof(procstat_t));
@@ -347,7 +347,7 @@ static void ps_proc_list_prepend(procstat_t *ps)
   if (proc_list_head_g == NULL) {
 	  proc_list_head_g = (procstat_t *)malloc(sizeof(procstat_t));
 	  if (proc_list_head_g == NULL) {
-		  ERROR ("mapr_processes plugin: error allocating memory");
+		  ERROR ("mapr_process plugin: error allocating memory");
 		  return;
 	  }
 	  ps->next = NULL;
@@ -357,7 +357,7 @@ static void ps_proc_list_prepend(procstat_t *ps)
 	  procstat_t *new;
     new = (procstat_t *)malloc(sizeof(procstat_t));
 	  if (new == NULL) {
-		  ERROR ("mapr_processes plugin: error allocating memory");
+		  ERROR ("mapr_process plugin: error allocating memory");
 		  return;
 	  }
 	  memcpy(new, ps, sizeof(procstat_t));
@@ -389,25 +389,25 @@ for (i = 0; i < ci->children_num; ++i) {
 	if (strcasecmp(c->key, "MinCPUPercent") == 0) {
 		filter_mincpupct_g = c->values[0].value.number;
 		if (filter_mincpupct_g < 0.0 || filter_mincpupct_g > 100.0) {
-			ERROR("mapr_processes plugin: MinCPUPercent out of [0,100] range");
+			ERROR("mapr_process plugin: MinCPUPercent out of [0,100] range");
 			continue;
 		}
 	} else if (strcasecmp(c->key, "MinMemoryPercent") == 0) {
 		filter_minmempct_g = c->values[0].value.number;
 		if (filter_minmempct_g < 0.0 || filter_minmempct_g > 100.0) {
-			ERROR("mapr_processes plugin: MinMemoryPercent out of [0,100] range");
+			ERROR("mapr_process plugin: MinMemoryPercent out of [0,100] range");
 			continue;
 		}
 	} else if (strcasecmp(c->key, "PID_Directory") == 0) {
 		if ((c->values_num != 1)
 				|| (OCONFIG_TYPE_STRING != c->values[0].type)) {
-			ERROR("mapr_processes plugin: `PID_Directory' expects exactly "
+			ERROR("mapr_process plugin: `PID_Directory' expects exactly "
 					"one string argument (got %i).", c->values_num);
 			continue;
 		}
 
 		if (c->children_num != 0) {
-			WARNING("mapr_processes plugin: the `PID_Directory' config option "
+			WARNING("mapr_process plugin: the `PID_Directory' config option "
 					"does not expect any child elements -- ignoring "
 					"content (%i elements) of the <PID_Directory '%s'> block.",
 					c->children_num, c->values[0].value.string);
@@ -429,7 +429,7 @@ for (i = 0; i < ci->children_num; ++i) {
 		  memset(newEntry, 0, sizeof(directorylist_t));
 		  strcpy(newEntry->directoryName,c->values[0].value.string);
 		  if (newEntry == NULL) {
-		    ERROR("mapr_processes plugin: creating directory list malloc failed.");
+		    ERROR("mapr_process plugin: creating directory list malloc failed.");
 		    continue;
 		  }
 		  if (dirlist == NULL) {
@@ -440,7 +440,7 @@ for (i = 0; i < ci->children_num; ++i) {
 		  getPids(c->values[0].value.string);
 		}
 	} else {
-		ERROR("mapr_processes plugin: The `%s' configuration option is not "
+		ERROR("mapr_process plugin: The `%s' configuration option is not "
 				"understood and will be ignored.", c->key);
 		continue;
 	}
@@ -464,69 +464,69 @@ value_list_t vl = VALUE_LIST_INIT;
 vl.values = values;
 vl.values_len = 2;
 sstrncpy(vl.host, hostname_g, sizeof(vl.host));
-sstrncpy(vl.plugin, "mapr.processes", sizeof(vl.plugin));
+sstrncpy(vl.plugin, "mapr.process", sizeof(vl.plugin));
 sstrncpy(vl.plugin_instance, ps->processName, sizeof(vl.plugin_instance));
 
-sstrncpy(vl.type, "ps_vm", sizeof(vl.type));
+sstrncpy(vl.type, "vm", sizeof(vl.type));
 vl.values[0].gauge = ps->vmem_size;
 vl.values_len = 1;
 plugin_dispatch_values(&vl);
 
-sstrncpy(vl.type, "ps_rss", sizeof(vl.type));
+sstrncpy(vl.type, "rss", sizeof(vl.type));
 vl.values[0].gauge = ps->vmem_rss;
 vl.values_len = 1;
 plugin_dispatch_values(&vl);
 
-sstrncpy(vl.type, "ps_data", sizeof(vl.type));
+sstrncpy(vl.type, "data", sizeof(vl.type));
 vl.values[0].gauge = ps->vmem_data;
 vl.values_len = 1;
 plugin_dispatch_values(&vl);
 
-sstrncpy(vl.type, "ps_code", sizeof(vl.type));
+sstrncpy(vl.type, "code", sizeof(vl.type));
 vl.values[0].gauge = ps->vmem_code;
 vl.values_len = 1;
 plugin_dispatch_values(&vl);
 
-sstrncpy(vl.type, "ps_stacksize", sizeof(vl.type));
+sstrncpy(vl.type, "stack_size", sizeof(vl.type));
 vl.values[0].gauge = ps->stack_size;
 vl.values_len = 1;
 plugin_dispatch_values(&vl);
 
-sstrncpy(vl.type, "ps_cputime", sizeof(vl.type));
+sstrncpy(vl.type, "cpu_time", sizeof(vl.type));
 vl.values[0].derive = ps->cpu_user_counter;
 vl.values[1].derive = ps->cpu_system_counter;
 vl.values_len = 2;
 plugin_dispatch_values(&vl);
 
-sstrncpy(vl.type, "ps_runtime", sizeof(vl.type));
+sstrncpy(vl.type, "run_time", sizeof(vl.type));
 vl.values[0].counter = ps->runtime_secs;
 vl.values_len = 1;
 plugin_dispatch_values(&vl);
 
-sstrncpy(vl.type, "ps_cpupercent", sizeof(vl.type));
+sstrncpy(vl.type, "cpu_percent", sizeof(vl.type));
 vl.values[0].gauge = ps->cpu_percent;
 vl.values_len = 1;
 plugin_dispatch_values(&vl);
 
-sstrncpy(vl.type, "ps_mempercent", sizeof(vl.type));
+sstrncpy(vl.type, "mem_percent", sizeof(vl.type));
 vl.values[0].gauge = ps->mem_percent;
 vl.values_len = 1;
 plugin_dispatch_values(&vl);
 
-sstrncpy(vl.type, "ps_count", sizeof(vl.type));
+sstrncpy(vl.type, "count", sizeof(vl.type));
 vl.values[0].gauge = ps->num_proc;
 vl.values[1].gauge = ps->num_lwp;
 vl.values_len = 2;
 plugin_dispatch_values(&vl);
 
-sstrncpy(vl.type, "ps_pagefaults", sizeof(vl.type));
+sstrncpy(vl.type, "page_faults", sizeof(vl.type));
 vl.values[0].derive = ps->vmem_minflt_counter;
 vl.values[1].derive = ps->vmem_majflt_counter;
 vl.values_len = 2;
 plugin_dispatch_values(&vl);
 
 if ((ps->io_rchar != -1) && (ps->io_wchar != -1)) {
-	sstrncpy(vl.type, "ps_disk_octets", sizeof(vl.type));
+	sstrncpy(vl.type, "disk_octets", sizeof(vl.type));
 	vl.values[0].derive = ps->io_rchar;
 	vl.values[1].derive = ps->io_wchar;
 	vl.values_len = 2;
@@ -534,7 +534,7 @@ if ((ps->io_rchar != -1) && (ps->io_wchar != -1)) {
 }
 
 if ((ps->io_syscr != -1) && (ps->io_syscw != -1)) {
-	sstrncpy(vl.type, "ps_disk_ops", sizeof(vl.type));
+	sstrncpy(vl.type, "disk_ops", sizeof(vl.type));
 	vl.values[0].derive = ps->io_syscr;
 	vl.values[1].derive = ps->io_syscw;
 	vl.values_len = 2;
@@ -542,14 +542,12 @@ if ((ps->io_syscr != -1) && (ps->io_syscw != -1)) {
 }
 
 if (report_ctx_switch) {
-	sstrncpy(vl.type, "contextswitch", sizeof(vl.type));
-	sstrncpy(vl.type_instance, "voluntary", sizeof(vl.type_instance));
+	sstrncpy(vl.type, "context_switch_voluntary", sizeof(vl.type));
 	vl.values[0].derive = ps->cswitch_vol;
 	vl.values_len = 1;
 	plugin_dispatch_values(&vl);
 
-	sstrncpy(vl.type, "contextswitch", sizeof(vl.type));
-	sstrncpy(vl.type_instance, "involuntary", sizeof(vl.type_instance));
+	sstrncpy(vl.type, "context_switch_invaluntary", sizeof(vl.type));
 	vl.values[0].derive = ps->cswitch_invol;
 	vl.values_len = 1;
 	plugin_dispatch_values(&vl);
@@ -1126,7 +1124,7 @@ static int ps_read(void) {
 } /* int ps_read */
 
 void module_register(void) {
-plugin_register_complex_config("mapr_processes", ps_config);
-plugin_register_init("mapr_processes", ps_init);
-plugin_register_read("mapr_processes", ps_read);
+plugin_register_complex_config("mapr_process", ps_config);
+plugin_register_init("mapr_process", ps_init);
+plugin_register_read("mapr_process", ps_read);
 } /* void module_register */
