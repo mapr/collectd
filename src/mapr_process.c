@@ -980,7 +980,7 @@ int ps_read_process (int pid, procstat_t *ps, char *state)
   ps->vmem_rss = (unsigned long) vmem_rss;
   ps->stack_size = (unsigned long) stack_size;
 
-  INFO("cpu_user_counter %ld, cpu_system_counter %ld, cpu_child_user_counter %ld, cpu_child_system_counter %ld, pid %d", ps->cpu_user_counter, ps->cpu_system_counter, ps->cpu_child_user_counter, ps->cpu_child_system_counter, ps->pid);
+  INFO("cpu_user_counter %ld, cpu_system_counter %ld, cpu_child_user_counter %ld, cpu_child_system_counter %ld, pid %ld", ps->cpu_user_counter, ps->cpu_system_counter, ps->cpu_child_user_counter, ps->cpu_child_system_counter, ps->pid);
   if ( (ps_read_io (pid, ps)) == NULL)
   {
     /* no io data */
@@ -1065,8 +1065,8 @@ static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *p
 	  }
 	  //Don't calculate the delta. Use actual values
 	  unsigned long totalSeconds = ss->sys_boot_time_secs - ps->starttime_secs;
-	  INFO ("sys_boot_time_secs %lu, start_time_secs %lu, cpu_system_counter %ld, cpu_user_counter %ld, numCores %d, pid %d", ss->sys_boot_time_secs, ps->starttime_secs, ps->cpu_system_counter, ps->cpu_user_counter, numCores, ps->pid);
 	  cpu_percent = (ps->cpu_system_counter + ps->cpu_user_counter) * 100.0 / (totalSeconds * numCores);
+	  INFO ("sys_boot_time_secs %lu, start_time_secs %lu, cpu_system_counter %ld, cpu_user_counter %ld, numCores %d, pid %ld, cpu_percent %f", ss->sys_boot_time_secs, ps->starttime_secs, ps->cpu_system_counter, ps->cpu_user_counter, numCores, ps->pid, cpu_percent);
 	  //cpu_percent = (ps->cpu_user_counter + ps->cpu_system_counter) * 100.0 / (ss->sys_cpu_tot_time_counter);
 	  /* +0.5 to round it off to nearest int */
 	  ps->cpu_percent = cpu_percent;
