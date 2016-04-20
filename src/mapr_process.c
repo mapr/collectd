@@ -1070,10 +1070,8 @@ static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *p
 	  }
 
 	  unsigned long totalSeconds = ss->sys_boot_time_secs - ps->starttime_secs;
-	  cpu_percent = (ps->cpu_user_counter + ps->cpu_system_counter) * 100.0  / (totalSeconds);
-	  unsigned long totalSeconds_delta = ss_cpu_boot_time_delta - ps_starttime_delta;
-	  cpu_percent_delta = (ps_cpu_user_delta + ps_cpu_user_delta) * 100.0  / (totalSeconds_delta);
-	  INFO ("sys_boot_time_secs %lu, start_time_secs %lu, cpu_system_counter %ld, cpu_user_counter %ld, numCores %d, pid %ld, cpu_percent %f cpu_percent_delta %f", ss->sys_boot_time_secs, ps->starttime_secs, ps->cpu_system_counter, ps->cpu_user_counter, numCores, ps->pid, cpu_percent, cpu_percent_delta);
+	  cpu_percent = (ps->cpu_user_counter + ps->cpu_system_counter) * 100.0  / (totalSeconds * numCores);
+	  INFO ("sys_boot_time_secs %lu, start_time_secs %lu, cpu_system_counter %ld, cpu_user_counter %ld, numCores %d, pid %ld, cpu_percent %f", ss->sys_boot_time_secs, ps->starttime_secs, ps->cpu_system_counter, ps->cpu_user_counter, numCores, ps->pid, cpu_percent);
 	  //cpu_percent = (ps->cpu_user_counter + ps->cpu_system_counter) * 100.0 / (ss->sys_cpu_tot_time_counter);
 	  /* +0.5 to round it off to nearest int */
 	  ps->cpu_percent = cpu_percent;
