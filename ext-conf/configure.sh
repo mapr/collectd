@@ -36,15 +36,17 @@ NEW_CD_CONF_FILE=${NEW_CD_CONF_FILE:-${COLLECTD_HOME}/etc/collectd.conf.progress
 CD_CONF_FILE_SAVE_AGE="30"
 AWKLIBPATH=${AWKLIBPATH:-$COLLECTD_HOME/lib/awk}
 CD_NOW=`date "+%Y%m%d_%H%M%S"`
-HADOOP_VER="hadoop-2.7.0"
-YARN_BIN="/opt/mapr/hadoop/${HADOOP_VER}/bin/yarn"
+RM_REST_PORT=8088
 RM_JMX_PORT=8025
 NM_JMX_PORT=8027
+CLDB_JMX_PORT=7220
 JMX_INSERT='#Enable JMX for MaprMonitoring\nJMX_OPTS=\"-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.port\"'
 YARN_JMX_RM_OPT_STR='$JMX_OPTS='${RM_JMX_PORT}
 YARN_JMX_NM_OPT_STR='$JMX_OPTS='${NM_JMX_PORT}
 MAPR_HOME=${MAPR_HOME:-/opt/mapr}
 MAPR_CONF_DIR="${MAPR_HOME}/conf/conf.d"
+HADOOP_VER=$(cat "$MAPR_HOME/hadoop/hadoopversion")
+YARN_BIN="${MAPR_HOME}/hadoop/hadoop-${HADOOP_VER}/bin/yarn"
 CD_CONF_ASSUME_RUNNING_CORE=${isOnlyRoles:-0}
 CD_NM_ROLE=0
 CD_CLDB_ROLE=0
@@ -56,6 +58,7 @@ CD_ENABLE_SERVICE=0
 nodecount=0
 nodelist=""
 nodeport=4242
+secureCluster=0
 
 #############################################################################
 # Function to uncomment a section
@@ -109,6 +112,51 @@ function fillSection()
     removeSection $1
     awk -f ${AWKLIBPATH}/replaceSection.awk -v tag="$1" -v newSectionContentFile="$2" \
         ${NEW_CD_CONF_FILE} > ${NEW_CD_CONF_FILE}.tmp
+    if [[ $? -eq 0 ]]; then
+        mv ${NEW_CD_CONF_FILE}.tmp ${NEW_CD_CONF_FILE}
+    fi
+}
+
+#############################################################################
+# Function to configure a ServiceURL within a section
+#
+# $1 is the sectionTag prefix we will use to determine section to uncomment
+# $2 is the hostname to use in the serviceURL
+# $3 is a flag indiciating if this is a http or jmx url
+# $4 is a flag indiciating if this needs to be a secure url
+# $5 is the port to use
+#############################################################################
+function configureServiceURL()
+{
+    # $1 is the sectionTag prefix we will use to determine section to uncomment
+    local findPattern
+    local replacePattern
+    local hostname
+    local urlType
+    local secure
+    local secureStr
+    local oldPort
+    local section
+
+    section="$1"
+    hostname="$2"
+    urlType=$3
+    secure="$4"
+    secureStr=""
+    port="$5"
+
+    if [ $secure -eq 1 ]; then
+        secureStr="s"
+    fi
+    if [ "$urlType" == "jmx" ]; then
+        findPattern="ServiceURL \"service:jmx:rmi:///jndi/rmi://.*:[0-9]+/"
+        replacePattern="ServiceURL \"service:jmx:rmi:///jndi/rmi://$hostname:$port/"
+    else
+        findPattern="ServiceURL \"http://.*:[0-9]+/"
+        replacePattern="ServiceURL \"http$secureStr://$hostname:$port/"
+    fi
+    awk -f ${AWKLIBPATH}/substituteWithinSection.awk -v tag="$1" -v findPattern="$findPattern" \
+        -v replacePattern="$replacePattern" ${NEW_CD_CONF_FILE} > ${NEW_CD_CONF_FILE}.tmp
     if [[ $? -eq 0 ]]; then
         mv ${NEW_CD_CONF_FILE}.tmp ${NEW_CD_CONF_FILE}
     fi
@@ -286,11 +334,14 @@ function configurejavajmxplugin()
     #     </connection>
     #
 
+    # XXX potential problem with multi-nic nodes
+    host_name=$(hostname)
     if [ ${CD_RM_ROLE} -eq 1  -o ${CD_NM_ROLE} -eq 1  -o ${CD_CLDB_ROLE} -eq 1 ]; then
         enableSection MAPR_CONF_JMX_TAG
         sed -i 's@${fastjmx_prefix}@'$COLLECTD_HOME'@g' ${NEW_CD_CONF_FILE}
         if [ ${CD_RM_ROLE} -eq 1 ]; then
             enableSection MAPR_CONF_RM_REST_TAG
+            configureServiceURL MAPR_CONF_RM_REST_TAG $host_name http $secureCluster $RM_REST_PORT
         fi
         configureConnections
     fi
@@ -303,19 +354,20 @@ function configurejavajmxplugin()
 #############################################################################
 function configureConnections() {
     local host_name
-    host_name=`hostname`
+    # XXX potential problem with multi-nic nodes
+    host_name=$(hostname)
     if [ ${CD_CLDB_ROLE} -eq 1 ]; then
         enableSection MAPR_CONN_CONF_CLDB_TAG
+        configureServiceURL MAPR_CONN_CONF_CLDB_TAG $host_name jmx $secureCluster $CLDB_JMX_PORT
     fi
     if [ ${CD_NM_ROLE} -eq 1 ]; then
         enableSection MAPR_CONN_CONF_NM_TAG
+        configureServiceURL MAPR_CONN_CONF_NM_TAG $host_name jmx $secureCluster $NM_JMX_PORT
     fi
     if [ ${CD_RM_ROLE} -eq 1 ]; then
         enableSection MAPR_CONN_CONF_RM_TAG
+        configureServiceURL MAPR_CONN_CONF_RM_TAG $host_name jmx $secureCluster $RM_JMX_PORT
     fi
-    # XXX Still need to make this stateless
-    sed -i -e "s/RESOURCEMGR_IP/${host_name}/g;s/NODEMGR_IP/${host_name}/g;\
-        s/CLDB_IP/${host_name}/g" ${NEW_CD_CONF_FILE}
 }
 
 
@@ -460,11 +512,11 @@ function cleanupOldConfFiles
 # is not the active one, we will be getting 0s for the stats.
 #
 
-usage="usage: $0 [-nodeCount <cnt>] [-nodePort <port>]  -OT \"ip:port,ip1:port,\" "
+usage="usage: $0 [-nodeCount <cnt>] [-nodePort <port>] [-secureCluster]  -OT \"ip:port,ip1:port,\" "
 if [ ${#} -gt 1 ]; then
     # we have arguments - run as as standalone - need to get params and
     # XXX why do we need the -o to make this work?
-    OPTS=`getopt -a -o h -l nodeCount: -l nodePort: -l OT: -- "$@"`
+    OPTS=`getopt -a -o h -l nodeCount: -l nodePort: -l OT: -l secureCluster -- "$@"`
     if [ $? != 0 ]; then
         echo ${usage}
         return 2 2>/dev/null || exit 2
@@ -475,13 +527,16 @@ if [ ${#} -gt 1 ]; then
         case "$i" in
             --nodeCount)
                 nodecount="$2";
-            shift 2;;
+                shift 2;;
             --OT)
                 nodelist="$2";
-            shift 2;;
+                shift 2;;
             --nodePort)
                 nodeport="$2";
-            shift 2;;
+                shift 2;;
+            --secureCluster)
+                sescureCluster=1;
+                shift 1;;
             -h)
                 echo ${usage}
                 return 2 2>/dev/null || exit 2
