@@ -158,8 +158,6 @@ typedef struct directorylist {
 } directorylist_t;
 
 static procstat_t *list_head_g = NULL;
-static procstat_t *proc_list_head_g = NULL;
-static procstat_t *prev_proc_list_head_g = NULL;
 static directorylist_t *directory_list_head_g = NULL;
 
 /* configuration globals */
