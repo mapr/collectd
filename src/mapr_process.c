@@ -1068,23 +1068,9 @@ static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *p
 	  if (ps_cpu_user_delta || ps_cpu_system_delta || ps_starttime_delta) {
 		  INFO ("%s proc with %lu pid delta: u: %lu, s: %lu, tot: %lu, uptime: %lu\n", ps->name, ps->pid,ps_cpu_user_delta, ps_cpu_system_delta, ss_cpu_tot_time_delta, ps_starttime_delta);
 	  }
-	  static struct timeval oldtimev;
-	  struct timeval timev;
-	  struct timezone timez;
-	  float et;
 
-	  gettimeofday(&timev, &timez);
-	  et = (timev.tv_sec - oldtimev.tv_sec)
-	               + (float)(timev.tv_usec - oldtimev.tv_usec) / 1000000.0;
-	  oldtimev.tv_sec = timev.tv_sec;
-	  oldtimev.tv_usec = timev.tv_usec;
-
-	  Frame_tscale = 100.0f / ((float)et * numCores);
-	  cpu_percent = (float)ss_cpu_tot_time_delta * Frame_tscale;
-
-	  //unsigned long totalSeconds = ss->sys_cpu_tot_time_counter;
 	  //unsigned long totalSeconds = ss->sys_boot_time_secs - ps->starttime_secs;
-	  //cpu_percent = (ps->cpu_user_counter + ps->cpu_system_counter) * 100.0  / (totalSeconds);
+	  cpu_percent = (ps_cpu_system_delta + ps_cpu_user_delta) * 100.0  / ss_cpu_tot_time_delta;
 	  INFO ("sys_boot_time_secs %lu, start_time_secs %lu, cpu_system_counter %ld, cpu_user_counter %ld, numCores %d, pid %ld, cpu_percent %f", ss->sys_boot_time_secs, ps->starttime_secs, ps->cpu_system_counter, ps->cpu_user_counter, numCores, ps->pid, cpu_percent);
 	  //cpu_percent = (ps->cpu_user_counter + ps->cpu_system_counter) * 100.0 / (ss->sys_cpu_tot_time_counter);
 	  /* +0.5 to round it off to nearest int */
