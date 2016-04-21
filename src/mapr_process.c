@@ -171,7 +171,6 @@ static _Bool report_ctx_switch = 1;
 static long pagesize_g;
 static long clockTicks;
 static int numCores;
-static float Frame_tscale;
 
 /* Read /proc/ */
 static int getProcesses(void) {
