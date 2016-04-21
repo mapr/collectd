@@ -794,23 +794,25 @@ unsigned long long sys_cpu_user_counter;
 unsigned long long sys_cpu_user_nice_counter;
 unsigned long long sys_cpu_system_counter;
 unsigned long long sys_cpu_idle_counter;
+unsigned long long sys_cpu_iowait_counter;
+unsigned long long sys_cpu_irq_counter;
+unsigned long long sys_cpu_softirq_counter;
+unsigned long long sys_cpu_steal_counter;
+unsigned long long sys_cpu_guest_counter;
 unsigned long long sys_tot_phys_mem;
 unsigned long sys_boot_time_secs;
 struct sysinfo si;
 sysstat_t *ss;
 
 read_file_contents("/proc/stat", buffer, sizeof(buffer));
-sscanf(buffer, "%s %llu %llu %llu %llu", name,
+sscanf(buffer, "%s %llu %llu %llu %llu %llu %llu %llu %llu %llu", name,
 		&sys_cpu_user_counter, &sys_cpu_user_nice_counter,
-		&sys_cpu_system_counter, &sys_cpu_idle_counter);
+		&sys_cpu_system_counter, &sys_cpu_idle_counter, &sys_cpu_iowait_counter, &sys_cpu_irq_counter, &sys_cpu_softirq_counter, &sys_cpu_steal_counter, &sys_cpu_guest_counter);
 if (strcmp(name, "cpu") != 0) {
 	ERROR ("processes plugin: unexpected string in /proc/stat");
 	return NULL;
 }
-sys_cpu_user_counter = sys_cpu_user_counter / clockTicks;
-sys_cpu_user_nice_counter = sys_cpu_user_nice_counter / clockTicks;
-sys_cpu_system_counter = sys_cpu_system_counter / clockTicks;
-sys_cpu_idle_counter = sys_cpu_idle_counter / clockTicks;
+
 if (sysinfo(&si) < 0) {
 	ERROR ("processes plugin: cannot obtain system info via sysinfo()");
 	return NULL;
@@ -827,7 +829,8 @@ ss->sys_cpu_user_counter = sys_cpu_user_counter;
 ss->sys_cpu_system_counter = sys_cpu_system_counter;
 ss->sys_cpu_tot_time_counter = sys_cpu_user_counter +
 sys_cpu_user_nice_counter + sys_cpu_system_counter +
-sys_cpu_idle_counter;
+sys_cpu_idle_counter + sys_cpu_iowait_counter + sys_cpu_irq_counter + sys_cpu_softirq_counter + sys_cpu_steal_counter + sys_cpu_guest_counter;
+ss->sys_cpu_tot_time_counter = ss->sys_cpu_tot_time_counter / clockTicks;
 ss->sys_boot_time_secs = si.uptime;
 ss->sys_tot_phys_mem = sys_tot_phys_mem;
 //ss->sys_boot_time_secs = time(NULL) - sys_boot_time_secs;
