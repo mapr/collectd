@@ -755,7 +755,7 @@ unsigned long long sys_cpu_user_nice_counter;
 unsigned long long sys_cpu_system_counter;
 unsigned long long sys_cpu_idle_counter;
 unsigned long long sys_tot_phys_mem;
-unsigned long sys_boot_time_secs;
+unsigned long sys_boot_time_secs=0;
 struct sysinfo si;
 sysstat_t *ss;
 
@@ -764,7 +764,7 @@ sscanf(buffer, "%s %llu %llu %llu %llu", name,
 		&sys_cpu_user_counter, &sys_cpu_user_nice_counter,
 		&sys_cpu_system_counter, &sys_cpu_idle_counter);
 if (strcmp(name, "cpu") != 0) {
-	ERROR ("processes plugin: unexpected string in /proc/stat");
+	ERROR ("mapr processes plugin: unexpected string in /proc/stat");
 	return NULL;
 }
 sys_cpu_user_counter = sys_cpu_user_counter / clockTicks;
@@ -772,7 +772,7 @@ sys_cpu_user_nice_counter = sys_cpu_user_nice_counter / clockTicks;
 sys_cpu_system_counter = sys_cpu_system_counter / clockTicks;
 sys_cpu_idle_counter = sys_cpu_idle_counter / clockTicks;
 if (sysinfo(&si) < 0) {
-	ERROR ("processes plugin: cannot obtain system info via sysinfo()");
+	ERROR ("mapr processes plugin: cannot obtain system info via sysinfo()");
 	return NULL;
 }
 
@@ -780,7 +780,7 @@ sys_tot_phys_mem = si.totalram * si.mem_unit;
 
 ss = (sysstat_t *)malloc(sizeof(sysstat_t));
 if (ss == NULL) {
-	ERROR ("processes plugin: error allocating memory");
+	ERROR ("mapr processes plugin: error allocating memory");
 	return NULL;
 }
 ss->sys_cpu_user_counter = sys_cpu_user_counter;
