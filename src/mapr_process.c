@@ -129,7 +129,7 @@ typedef struct procstat {
 	derive_t cpu_child_user_counter;
 	derive_t cpu_child_system_counter;
 
-	float cpu_percent;
+	double cpu_percent;
 	float mem_percent;
 
 	/* io data */
@@ -1051,7 +1051,6 @@ static void ps_calc_runtime(sysstat_t *ss, procstat_t *ps)
 
 static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *ps)
 {
-  //Don't calculate the delta. Use actual values. Leaving this code for future.
   if (ss && prev_ss) {
     INFO("Previous system stats for cpu percent: %ld, %ld",prev_ss->sys_cpu_system_counter, prev_ss->sys_cpu_tot_time_counter);
     INFO("Current system stats for cpu percent: %ld, %ld",ss->sys_cpu_system_counter, ss->sys_cpu_tot_time_counter);
@@ -1062,9 +1061,13 @@ static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *p
     ps_find_cpu_delta(ps, &ps_cpu_user_delta, &ps_cpu_system_delta);
 	  ss_cpu_tot_time_delta = ss->sys_cpu_tot_time_counter - prev_ss->sys_cpu_tot_time_counter;
 	  ss_cpu_boot_time_delta = ss->sys_boot_time_secs - prev_ss->sys_boot_time_secs;
-
-	  cpu_percent = (ps_cpu_system_delta + ps_cpu_user_delta) * 100.0  / ss_cpu_tot_time_delta;
-	  INFO ("%s proc with %lu pid delta: u: %lu, s: %lu, tot: %lu, percent: %f\n", ps->name, ps->pid,ps_cpu_user_delta, ps_cpu_system_delta, ss_cpu_tot_time_delta,cpu_percent);
+	  if (ps_cpu_user_delta == 0 && ps_cpu_system_delta == 0) {
+	    INFO ("%s proc with %lu pid delta: u: %lu, s: %lu, tot: %lu, percent: %f\n", ps->name, ps->pid,ps->cpu_user_counter, ps->cpu_system_counter, ss->sys_cpu_tot_time_counter,cpu_percent);
+	    cpu_percent = (ps->cpu_user_counter + ps->cpu_system_counter) * 100.0  / ss->sys_cpu_tot_time_counter;
+	  } else {
+	    INFO ("%s proc with %lu pid delta: u: %lu, s: %lu, tot: %lu, percent: %f\n", ps->name, ps->pid,ps_cpu_user_delta, ps_cpu_system_delta, ss_cpu_tot_time_delta,cpu_percent);
+      cpu_percent = (ps_cpu_system_delta + ps_cpu_user_delta) * 100.0  / ss_cpu_tot_time_delta;
+	  }
 	  ps->cpu_percent = cpu_percent;
   }
 }
