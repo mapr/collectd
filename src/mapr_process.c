@@ -158,6 +158,8 @@ typedef struct directorylist {
 } directorylist_t;
 
 static procstat_t *list_head_g = NULL;
+static procstat_t *proc_list_head_g = NULL;
+static procstat_t *prev_proc_list_head_g = NULL;
 static directorylist_t *directory_list_head_g = NULL;
 
 /* configuration globals */
@@ -341,6 +343,44 @@ static void getPids(char *name) {
     closedir(directory);
   }
 } /* void getPids */
+
+static void ps_proc_list_prepend(procstat_t *ps)
+{
+  if (proc_list_head_g == NULL) {
+	  proc_list_head_g = (procstat_t *)malloc(sizeof(procstat_t));
+	  if (proc_list_head_g == NULL) {
+		  ERROR ("mapr_process plugin: error allocating memory");
+		  return;
+	  }
+	  ps->next = NULL;
+	  memcpy(proc_list_head_g, ps, sizeof(procstat_t));
+  }
+  else {
+	  procstat_t *new;
+    new = (procstat_t *)malloc(sizeof(procstat_t));
+	  if (new == NULL) {
+		  ERROR ("mapr_process plugin: error allocating memory");
+		  return;
+	  }
+	  memcpy(new, ps, sizeof(procstat_t));
+	  new->next = proc_list_head_g;
+	  proc_list_head_g = new;
+  }
+} /* void ps_proc_list_prepend */
+
+static void ps_proc_list_reset (procstat_t **head)
+{
+  procstat_t *ps;
+
+  ps = *head;
+  while (ps) {
+	  procstat_t *nps;
+  	nps = ps->next;
+	  free(ps);
+	  ps = nps;
+  }
+  *head = NULL;
+} /* void ps_proc_list_reset */
 
 /* put all pre-defined 'Process' names from config to list_head_g tree */
 static int ps_config(oconfig_item_t *ci) {
@@ -755,7 +795,7 @@ unsigned long long sys_cpu_user_nice_counter;
 unsigned long long sys_cpu_system_counter;
 unsigned long long sys_cpu_idle_counter;
 unsigned long long sys_tot_phys_mem;
-unsigned long sys_boot_time_secs=0;
+unsigned long sys_boot_time_secs;
 struct sysinfo si;
 sysstat_t *ss;
 
@@ -764,7 +804,7 @@ sscanf(buffer, "%s %llu %llu %llu %llu", name,
 		&sys_cpu_user_counter, &sys_cpu_user_nice_counter,
 		&sys_cpu_system_counter, &sys_cpu_idle_counter);
 if (strcmp(name, "cpu") != 0) {
-	ERROR ("mapr processes plugin: unexpected string in /proc/stat");
+	ERROR ("processes plugin: unexpected string in /proc/stat");
 	return NULL;
 }
 sys_cpu_user_counter = sys_cpu_user_counter / clockTicks;
@@ -772,7 +812,7 @@ sys_cpu_user_nice_counter = sys_cpu_user_nice_counter / clockTicks;
 sys_cpu_system_counter = sys_cpu_system_counter / clockTicks;
 sys_cpu_idle_counter = sys_cpu_idle_counter / clockTicks;
 if (sysinfo(&si) < 0) {
-	ERROR ("mapr processes plugin: cannot obtain system info via sysinfo()");
+	ERROR ("processes plugin: cannot obtain system info via sysinfo()");
 	return NULL;
 }
 
@@ -780,7 +820,7 @@ sys_tot_phys_mem = si.totalram * si.mem_unit;
 
 ss = (sysstat_t *)malloc(sizeof(sysstat_t));
 if (ss == NULL) {
-	ERROR ("mapr processes plugin: error allocating memory");
+	ERROR ("processes plugin: error allocating memory");
 	return NULL;
 }
 ss->sys_cpu_user_counter = sys_cpu_user_counter;
@@ -790,7 +830,7 @@ sys_cpu_user_nice_counter + sys_cpu_system_counter +
 sys_cpu_idle_counter;
 ss->sys_boot_time_secs = si.uptime;
 ss->sys_tot_phys_mem = sys_tot_phys_mem;
-ss->sys_boot_time_secs = time(NULL) - sys_boot_time_secs;
+//ss->sys_boot_time_secs = time(NULL) - sys_boot_time_secs;
 INFO ("%s sys u:%llu n:%llu s:%llu i:%llu physmem: %llu, boottime: %lu\n",
 		name, sys_cpu_user_counter, sys_cpu_user_nice_counter,
 		sys_cpu_system_counter, sys_cpu_idle_counter, sys_tot_phys_mem,
@@ -978,13 +1018,25 @@ static _Bool config_threshold_exceeded(procstat_t *ps)
   return 0;
 }
 
-static void ps_find_cpu_delta(procstat_t *ps, procstat_t *prevps, unsigned long *out_userd, unsigned long *out_sysd)
+static void ps_find_cpu_delta(procstat_t *ps, unsigned long *out_userd, unsigned long *out_sysd)
 {
-  INFO ("Current cpu user counter %"PRIi64" , previous counter %"PRIi64" ",ps->cpu_user_counter, prevps->cpu_user_counter);
-  *out_userd = ps->cpu_user_counter - prevps->cpu_user_counter;
-  INFO ("Current cpu system counter %"PRIi64" , previous counter %"PRIi64" ",ps->cpu_system_counter, prevps->cpu_system_counter);
-  *out_sysd = ps->cpu_system_counter - prevps->cpu_system_counter;
+  procstat_t *ps_ptr;
+  for (ps_ptr=prev_proc_list_head_g; ps_ptr!=NULL; ps_ptr=ps_ptr->next) {
+    if (ps_ptr->pid == ps->pid)
+      break;
+  }
+
+  if (ps_ptr) {
+    INFO ("Current cpu user counter %"PRIi64" , previous counter %"PRIi64" ",ps->cpu_user_counter, ps_ptr->cpu_user_counter);
+    *out_userd = ps->cpu_user_counter - ps_ptr->cpu_user_counter;
+    INFO ("Current cpu system counter %"PRIi64" , previous counter %"PRIi64" ",ps->cpu_system_counter, ps_ptr->cpu_system_counter);
+    *out_sysd = ps->cpu_system_counter - ps_ptr->cpu_system_counter;
+  }
+  else {
+    *out_userd = *out_sysd  = 0ULL;
+  }
 }
+
 
 static void ps_calc_mem_percent(sysstat_t *ss, procstat_t *ps)
 {
@@ -997,7 +1049,7 @@ static void ps_calc_runtime(sysstat_t *ss, procstat_t *ps)
   ps->runtime_secs = time(NULL) - (ps->starttime_secs + ss->sys_boot_time_secs);
 }
 
-static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *ps, procstat_t *prevps)
+static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *ps)
 {
   if (ss && prev_ss) {
     INFO("Previous system stats for cpu percent: %ld, %ld",prev_ss->sys_cpu_system_counter, prev_ss->sys_cpu_tot_time_counter);
@@ -1006,12 +1058,11 @@ static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *p
 	  unsigned long ss_cpu_tot_time_delta;
 	  unsigned long ss_cpu_boot_time_delta;
 	  double cpu_percent;
-    ps_find_cpu_delta(ps, prevps,&ps_cpu_user_delta, &ps_cpu_system_delta);
+    ps_find_cpu_delta(ps, &ps_cpu_user_delta, &ps_cpu_system_delta);
 	  ss_cpu_tot_time_delta = ss->sys_cpu_tot_time_counter - prev_ss->sys_cpu_tot_time_counter;
 	  ss_cpu_boot_time_delta = ss->sys_boot_time_secs - prev_ss->sys_boot_time_secs;
-	  cpu_percent = (ps_cpu_system_delta + ps_cpu_user_delta) * 100.0  / ss_cpu_tot_time_delta;
+	  cpu_percent = (ps_cpu_system_delta + ps_cpu_user_delta) * 100.0 / ss_cpu_tot_time_delta;
 	  INFO ("%s proc with %lu pid delta: u: %lu, s: %lu, tot: %lu, percent: %f\n", ps->name, ps->pid,ps_cpu_user_delta, ps_cpu_system_delta, ss_cpu_tot_time_delta,cpu_percent);
-
 	  ps->cpu_percent = cpu_percent;
   }
 }
@@ -1019,11 +1070,12 @@ static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *p
 /* do actual readings from kernel */
 static int ps_read(void) {
   int status;
-  procstat_t ps, prevps;
+  procstat_t ps;
   procstat_t *ps_ptr;
-  sysstat_t *ss, *prevss;
+  sysstat_t *ss;
   char state;
   directorylist_t *dirlist;
+  static sysstat_t *prev_ss=NULL;
 
   /*
    * Read /proc file and get the number of processes and
@@ -1045,13 +1097,9 @@ static int ps_read(void) {
      getPids(dirlist->directoryName);
   }
 
-  prevss = ps_read_sys_stat();
-  sleep(1);
   ss = ps_read_sys_stat();
 
   for (ps_ptr = list_head_g; ps_ptr != NULL; ps_ptr = ps_ptr->next) {
-    status = ps_read_process (ps_ptr->pid, &prevps, &state);
-    sleep(1);
     status = ps_read_process (ps_ptr->pid, &ps, &state);
     if (status != 0) {
       DEBUG ("ps_read_process failed: %i", status);
@@ -1060,11 +1108,24 @@ static int ps_read(void) {
     INFO ("Collecting stats for process %s with pid %lu: ",ps_ptr->name, ps_ptr->pid);
     ps_calc_runtime(ss, &ps);
     ps_calc_mem_percent(ss, &ps);
-    ps_calc_cpu_percent(ss, prevss, &ps, &prevps);
+    ps_calc_cpu_percent(ss, prev_ss, &ps);
     sstrncpy(ps.processName, ps_ptr->processName, sizeof(ps.processName));
+
+    // Store the per process metrics so you can use them to compute deltas
+    ps_proc_list_prepend(&ps);
+  }
+
+  for (ps_ptr = proc_list_head_g; ps_ptr != NULL; ps_ptr = ps_ptr->next) {
     if (config_threshold_exceeded(ps_ptr))
       ps_submit_proc_list (ps_ptr);
   }
+  ps_proc_list_reset(&prev_proc_list_head_g);
+  prev_proc_list_head_g = proc_list_head_g;
+  if (prev_ss)
+    free(prev_ss);
+  prev_ss = ss;
+  INFO("Current system stats: %ld, %ld",prev_ss->sys_cpu_system_counter, prev_ss->sys_cpu_tot_time_counter);
+  proc_list_head_g = NULL;
 
   free(P);
   return (0);
