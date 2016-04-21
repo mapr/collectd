@@ -1062,10 +1062,10 @@ static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *p
 	  ss_cpu_tot_time_delta = ss->sys_cpu_tot_time_counter - prev_ss->sys_cpu_tot_time_counter;
 	  ss_cpu_boot_time_delta = ss->sys_boot_time_secs - prev_ss->sys_boot_time_secs;
 	  if (ps_cpu_user_delta == 0 && ps_cpu_system_delta == 0) {
-	    cpu_percent = (ps->cpu_user_counter + ps->cpu_system_counter) * 100.0  / ss->sys_cpu_tot_time_counter;
+	    cpu_percent = (ps->cpu_user_counter + ps->cpu_system_counter) * 100.0 * numCores  / ss->sys_cpu_tot_time_counter;
 	    INFO ("%s proc with %lu pid delta: u: %lu, s: %lu, tot: %lu, percent: %f\n", ps->name, ps->pid,ps->cpu_user_counter, ps->cpu_system_counter, ss->sys_cpu_tot_time_counter,cpu_percent);
 	  } else {
-	    cpu_percent = (ps_cpu_system_delta + ps_cpu_user_delta) * 100.0  / ss_cpu_tot_time_delta;
+	    cpu_percent = (ps_cpu_system_delta + ps_cpu_user_delta) * 100.0 * numCores / ss_cpu_tot_time_delta;
 	    INFO ("%s proc with %lu pid delta: u: %lu, s: %lu, tot: %lu, percent: %f\n", ps->name, ps->pid,ps_cpu_user_delta, ps_cpu_system_delta, ss_cpu_tot_time_delta,cpu_percent);
 	  }
 	  ps->cpu_percent = cpu_percent;
