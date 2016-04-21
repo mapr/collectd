@@ -1079,7 +1079,7 @@ static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *p
 	  oldtimev.tv_sec = timev.tv_sec;
 	  oldtimev.tv_usec = timev.tv_usec;
 
-	  Frame_tscale = 100.0f / ((float)clockTicks * (float)et * numCores);
+	  Frame_tscale = 100.0f / ((float)et * numCores);
 	  cpu_percent = (float)ss_cpu_tot_time_delta * Frame_tscale;
 
 	  //unsigned long totalSeconds = ss->sys_cpu_tot_time_counter;
