@@ -790,7 +790,7 @@ sys_cpu_user_nice_counter + sys_cpu_system_counter +
 sys_cpu_idle_counter;
 ss->sys_boot_time_secs = si.uptime;
 ss->sys_tot_phys_mem = sys_tot_phys_mem;
-//ss->sys_boot_time_secs = time(NULL) - sys_boot_time_secs;
+ss->sys_boot_time_secs = time(NULL) - sys_boot_time_secs;
 INFO ("%s sys u:%llu n:%llu s:%llu i:%llu physmem: %llu, boottime: %lu\n",
 		name, sys_cpu_user_counter, sys_cpu_user_nice_counter,
 		sys_cpu_system_counter, sys_cpu_idle_counter, sys_tot_phys_mem,
