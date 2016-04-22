@@ -707,8 +707,8 @@ if (fclose (fh))
 			sstrerror (errno, errbuf, sizeof (errbuf)));
 }
 
-ps->vmem_data = data * 1024;
-ps->vmem_code = (exe + lib) * 1024;
+ps->vmem_data = data;
+ps->vmem_code = (exe + lib);
 if (threads != 0)
 ps->num_lwp = threads;
 
