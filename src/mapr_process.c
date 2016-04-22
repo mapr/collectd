@@ -486,11 +486,6 @@ vl.values[0].gauge = ps->vmem_data;
 vl.values_len = 1;
 plugin_dispatch_values(&vl);
 
-sstrncpy(vl.type, "code", sizeof(vl.type));
-vl.values[0].gauge = ps->vmem_code;
-vl.values_len = 1;
-plugin_dispatch_values(&vl);
-
 sstrncpy(vl.type, "stack_size", sizeof(vl.type));
 vl.values[0].gauge = ps->stack_size;
 vl.values_len = 1;
@@ -502,11 +497,6 @@ vl.values[1].derive = ps->cpu_system_counter;
 vl.values_len = 2;
 plugin_dispatch_values(&vl);
 
-sstrncpy(vl.type, "run_time", sizeof(vl.type));
-vl.values[0].counter = ps->runtime_secs;
-vl.values_len = 1;
-plugin_dispatch_values(&vl);
-
 sstrncpy(vl.type, "cpu_percent", sizeof(vl.type));
 vl.values[0].gauge = ps->cpu_percent;
 vl.values_len = 1;
@@ -515,12 +505,6 @@ plugin_dispatch_values(&vl);
 sstrncpy(vl.type, "mem_percent", sizeof(vl.type));
 vl.values[0].gauge = ps->mem_percent;
 vl.values_len = 1;
-plugin_dispatch_values(&vl);
-
-sstrncpy(vl.type, "count", sizeof(vl.type));
-vl.values[0].gauge = ps->num_proc;
-vl.values[1].gauge = ps->num_lwp;
-vl.values_len = 2;
 plugin_dispatch_values(&vl);
 
 sstrncpy(vl.type, "page_faults", sizeof(vl.type));
