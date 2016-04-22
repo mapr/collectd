@@ -45,16 +45,16 @@ do
         if [[ -n "$logicalUsed" && -n "$used" && -n "$snapshotused" && -n "$totalused" && -n  "$quota" && -n "$topology"  && -n "$entity" ]]
         then
           # Collect metrics per volume
-          echo "PUTVAL \"$HOSTNAME/mapr.volume-${topology:1}/logicalUsed-$volumename\" interval=$INTERVAL N:$logicalUsed"
+          echo "PUTVAL \"$HOSTNAME/mapr.volume-${topology:1}/logical_used-$volumename\" interval=$INTERVAL N:$logicalUsed"
           echo "PUTVAL \"$HOSTNAME/mapr.volume-${topology:1}/used-$volumename\" interval=$INTERVAL N:$used"
-          echo "PUTVAL \"$HOSTNAME/mapr.volume-${topology:1}/snapshotused-$volumename\" interval=$INTERVAL N:$snapshotused"
-          echo "PUTVAL \"$HOSTNAME/mapr.volume-${topology:1}/totalused-$volumename\" interval=$INTERVAL N:$totalused"
+          echo "PUTVAL \"$HOSTNAME/mapr.volume-${topology:1}/snapshot_used-$volumename\" interval=$INTERVAL N:$snapshotused"
+          echo "PUTVAL \"$HOSTNAME/mapr.volume-${topology:1}/total_used-$volumename\" interval=$INTERVAL N:$totalused"
           echo "PUTVAL \"$HOSTNAME/mapr.volume-${topology:1}/quota-$volumename\" interval=$INTERVAL N:$quota"
           # Tag by entity
-          echo "PUTVAL \"$HOSTNAME/mapr.volume_by_entity/logicalUsed-$entity\" interval=$INTERVAL N:$logicalUsed"
+          echo "PUTVAL \"$HOSTNAME/mapr.volume_by_entity/logical_used-$entity\" interval=$INTERVAL N:$logicalUsed"
           echo "PUTVAL \"$HOSTNAME/mapr.volume_by_entity/used-$entity\" interval=$INTERVAL N:$used"
-          echo "PUTVAL \"$HOSTNAME/mapr.volume_by_entity/snapshotused-$entity\" interval=$INTERVAL N:$snapshotused"
-          echo "PUTVAL \"$HOSTNAME/mapr.volume_by_entity/totalused-$entity\" interval=$INTERVAL N:$totalused"
+          echo "PUTVAL \"$HOSTNAME/mapr.volume_by_entity/snapshot_used-$entity\" interval=$INTERVAL N:$snapshotused"
+          echo "PUTVAL \"$HOSTNAME/mapr.volume_by_entity/total_used-$entity\" interval=$INTERVAL N:$totalused"
           echo "PUTVAL \"$HOSTNAME/mapr.volume_by_entity/quota-$entity\" interval=$INTERVAL N:$quota"
           break
         fi

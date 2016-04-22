@@ -5249,7 +5249,7 @@ plugin_nfs="no"
 plugin_numa="no"
 plugin_perl="no"
 plugin_processes="no"
-plugin_mapr_processes="no"
+plugin_mapr_process="no"
 plugin_protocols="no"
 plugin_serial="no"
 plugin_swap="no"
@@ -5290,7 +5290,7 @@ then
 	plugin_nfs="yes"
 	plugin_numa="yes"
 	plugin_processes="yes"
-	plugin_mapr_processes="yes"
+	plugin_mapr_process="yes"
 	plugin_protocols="yes"
 	plugin_serial="yes"
 	plugin_swap="yes"
@@ -5647,7 +5647,7 @@ AC_PLUGIN([log_logstash], [$plugin_log_logstash], [Logstash json_event compatibl
 AC_PLUGIN([lpar],        [$with_perfstat],     [AIX logical partitions statistics])
 AC_PLUGIN([lvm],         [$with_liblvm2app],   [LVM statistics])
 AC_PLUGIN([madwifi],     [$have_linux_wireless_h], [Madwifi wireless statistics])
-AC_PLUGIN([mapr_processes], [yes],             [MapR processes stats])
+AC_PLUGIN([mapr_process], [yes],             [MapR processes stats])
 AC_PLUGIN([match_empty_counter], [yes],        [The empty counter match])
 AC_PLUGIN([match_hashed], [yes],               [The hashed match])
 AC_PLUGIN([match_regex], [yes],                [The regex match])
@@ -5685,7 +5685,7 @@ AC_PLUGIN([ping],        [$with_liboping],     [Network latency statistics])
 AC_PLUGIN([postgresql],  [$with_libpq],        [PostgreSQL database statistics])
 AC_PLUGIN([powerdns],    [yes],                [PowerDNS statistics])
 AC_PLUGIN([processes],   [$plugin_processes],  [Process statistics])
-AC_PLUGIN([mapr_processes],   [$plugin_mapr_processes],  [MapR Process statistics])
+AC_PLUGIN([mapr_process],   [$plugin_mapr_process],  [MapR Process statistics])
 AC_PLUGIN([protocols],   [$plugin_protocols],  [Protocol (IP, TCP, ...) statistics])
 AC_PLUGIN([python],      [$with_python],       [Embed a Python interpreter])
 AC_PLUGIN([redis],       [$with_libhiredis],    [Redis plugin])
@@ -6027,7 +6027,7 @@ Configuration:
     lpar  . . . . . . . . $enable_lpar
     lvm . . . . . . . . . $enable_lvm
     madwifi . . . . . . . $enable_madwifi
-    mapr_processes  . . . $enable_mapr_processes
+    mapr_process  . . . $enable_mapr_process
     match_empty_counter . $enable_match_empty_counter
     match_hashed  . . . . $enable_match_hashed
     match_regex . . . . . $enable_match_regex
@@ -6064,7 +6064,7 @@ Configuration:
     postgresql  . . . . . $enable_postgresql
     powerdns  . . . . . . $enable_powerdns
     processes . . . . . . $enable_processes
-    mapr_processes  . . . $enable_mapr_processes
+    mapr_process  . . . $enable_mapr_process
     protocols . . . . . . $enable_protocols
     python  . . . . . . . $enable_python
     redis . . . . . . . . $enable_redis

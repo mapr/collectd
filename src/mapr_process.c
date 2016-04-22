@@ -1,5 +1,5 @@
 /**
- * collectd - src/mapr_processes.c
+ * collectd - src/mapr_process.c
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -38,7 +38,6 @@
 # define PSFORMAT 	"%ld %ld %ld %ld %[^\n]"
 # define PSVARS	&P[i].uid, &P[i].pid, &P[i].ppid, &P[i].pgid, P[i].cmd
 # define PSVARSN	5
-# define CONFIG_HZ 100
 # define CMDLINE_BUFFER_SIZE 4096
 # include <stdio.h>
 # include <stdlib.h>
@@ -46,6 +45,8 @@
 # include <unistd.h>		/* For getopt() */
 # include <pwd.h>		/* For getpwnam() */
 # include <sys/ioctl.h>		/* For TIOCGSIZE/TIOCGWINSZ */
+#include <sys/times.h>
+#include <time.h>
 
 #ifndef TRUE
 #  define TRUE  1
@@ -56,7 +57,6 @@
 # include <dirent.h>
 # include <regex.h>
 
-
 struct Proc {
 	long uid, pid, ppid, pgid;
 	char name[32], cmd[MAXLINE];
@@ -64,7 +64,6 @@ struct Proc {
 	long parent, child, sister;
 	unsigned long thcount;
 }*P;
-
 
 static void uid2user(uid_t uid, char *name, int len) {
 #define NUMUN 128
@@ -127,8 +126,10 @@ typedef struct procstat {
 
 	derive_t cpu_user_counter;
 	derive_t cpu_system_counter;
+	derive_t cpu_child_user_counter;
+	derive_t cpu_child_system_counter;
 
-	float cpu_percent;
+	double cpu_percent;
 	float mem_percent;
 
 	/* io data */
@@ -165,10 +166,11 @@ static directorylist_t *directory_list_head_g = NULL;
 static float filter_mincpupct_g = 0.0;
 static float filter_minmempct_g = 0.0;
 static int numOfProcesses = 0;
-static _Bool report_ctx_switch = 0;
+static _Bool report_ctx_switch = 1;
 
 static long pagesize_g;
-
+static long clockTicks;
+static int numCores;
 
 /* Read /proc/ */
 static int getProcesses(void) {
@@ -210,7 +212,7 @@ static int getProcesses(void) {
 		int status = fscanf(processFP, "%ld %s %*c %ld %ld", &P[j].pid, P[j].cmd, &P[j].ppid,
 				&P[j].pgid);
     if (status == 0) {
-	    ERROR("mapr_processes plugin: Failed to read from /proc/pid/stat.");
+	    ERROR("mapr_process plugin: Failed to read from /proc/pid/stat.");
       continue;
     }
 		fclose(processFP);
@@ -274,7 +276,7 @@ static void ps_list_register(int pid, char *name) {
 
   new = (procstat_t *) malloc(sizeof(procstat_t));
   if (new == NULL) {
-    ERROR("mapr_processes plugin: ps_list_register: malloc failed.");
+    ERROR("mapr_process plugin: ps_list_register: malloc failed.");
     return;
   }
   memset(new, 0, sizeof(procstat_t));
@@ -347,7 +349,7 @@ static void ps_proc_list_prepend(procstat_t *ps)
   if (proc_list_head_g == NULL) {
 	  proc_list_head_g = (procstat_t *)malloc(sizeof(procstat_t));
 	  if (proc_list_head_g == NULL) {
-		  ERROR ("mapr_processes plugin: error allocating memory");
+		  ERROR ("mapr_process plugin: error allocating memory");
 		  return;
 	  }
 	  ps->next = NULL;
@@ -357,7 +359,7 @@ static void ps_proc_list_prepend(procstat_t *ps)
 	  procstat_t *new;
     new = (procstat_t *)malloc(sizeof(procstat_t));
 	  if (new == NULL) {
-		  ERROR ("mapr_processes plugin: error allocating memory");
+		  ERROR ("mapr_process plugin: error allocating memory");
 		  return;
 	  }
 	  memcpy(new, ps, sizeof(procstat_t));
@@ -389,25 +391,25 @@ for (i = 0; i < ci->children_num; ++i) {
 	if (strcasecmp(c->key, "MinCPUPercent") == 0) {
 		filter_mincpupct_g = c->values[0].value.number;
 		if (filter_mincpupct_g < 0.0 || filter_mincpupct_g > 100.0) {
-			ERROR("mapr_processes plugin: MinCPUPercent out of [0,100] range");
+			ERROR("mapr_process plugin: MinCPUPercent out of [0,100] range");
 			continue;
 		}
 	} else if (strcasecmp(c->key, "MinMemoryPercent") == 0) {
 		filter_minmempct_g = c->values[0].value.number;
 		if (filter_minmempct_g < 0.0 || filter_minmempct_g > 100.0) {
-			ERROR("mapr_processes plugin: MinMemoryPercent out of [0,100] range");
+			ERROR("mapr_process plugin: MinMemoryPercent out of [0,100] range");
 			continue;
 		}
 	} else if (strcasecmp(c->key, "PID_Directory") == 0) {
 		if ((c->values_num != 1)
 				|| (OCONFIG_TYPE_STRING != c->values[0].type)) {
-			ERROR("mapr_processes plugin: `PID_Directory' expects exactly "
+			ERROR("mapr_process plugin: `PID_Directory' expects exactly "
 					"one string argument (got %i).", c->values_num);
 			continue;
 		}
 
 		if (c->children_num != 0) {
-			WARNING("mapr_processes plugin: the `PID_Directory' config option "
+			WARNING("mapr_process plugin: the `PID_Directory' config option "
 					"does not expect any child elements -- ignoring "
 					"content (%i elements) of the <PID_Directory '%s'> block.",
 					c->children_num, c->values[0].value.string);
@@ -429,7 +431,7 @@ for (i = 0; i < ci->children_num; ++i) {
 		  memset(newEntry, 0, sizeof(directorylist_t));
 		  strcpy(newEntry->directoryName,c->values[0].value.string);
 		  if (newEntry == NULL) {
-		    ERROR("mapr_processes plugin: creating directory list malloc failed.");
+		    ERROR("mapr_process plugin: creating directory list malloc failed.");
 		    continue;
 		  }
 		  if (dirlist == NULL) {
@@ -440,7 +442,7 @@ for (i = 0; i < ci->children_num; ++i) {
 		  getPids(c->values[0].value.string);
 		}
 	} else {
-		ERROR("mapr_processes plugin: The `%s' configuration option is not "
+		ERROR("mapr_process plugin: The `%s' configuration option is not "
 				"understood and will be ignored.", c->key);
 		continue;
 	}
@@ -451,8 +453,10 @@ return (0);
 
 static int ps_init(void) {
 pagesize_g = sysconf(_SC_PAGESIZE);
-DEBUG ("pagesize_g = %li; CONFIG_HZ = %i;",
-		pagesize_g, CONFIG_HZ);
+clockTicks = sysconf(_SC_CLK_TCK);
+numCores = (uint)sysconf(_SC_NPROCESSORS_ONLN);
+INFO ("pagesize_g = %li; clockTicks = %li; numCores = %d;",
+		pagesize_g, clockTicks, numCores);
 return (0);
 } /* int ps_init */
 
@@ -464,69 +468,53 @@ value_list_t vl = VALUE_LIST_INIT;
 vl.values = values;
 vl.values_len = 2;
 sstrncpy(vl.host, hostname_g, sizeof(vl.host));
-sstrncpy(vl.plugin, "mapr.processes", sizeof(vl.plugin));
+sstrncpy(vl.plugin, "mapr.process", sizeof(vl.plugin));
 sstrncpy(vl.plugin_instance, ps->processName, sizeof(vl.plugin_instance));
 
-sstrncpy(vl.type, "ps_vm", sizeof(vl.type));
+sstrncpy(vl.type, "vm", sizeof(vl.type));
 vl.values[0].gauge = ps->vmem_size;
 vl.values_len = 1;
 plugin_dispatch_values(&vl);
 
-sstrncpy(vl.type, "ps_rss", sizeof(vl.type));
+sstrncpy(vl.type, "rss", sizeof(vl.type));
 vl.values[0].gauge = ps->vmem_rss;
 vl.values_len = 1;
 plugin_dispatch_values(&vl);
 
-sstrncpy(vl.type, "ps_data", sizeof(vl.type));
+sstrncpy(vl.type, "data", sizeof(vl.type));
 vl.values[0].gauge = ps->vmem_data;
 vl.values_len = 1;
 plugin_dispatch_values(&vl);
 
-sstrncpy(vl.type, "ps_code", sizeof(vl.type));
-vl.values[0].gauge = ps->vmem_code;
-vl.values_len = 1;
-plugin_dispatch_values(&vl);
-
-sstrncpy(vl.type, "ps_stacksize", sizeof(vl.type));
+sstrncpy(vl.type, "stack_size", sizeof(vl.type));
 vl.values[0].gauge = ps->stack_size;
 vl.values_len = 1;
 plugin_dispatch_values(&vl);
 
-sstrncpy(vl.type, "ps_cputime", sizeof(vl.type));
+sstrncpy(vl.type, "cpu_time", sizeof(vl.type));
 vl.values[0].derive = ps->cpu_user_counter;
 vl.values[1].derive = ps->cpu_system_counter;
 vl.values_len = 2;
 plugin_dispatch_values(&vl);
 
-sstrncpy(vl.type, "ps_runtime", sizeof(vl.type));
-vl.values[0].counter = ps->runtime_secs;
-vl.values_len = 1;
-plugin_dispatch_values(&vl);
-
-sstrncpy(vl.type, "ps_cpupercent", sizeof(vl.type));
+sstrncpy(vl.type, "cpu_percent", sizeof(vl.type));
 vl.values[0].gauge = ps->cpu_percent;
 vl.values_len = 1;
 plugin_dispatch_values(&vl);
 
-sstrncpy(vl.type, "ps_mempercent", sizeof(vl.type));
+sstrncpy(vl.type, "mem_percent", sizeof(vl.type));
 vl.values[0].gauge = ps->mem_percent;
 vl.values_len = 1;
 plugin_dispatch_values(&vl);
 
-sstrncpy(vl.type, "ps_count", sizeof(vl.type));
-vl.values[0].gauge = ps->num_proc;
-vl.values[1].gauge = ps->num_lwp;
-vl.values_len = 2;
-plugin_dispatch_values(&vl);
-
-sstrncpy(vl.type, "ps_pagefaults", sizeof(vl.type));
+sstrncpy(vl.type, "page_faults", sizeof(vl.type));
 vl.values[0].derive = ps->vmem_minflt_counter;
 vl.values[1].derive = ps->vmem_majflt_counter;
 vl.values_len = 2;
 plugin_dispatch_values(&vl);
 
 if ((ps->io_rchar != -1) && (ps->io_wchar != -1)) {
-	sstrncpy(vl.type, "ps_disk_octets", sizeof(vl.type));
+	sstrncpy(vl.type, "disk_octets", sizeof(vl.type));
 	vl.values[0].derive = ps->io_rchar;
 	vl.values[1].derive = ps->io_wchar;
 	vl.values_len = 2;
@@ -534,7 +522,7 @@ if ((ps->io_rchar != -1) && (ps->io_wchar != -1)) {
 }
 
 if ((ps->io_syscr != -1) && (ps->io_syscw != -1)) {
-	sstrncpy(vl.type, "ps_disk_ops", sizeof(vl.type));
+	sstrncpy(vl.type, "disk_ops", sizeof(vl.type));
 	vl.values[0].derive = ps->io_syscr;
 	vl.values[1].derive = ps->io_syscw;
 	vl.values_len = 2;
@@ -542,14 +530,12 @@ if ((ps->io_syscr != -1) && (ps->io_syscw != -1)) {
 }
 
 if (report_ctx_switch) {
-	sstrncpy(vl.type, "contextswitch", sizeof(vl.type));
-	sstrncpy(vl.type_instance, "voluntary", sizeof(vl.type_instance));
+	sstrncpy(vl.type, "context_switch_voluntary", sizeof(vl.type));
 	vl.values[0].derive = ps->cswitch_vol;
 	vl.values_len = 1;
 	plugin_dispatch_values(&vl);
 
-	sstrncpy(vl.type, "contextswitch", sizeof(vl.type));
-	sstrncpy(vl.type_instance, "involuntary", sizeof(vl.type_instance));
+	sstrncpy(vl.type, "context_switch_involuntary", sizeof(vl.type));
 	vl.values[0].derive = ps->cswitch_invol;
 	vl.values_len = 1;
 	plugin_dispatch_values(&vl);
@@ -792,28 +778,30 @@ unsigned long long sys_cpu_user_counter;
 unsigned long long sys_cpu_user_nice_counter;
 unsigned long long sys_cpu_system_counter;
 unsigned long long sys_cpu_idle_counter;
+unsigned long long sys_cpu_iowait_counter;
+unsigned long long sys_cpu_irq_counter;
+unsigned long long sys_cpu_softirq_counter;
+unsigned long long sys_cpu_steal_counter;
+unsigned long long sys_cpu_guest_counter;
 unsigned long long sys_tot_phys_mem;
 unsigned long sys_boot_time_secs;
 struct sysinfo si;
 sysstat_t *ss;
 
 read_file_contents("/proc/stat", buffer, sizeof(buffer));
-sscanf(buffer, "%s %llu %llu %llu %llu", name,
+sscanf(buffer, "%s %llu %llu %llu %llu %llu %llu %llu %llu %llu", name,
 		&sys_cpu_user_counter, &sys_cpu_user_nice_counter,
-		&sys_cpu_system_counter, &sys_cpu_idle_counter);
+		&sys_cpu_system_counter, &sys_cpu_idle_counter, &sys_cpu_iowait_counter, &sys_cpu_irq_counter, &sys_cpu_softirq_counter, &sys_cpu_steal_counter, &sys_cpu_guest_counter);
 if (strcmp(name, "cpu") != 0) {
 	ERROR ("processes plugin: unexpected string in /proc/stat");
 	return NULL;
 }
-sys_cpu_user_counter = sys_cpu_user_counter * 1000000 / CONFIG_HZ;
-sys_cpu_user_nice_counter = sys_cpu_user_nice_counter * 1000000 / CONFIG_HZ;
-sys_cpu_system_counter = sys_cpu_system_counter * 1000000 / CONFIG_HZ;
-sys_cpu_idle_counter = sys_cpu_idle_counter * 1000000 / CONFIG_HZ;
+
 if (sysinfo(&si) < 0) {
 	ERROR ("processes plugin: cannot obtain system info via sysinfo()");
 	return NULL;
 }
-sys_boot_time_secs = si.uptime;
+
 sys_tot_phys_mem = si.totalram * si.mem_unit;
 
 ss = (sysstat_t *)malloc(sizeof(sysstat_t));
@@ -825,10 +813,12 @@ ss->sys_cpu_user_counter = sys_cpu_user_counter;
 ss->sys_cpu_system_counter = sys_cpu_system_counter;
 ss->sys_cpu_tot_time_counter = sys_cpu_user_counter +
 sys_cpu_user_nice_counter + sys_cpu_system_counter +
-sys_cpu_idle_counter;
+sys_cpu_idle_counter + sys_cpu_iowait_counter + sys_cpu_irq_counter + sys_cpu_softirq_counter + sys_cpu_steal_counter + sys_cpu_guest_counter;
+ss->sys_cpu_tot_time_counter = ss->sys_cpu_tot_time_counter / clockTicks;
+ss->sys_boot_time_secs = si.uptime;
 ss->sys_tot_phys_mem = sys_tot_phys_mem;
-ss->sys_boot_time_secs = time(NULL) - sys_boot_time_secs;
-DEBUG ("%s sys u:%llu n:%llu s:%llu i:%llu physmem: %llu, boottime: %lu\n",
+//ss->sys_boot_time_secs = time(NULL) - sys_boot_time_secs;
+INFO ("%s sys u:%llu n:%llu s:%llu i:%llu physmem: %llu, boottime: %lu\n",
 		name, sys_cpu_user_counter, sys_cpu_user_nice_counter,
 		sys_cpu_system_counter, sys_cpu_idle_counter, sys_tot_phys_mem,
 		sys_boot_time_secs);
@@ -852,6 +842,9 @@ int ps_read_process (int pid, procstat_t *ps, char *state)
 
   derive_t cpu_user_counter;
   derive_t cpu_system_counter;
+  derive_t cpu_child_user_counter;
+  derive_t cpu_child_system_counter;
+
   long long unsigned vmem_size;
   long long unsigned vmem_rss;
   long long unsigned stack_size;
@@ -943,13 +936,16 @@ int ps_read_process (int pid, procstat_t *ps, char *state)
 
   cpu_user_counter = atoll (fields[11]);
   cpu_system_counter = atoll (fields[12]);
+  cpu_child_user_counter = atoll (fields[13]);
+  cpu_child_system_counter = atoll (fields[14]);
+
   vmem_size = atoll (fields[20]);
   vmem_rss = atoll (fields[21]);
   ps->vmem_minflt_counter = atol (fields[7]);
   ps->vmem_majflt_counter = atol (fields[9]);
   ps->pid = pid;
   ps->ppid = atol (fields[1]);
-  ps->starttime_secs = atoll (fields[19]) / CONFIG_HZ;
+  ps->starttime_secs = atoll (fields[19]) / clockTicks;
 
   {
     unsigned long long stack_start = atoll (fields[25]);
@@ -960,9 +956,9 @@ int ps_read_process (int pid, procstat_t *ps, char *state)
     : stack_ptr - stack_start;
   }
 
-  /* Convert jiffies to useconds */
-  cpu_user_counter = cpu_user_counter * 1000000 / CONFIG_HZ;
-  cpu_system_counter = cpu_system_counter * 1000000 / CONFIG_HZ;
+  /* Convert clockticks to seconds */
+  cpu_user_counter = (cpu_user_counter + cpu_child_user_counter) / clockTicks;
+  cpu_system_counter = (cpu_system_counter + cpu_child_system_counter)   / clockTicks;
   vmem_rss = vmem_rss * pagesize_g;
 
   ps->cpu_user_counter = cpu_user_counter;
@@ -971,6 +967,7 @@ int ps_read_process (int pid, procstat_t *ps, char *state)
   ps->vmem_rss = (unsigned long) vmem_rss;
   ps->stack_size = (unsigned long) stack_size;
 
+  INFO("cpu_user_counter %ld, cpu_system_counter %ld, cpu_child_user_counter %ld, cpu_child_system_counter %ld, pid %ld", ps->cpu_user_counter, ps->cpu_system_counter, ps->cpu_child_user_counter, ps->cpu_child_system_counter, ps->pid);
   if ( (ps_read_io (pid, ps)) == NULL)
   {
     /* no io data */
@@ -1008,24 +1005,24 @@ static _Bool config_threshold_exceeded(procstat_t *ps)
   return 0;
 }
 
-//static void ps_find_cpu_delta(procstat_t *ps, unsigned long *out_userd, unsigned long *out_sysd)
-//{
-//  procstat_t *ps_ptr;
-//  for (ps_ptr=prev_proc_list_head_g; ps_ptr!=NULL; ps_ptr=ps_ptr->next) {
-//    if (ps_ptr->pid == ps->pid)
-//      break;
-//  }
-//
-//  if (ps_ptr) {
-//    INFO ("Current cpu user counter %"PRIi64" , previous counter %"PRIi64" ",ps->cpu_user_counter, ps_ptr->cpu_user_counter);
-//    *out_userd = ps->cpu_user_counter - ps_ptr->cpu_user_counter;
-//    INFO ("Current cpu system counter %"PRIi64" , previous counter %"PRIi64" ",ps->cpu_system_counter, ps_ptr->cpu_system_counter);
-//    *out_sysd = ps->cpu_system_counter - ps_ptr->cpu_system_counter;
-//  }
-//  else {
-//    *out_userd = *out_sysd = 0ULL;
-//  }
-//}
+static void ps_find_cpu_delta(procstat_t *ps, unsigned long *out_userd, unsigned long *out_sysd)
+{
+  procstat_t *ps_ptr;
+  for (ps_ptr=prev_proc_list_head_g; ps_ptr!=NULL; ps_ptr=ps_ptr->next) {
+    if (ps_ptr->pid == ps->pid)
+      break;
+  }
+
+  if (ps_ptr) {
+    INFO ("Current cpu user counter %"PRIi64" , previous counter %"PRIi64" ",ps->cpu_user_counter, ps_ptr->cpu_user_counter);
+    *out_userd = ps->cpu_user_counter - ps_ptr->cpu_user_counter;
+    INFO ("Current cpu system counter %"PRIi64" , previous counter %"PRIi64" ",ps->cpu_system_counter, ps_ptr->cpu_system_counter);
+    *out_sysd = ps->cpu_system_counter - ps_ptr->cpu_system_counter;
+  }
+  else {
+    *out_userd = *out_sysd  = 0ULL;
+  }
+}
 
 
 static void ps_calc_mem_percent(sysstat_t *ss, procstat_t *ps)
@@ -1041,24 +1038,20 @@ static void ps_calc_runtime(sysstat_t *ss, procstat_t *ps)
 
 static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *ps)
 {
-  // Don't calculate the delta. Use actual values. Leaving this code for future.
-  //if (ss && prev_ss) {
-    //INFO("Previous system stats for cpu percent: %ld, %ld",prev_ss->sys_cpu_system_counter, prev_ss->sys_cpu_tot_time_counter);
-    //INFO("Current system stats for cpu percent: %ld, %ld",ss->sys_cpu_system_counter, ss->sys_cpu_tot_time_counter);
-    //unsigned long ps_cpu_user_delta, ps_cpu_system_delta;
-	  //unsigned long ss_cpu_tot_time_delta;
+  if (ss && prev_ss) {
+    INFO("Previous system stats for cpu percent: %ld, %ld",prev_ss->sys_cpu_system_counter, prev_ss->sys_cpu_tot_time_counter);
+    INFO("Current system stats for cpu percent: %ld, %ld",ss->sys_cpu_system_counter, ss->sys_cpu_tot_time_counter);
+    unsigned long ps_cpu_user_delta, ps_cpu_system_delta;
+	  unsigned long ss_cpu_tot_time_delta;
+	  unsigned long ss_cpu_boot_time_delta;
 	  double cpu_percent;
-    //ps_find_cpu_delta(ps, &ps_cpu_user_delta, &ps_cpu_system_delta);
-	  //ss_cpu_tot_time_delta = ss->sys_cpu_tot_time_counter - prev_ss->sys_cpu_tot_time_counter;
-	  //if (ps_cpu_user_delta || ps_cpu_system_delta) {
-		  //INFO ("%s proc with %lu pid delta: u: %lu, s: %lu, tot: %lu\n", ps->name, ps->pid,ps_cpu_user_delta, ps_cpu_system_delta, ss_cpu_tot_time_delta);
-	  //}
-	  // Don't calculate the delta. Use actual values
-	  //cpu_percent = (ps_cpu_user_delta + ps_cpu_system_delta) * 100.0 / (ss_cpu_tot_time_delta);
-	  cpu_percent = (ps->cpu_user_counter + ps->cpu_system_counter) * 100.0 / (ss->sys_cpu_tot_time_counter);
-	  /* +0.5 to round it off to nearest int */
+    ps_find_cpu_delta(ps, &ps_cpu_user_delta, &ps_cpu_system_delta);
+	  ss_cpu_tot_time_delta = ss->sys_cpu_tot_time_counter - prev_ss->sys_cpu_tot_time_counter;
+	  ss_cpu_boot_time_delta = ss->sys_boot_time_secs - prev_ss->sys_boot_time_secs;
+	  cpu_percent = (ps_cpu_system_delta + ps_cpu_user_delta) * 100.0 / ss_cpu_tot_time_delta;
+	  INFO ("%s proc with %lu pid delta: u: %lu, s: %lu, tot: %lu, percent: %f\n", ps->name, ps->pid,ps_cpu_user_delta, ps_cpu_system_delta, ss_cpu_tot_time_delta,cpu_percent);
 	  ps->cpu_percent = cpu_percent;
-  //}
+  }
 }
 
 /* do actual readings from kernel */
@@ -1126,7 +1119,7 @@ static int ps_read(void) {
 } /* int ps_read */
 
 void module_register(void) {
-plugin_register_complex_config("mapr_processes", ps_config);
-plugin_register_init("mapr_processes", ps_init);
-plugin_register_read("mapr_processes", ps_read);
+plugin_register_complex_config("mapr_process", ps_config);
+plugin_register_init("mapr_process", ps_init);
+plugin_register_read("mapr_process", ps_read);
 } /* void module_register */
