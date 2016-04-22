@@ -1,0 +1,13 @@
+__INSTALL__/var/log/collectd/collectd.log {
+  daily
+  rotate 30
+  compress
+  delaycompress
+  notifempty
+  create 640 mapr mapr
+  sharedscripts
+  postrotate
+    pid=__INSTALL__/var/run/collectd/collectd.pid
+    test -s $pid && kill -USR1 "$(cat $pid)"
+  endscript
+}

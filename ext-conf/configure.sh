@@ -44,6 +44,8 @@ JMX_INSERT='#Enable JMX for MaprMonitoring\nJMX_OPTS=\"-Dcom.sun.management.jmxr
 YARN_JMX_RM_OPT_STR='$JMX_OPTS='${RM_JMX_PORT}
 YARN_JMX_NM_OPT_STR='$JMX_OPTS='${NM_JMX_PORT}
 MAPR_HOME=${MAPR_HOME:-/opt/mapr}
+MAPR_USER=${MAPR_USER:-mapr}
+MAPR_GROUP=${MAPR_GROUP:-mapr}
 MAPR_CONF_DIR="${MAPR_HOME}/conf/conf.d"
 HADOOP_VER=$(cat "$MAPR_HOME/hadoop/hadoopversion")
 YARN_BIN="${MAPR_HOME}/hadoop/hadoop-${HADOOP_VER}/bin/yarn"
@@ -59,6 +61,17 @@ nodecount=0
 nodelist=""
 nodeport=4242
 secureCluster=0
+
+#############################################################################
+# function to adjust ownership
+#############################################################################
+function adjustOwnership() {
+    if [ -f "/etc/logrotate.d/collectd" ]; then
+        if [ "$MAPR_USER" != "mapr" -o "$MAPR_GROUP" != "mapr" ]; then
+            sed -i -e 's/create 640 mapr mapr/create 640 '"$MAPR_USER $MAPR_GROUP/" /etc/logrotate.d/collectd
+        fi
+    fi
+}
 
 #############################################################################
 # Function to uncomment a section
@@ -488,6 +501,7 @@ function installWardenConfFile()
     fi
 
     cp ${COLLECTD_HOME}/etc/conf/warden.collectd.conf ${MAPR_CONF_DIR}/
+    chown $MAPR_USER:$MAPR_GROUP ${MAPR_CONF_DIR}/warden.collectd.conf
 }
 
 #############################################################################
@@ -565,6 +579,7 @@ cp ${CD_CONF_FILE} ${NEW_CD_CONF_FILE}
 #configureinterfaceplugin
 #configurediskplugin
 #configurezookeeperconfig
+adjustOwnership
 getRoles
 configureopentsdbplugin  # this ucomments everything between the MAPR_CONF_TAGs
 configurejavajmxplugin
