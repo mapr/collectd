@@ -817,10 +817,9 @@ static sysstat_t *ps_read_sys_stat(void)
   ss->sys_boot_time_secs = si.uptime;
   ss->sys_tot_phys_mem = sys_tot_phys_mem;
   ss->sys_boot_time_secs = time(NULL) - ss->sys_boot_time_secs;
-  INFO ("%s sys u:%llu n:%llu s:%llu i:%llu physmem: %llu, boottime: %lu\n",
+  INFO ("%s sys u:%llu n:%llu s:%llu i:%llu physmem: %llu\n",
       name, sys_cpu_user_counter, sys_cpu_user_nice_counter,
-      sys_cpu_system_counter, sys_cpu_idle_counter, sys_tot_phys_mem,
-      sys_boot_time_secs);
+      sys_cpu_system_counter, sys_cpu_idle_counter, sys_tot_phys_mem);
   return ss;
 }
 
