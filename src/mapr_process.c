@@ -31,9 +31,9 @@
 # include <sys/stat.h>
 # include <linux/limits.h>
 # include <sys/sysinfo.h>
-#  if HAVE_LINUX_CONFIG_H
-#    include <linux/config.h>
-#  endif
+# if HAVE_LINUX_CONFIG_H
+#   include <linux/config.h>
+# endif
 # define PSCMD 	"ps -eo uid,pid,ppid,pgid,args"
 # define PSFORMAT 	"%ld %ld %ld %ld %[^\n]"
 # define PSVARS	&P[i].uid, &P[i].pid, &P[i].ppid, &P[i].pgid, P[i].cmd
@@ -58,98 +58,98 @@
 # include <regex.h>
 
 struct Proc {
-	long uid, pid, ppid, pgid;
-	char name[32], cmd[MAXLINE];
-	int print;
-	long parent, child, sister;
-	unsigned long thcount;
+  long uid, pid, ppid, pgid;
+  char name[32], cmd[MAXLINE];
+  int print;
+  long parent, child, sister;
+  unsigned long thcount;
 }*P;
 
 static void uid2user(uid_t uid, char *name, int len) {
 #define NUMUN 128
-	static struct un_ {
-		uid_t uid;
-		char name[32];
-	}un[NUMUN];
-	static short n = 0;
-	short i;
-	char uid_name[32];
-	char *found;
+  static struct un_ {
+    uid_t uid;
+    char name[32];
+  }un[NUMUN];
+  static short n = 0;
+  short i;
+  char uid_name[32];
+  char *found;
 #ifdef DEBUG
-	if (name == NULL) {
-		for (i = 0; i < n; i++)
-		fprintf(stderr, "uid = %3d, name = %s\n", un[i].uid, un[i].name);
-		return;
-	}
+  if (name == NULL) {
+    for (i = 0; i < n; i++)
+      fprintf(stderr, "uid = %3d, name = %s\n", un[i].uid, un[i].name);
+    return;
+  }
 #endif
-	for (i = n - 1; i >= 0 && un[i].uid != uid; i--);
-	if (i >= 0) { /* found locally */
-		found = un[i].name;
-	} else {
-		struct passwd *pw = getpwuid(uid);
-		if (pw) {
-			found = pw->pw_name;
-		} else {
-			/* fix by Stan Sieler & Philippe Torche */
-			snprintf(uid_name, sizeof(uid_name), "#%d", uid);
-			found = uid_name;
-		}
-		if (n < NUMUN) {
-			un[n].uid = uid;
-			strncpy(un[n].name, found, 9);
-			un[n].name[8] = '\0';
-			n++;
-		}
-	}
-	strncpy(name, found, len);
-	name[len-1] = '\0';
+  for (i = n - 1; i >= 0 && un[i].uid != uid; i--);
+  if (i >= 0) { /* found locally */
+    found = un[i].name;
+  } else {
+    struct passwd *pw = getpwuid(uid);
+    if (pw) {
+      found = pw->pw_name;
+    } else {
+      /* fix by Stan Sieler & Philippe Torche */
+      snprintf(uid_name, sizeof(uid_name), "#%d", uid);
+      found = uid_name;
+    }
+    if (n < NUMUN) {
+      un[n].uid = uid;
+      strncpy(un[n].name, found, 9);
+      un[n].name[8] = '\0';
+      n++;
+    }
+  }
+  strncpy(name, found, len);
+  name[len-1] = '\0';
 }
 #define PROCSTAT_NAME_LEN 256
 typedef struct procstat {
-	char name[PROCSTAT_NAME_LEN];
-	char processName[PROCSTAT_NAME_LEN];
-	unsigned long pid;
-	unsigned long ppid;
-	unsigned long starttime_secs;
-	unsigned long runtime_secs;
+  char name[PROCSTAT_NAME_LEN];
+  char processName[PROCSTAT_NAME_LEN];
+  unsigned long pid;
+  unsigned long ppid;
+  unsigned long starttime_secs;
+  unsigned long runtime_secs;
 
-	unsigned long num_proc;
-	unsigned long num_lwp;
-	unsigned long vmem_size;
-	unsigned long vmem_rss;
-	unsigned long vmem_data;
-	unsigned long vmem_code;
-	unsigned long stack_size;
+  unsigned long num_proc;
+  unsigned long num_lwp;
+  unsigned long vmem_size;
+  unsigned long vmem_rss;
+  unsigned long vmem_data;
+  unsigned long vmem_code;
+  unsigned long stack_size;
 
-	derive_t vmem_minflt_counter;
-	derive_t vmem_majflt_counter;
+  derive_t vmem_minflt_counter;
+  derive_t vmem_majflt_counter;
 
-	derive_t cpu_user_counter;
-	derive_t cpu_system_counter;
-	derive_t cpu_child_user_counter;
-	derive_t cpu_child_system_counter;
+  derive_t cpu_user_counter;
+  derive_t cpu_system_counter;
+  derive_t cpu_child_user_counter;
+  derive_t cpu_child_system_counter;
 
-	double cpu_percent;
-	float mem_percent;
+  double cpu_percent;
+  float mem_percent;
 
-	/* io data */
-	derive_t io_rchar;
-	derive_t io_wchar;
-	derive_t io_syscr;
-	derive_t io_syscw;
+  /* io data */
+  derive_t io_rchar;
+  derive_t io_wchar;
+  derive_t io_syscr;
+  derive_t io_syscw;
 
-	derive_t cswitch_vol;
-	derive_t cswitch_invol;
+  derive_t cswitch_vol;
+  derive_t cswitch_invol;
 
-	struct procstat *next;
+  struct procstat *next;
 } procstat_t;
 
 typedef struct sysstat {
-	unsigned long sys_cpu_user_counter; /* /proc/stat */
-	unsigned long sys_cpu_system_counter; /* /proc/stat */
-	unsigned long sys_cpu_tot_time_counter; /* /proc/stat */
-	unsigned long long sys_tot_phys_mem; /* /proc/meminfo */
-	unsigned long sys_boot_time_secs; /* /proc/stat */
+  unsigned long sys_cpu_user_counter; /* /proc/stat */
+  unsigned long sys_cpu_system_counter; /* /proc/stat */
+  unsigned long sys_cpu_tot_time_counter; /* /proc/stat */
+  unsigned long long sys_tot_phys_mem; /* /proc/meminfo */
+  unsigned long sys_boot_time_secs; /* /proc/stat */
 } sysstat_t;
 
 typedef struct directorylist {
@@ -174,97 +174,97 @@ static int numCores;
 
 /* Read /proc/ */
 static int getProcesses(void) {
-	glob_t globbuf;
-	unsigned int i, j;
+  glob_t globbuf;
+  unsigned int i, j;
 
-	glob("/proc/[0-9]*", GLOB_NOSORT, NULL, &globbuf);
+  glob("/proc/[0-9]*", GLOB_NOSORT, NULL, &globbuf);
 
-	P = calloc(globbuf.gl_pathc, sizeof(struct Proc));
-	if (P == NULL) {
-		fprintf(stderr, "Problems with malloc.\n");
-		exit(1);
-	}
+  P = calloc(globbuf.gl_pathc, sizeof(struct Proc));
+  if (P == NULL) {
+    fprintf(stderr, "Problems with malloc.\n");
+    exit(1);
+  }
 
-	for (i = j = 0; i < globbuf.gl_pathc; i++) {
-		char *pdir, name[32];
-		int c;
-		FILE *processFP;
-		int k = 0;
+  for (i = j = 0; i < globbuf.gl_pathc; i++) {
+    char *pdir, name[32];
+    int c;
+    FILE *processFP;
+    int k = 0;
 
-		pdir = globbuf.gl_pathv[globbuf.gl_pathc - i - 1];
+    pdir = globbuf.gl_pathv[globbuf.gl_pathc - i - 1];
 
-		/* if processes change their UID this change is only reflected in the owner of pdir.
-		 * fixed since version 2.36 */
-		{
-			struct stat st;
-			if (stat(pdir, &st) != 0) { /* get uid */
-				continue; /* process vanished since glob() */
-			}
-			P[j].uid = st.st_uid;
-			uid2user(P[j].uid, P[j].name, sizeof(P[j].name));
-		}
+    /* if processes change their UID this change is only reflected in the owner of pdir.
+     * fixed since version 2.36 */
+    {
+      struct stat st;
+      if (stat(pdir, &st) != 0) { /* get uid */
+        continue; /* process vanished since glob() */
+      }
+      P[j].uid = st.st_uid;
+      uid2user(P[j].uid, P[j].name, sizeof(P[j].name));
+    }
 
-		snprintf(name, sizeof(name), "%s%s",
-				globbuf.gl_pathv[globbuf.gl_pathc - i - 1], "/stat");
-		processFP = fopen(name, "r");
-		if (processFP == NULL)
-			continue; /* process vanished since glob() */
-		int status = fscanf(processFP, "%ld %s %*c %ld %ld", &P[j].pid, P[j].cmd, &P[j].ppid,
-				&P[j].pgid);
+    snprintf(name, sizeof(name), "%s%s",
+        globbuf.gl_pathv[globbuf.gl_pathc - i - 1], "/stat");
+    processFP = fopen(name, "r");
+    if (processFP == NULL)
+      continue; /* process vanished since glob() */
+    int status = fscanf(processFP, "%ld %s %*c %ld %ld", &P[j].pid, P[j].cmd, &P[j].ppid,
+        &P[j].pgid);
     if (status == 0) {
-	    ERROR("mapr_process plugin: Failed to read from /proc/pid/stat.");
+      ERROR("mapr_process plugin: Failed to read from /proc/pid/stat.");
       continue;
     }
-		fclose(processFP);
-		P[j].thcount = 1;
+    fclose(processFP);
+    P[j].thcount = 1;
 
-		snprintf(name, sizeof(name), "%s%s",
-				globbuf.gl_pathv[globbuf.gl_pathc - i - 1], "/cmdline");
-		processFP = fopen(name, "r");
-		if (processFP == NULL)
-			continue; /* process vanished since glob() */
-		while (k < MAXLINE - 1 && EOF != (c = fgetc(processFP))) {
-			P[j].cmd[k++] = c == '\0' ? ' ' : c;
-		}
-		if (k > 0)
-			P[j].cmd[k] = '\0';
-		fclose(processFP);
-		P[j].parent = P[j].child = P[j].sister = -1;
-		j++;
-	}
-	globfree(&globbuf);
-	return j;
+    snprintf(name, sizeof(name), "%s%s",
+        globbuf.gl_pathv[globbuf.gl_pathc - i - 1], "/cmdline");
+    processFP = fopen(name, "r");
+    if (processFP == NULL)
+      continue; /* process vanished since glob() */
+    while (k < MAXLINE - 1 && EOF != (c = fgetc(processFP))) {
+      P[j].cmd[k++] = c == '\0' ? ' ' : c;
+    }
+    if (k > 0)
+      P[j].cmd[k] = '\0';
+    fclose(processFP);
+    P[j].parent = P[j].child = P[j].sister = -1;
+    j++;
+  }
+  globfree(&globbuf);
+  return j;
 } /* int getProcesses() */
 
 int get_pid_index(long pid) {
-	int me;
-	for (me = numOfProcesses - 1; me >= 0 && P[me].pid != pid; me--)
-		; /* Search process */
-	return me;
+  int me;
+  for (me = numOfProcesses - 1; me >= 0 && P[me].pid != pid; me--)
+    ; /* Search process */
+  return me;
 }
 
 #define EXIST(idx) ((idx) != -1)
 
 static void MakeTree(void) {
-	/* Build the process hierarchy. Every process marks itself as first child
-	 * of it's parent or as sister of first child of it's parent */
-	int me;
-	for (me = 0; me < numOfProcesses; me++) {
-		int parent;
-		parent = get_pid_index(P[me].ppid);
-		if (parent != me && parent != -1) { /* valid process, not me */
-			P[me].parent = parent;
-			if (P[parent].child == -1) /* first child */
-				P[parent].child = me;
-			else {
-				int sister;
-				for (sister = P[parent].child; EXIST(P[sister].sister); sister =
-						P[sister].sister)
-					;
-				P[sister].sister = me;
-			}
-		}
-	}
+  /* Build the process hierarchy. Every process marks itself as first child
+   * of it's parent or as sister of first child of it's parent */
+  int me;
+  for (me = 0; me < numOfProcesses; me++) {
+    int parent;
+    parent = get_pid_index(P[me].ppid);
+    if (parent != me && parent != -1) { /* valid process, not me */
+      P[me].parent = parent;
+      if (P[parent].child == -1) /* first child */
+        P[parent].child = me;
+      else {
+        int sister;
+        for (sister = P[parent].child; EXIST(P[sister].sister); sister =
+            P[sister].sister)
+          ;
+        P[sister].sister = me;
+      }
+    }
+  }
 }
 
 /* put name of process from config to list_head_g tree
@@ -347,24 +347,24 @@ static void getPids(char *name) {
 static void ps_proc_list_prepend(procstat_t *ps)
 {
   if (proc_list_head_g == NULL) {
-	  proc_list_head_g = (procstat_t *)malloc(sizeof(procstat_t));
-	  if (proc_list_head_g == NULL) {
-		  ERROR ("mapr_process plugin: error allocating memory");
-		  return;
-	  }
-	  ps->next = NULL;
-	  memcpy(proc_list_head_g, ps, sizeof(procstat_t));
+    proc_list_head_g = (procstat_t *)malloc(sizeof(procstat_t));
+    if (proc_list_head_g == NULL) {
+      ERROR ("mapr_process plugin: error allocating memory");
+      return;
+    }
+    ps->next = NULL;
+    memcpy(proc_list_head_g, ps, sizeof(procstat_t));
   }
   else {
-	  procstat_t *new;
+    procstat_t *new;
     new = (procstat_t *)malloc(sizeof(procstat_t));
-	  if (new == NULL) {
-		  ERROR ("mapr_process plugin: error allocating memory");
-		  return;
-	  }
-	  memcpy(new, ps, sizeof(procstat_t));
-	  new->next = proc_list_head_g;
-	  proc_list_head_g = new;
+    if (new == NULL) {
+      ERROR ("mapr_process plugin: error allocating memory");
+      return;
+    }
+    memcpy(new, ps, sizeof(procstat_t));
+    new->next = proc_list_head_g;
+    proc_list_head_g = new;
   }
 } /* void ps_proc_list_prepend */
 
@@ -374,455 +374,454 @@ static void ps_proc_list_reset (procstat_t **head)
 
   ps = *head;
   while (ps) {
-	  procstat_t *nps;
-  	nps = ps->next;
-	  free(ps);
-	  ps = nps;
+    procstat_t *nps;
+    nps = ps->next;
+    free(ps);
+    ps = nps;
   }
   *head = NULL;
 } /* void ps_proc_list_reset */
 
 /* put all pre-defined 'Process' names from config to list_head_g tree */
 static int ps_config(oconfig_item_t *ci) {
-int i;
-directorylist_t *dirlist;
-for (i = 0; i < ci->children_num; ++i) {
-	oconfig_item_t *c = ci->children + i;
-	if (strcasecmp(c->key, "MinCPUPercent") == 0) {
-		filter_mincpupct_g = c->values[0].value.number;
-		if (filter_mincpupct_g < 0.0 || filter_mincpupct_g > 100.0) {
-			ERROR("mapr_process plugin: MinCPUPercent out of [0,100] range");
-			continue;
-		}
-	} else if (strcasecmp(c->key, "MinMemoryPercent") == 0) {
-		filter_minmempct_g = c->values[0].value.number;
-		if (filter_minmempct_g < 0.0 || filter_minmempct_g > 100.0) {
-			ERROR("mapr_process plugin: MinMemoryPercent out of [0,100] range");
-			continue;
-		}
-	} else if (strcasecmp(c->key, "PID_Directory") == 0) {
-		if ((c->values_num != 1)
-				|| (OCONFIG_TYPE_STRING != c->values[0].type)) {
-			ERROR("mapr_process plugin: `PID_Directory' expects exactly "
-					"one string argument (got %i).", c->values_num);
-			continue;
-		}
+  int i;
+  directorylist_t *dirlist;
+  for (i = 0; i < ci->children_num; ++i) {
+    oconfig_item_t *c = ci->children + i;
+    if (strcasecmp(c->key, "MinCPUPercent") == 0) {
+      filter_mincpupct_g = c->values[0].value.number;
+      if (filter_mincpupct_g < 0.0 || filter_mincpupct_g > 100.0) {
+        ERROR("mapr_process plugin: MinCPUPercent out of [0,100] range");
+        continue;
+      }
+    } else if (strcasecmp(c->key, "MinMemoryPercent") == 0) {
+      filter_minmempct_g = c->values[0].value.number;
+      if (filter_minmempct_g < 0.0 || filter_minmempct_g > 100.0) {
+        ERROR("mapr_process plugin: MinMemoryPercent out of [0,100] range");
+        continue;
+      }
+    } else if (strcasecmp(c->key, "PID_Directory") == 0) {
+      if ((c->values_num != 1)
+          || (OCONFIG_TYPE_STRING != c->values[0].type)) {
+        ERROR("mapr_process plugin: `PID_Directory' expects exactly "
+            "one string argument (got %i).", c->values_num);
+        continue;
+      }
 
-		if (c->children_num != 0) {
-			WARNING("mapr_process plugin: the `PID_Directory' config option "
-					"does not expect any child elements -- ignoring "
-					"content (%i elements) of the <PID_Directory '%s'> block.",
-					c->children_num, c->values[0].value.string);
-		}
+      if (c->children_num != 0) {
+        WARNING("mapr_process plugin: the `PID_Directory' config option "
+            "does not expect any child elements -- ignoring "
+            "content (%i elements) of the <PID_Directory '%s'> block.",
+            c->children_num, c->values[0].value.string);
+      }
 
-		int found = 0;
-		for (dirlist=directory_list_head_g;dirlist != NULL;dirlist = dirlist->next) {
-		  // Either you have found the entry or you have reached end of the list
-		  if (strcmp(dirlist->directoryName, c->values[0].value.string) == 0) {
-		    WARNING("mapr_process plugin: Found more than one entry for directory name. Ignoring the current entry");
-		    found = 1;
+      int found = 0;
+      for (dirlist=directory_list_head_g;dirlist != NULL;dirlist = dirlist->next) {
+        // Either you have found the entry or you have reached end of the list
+        if (strcmp(dirlist->directoryName, c->values[0].value.string) == 0) {
+          WARNING("mapr_process plugin: Found more than one entry for directory name. Ignoring the current entry");
+          found = 1;
 
-		  }
-		  if (dirlist->next == NULL) break;
-		}
+        }
+        if (dirlist->next == NULL) break;
+      }
 
-		if (found == 0) {
-		  directorylist_t *newEntry = (directorylist_t *) malloc(sizeof(directorylist_t));
-		  memset(newEntry, 0, sizeof(directorylist_t));
-		  strcpy(newEntry->directoryName,c->values[0].value.string);
-		  if (newEntry == NULL) {
-		    ERROR("mapr_process plugin: creating directory list malloc failed.");
-		    continue;
-		  }
-		  if (dirlist == NULL) {
-		    directory_list_head_g = newEntry;
-		  } else {
-		    dirlist->next = newEntry;
-		  }
-		  getPids(c->values[0].value.string);
-		}
-	} else {
-		ERROR("mapr_process plugin: The `%s' configuration option is not "
-				"understood and will be ignored.", c->key);
-		continue;
-	}
-}
+      if (found == 0) {
+        directorylist_t *newEntry = (directorylist_t *) malloc(sizeof(directorylist_t));
+        memset(newEntry, 0, sizeof(directorylist_t));
+        strcpy(newEntry->directoryName,c->values[0].value.string);
+        if (newEntry == NULL) {
+          ERROR("mapr_process plugin: creating directory list malloc failed.");
+          continue;
+        }
+        if (dirlist == NULL) {
+          directory_list_head_g = newEntry;
+        } else {
+          dirlist->next = newEntry;
+        }
+        getPids(c->values[0].value.string);
+      }
+    } else {
+      ERROR("mapr_process plugin: The `%s' configuration option is not "
+          "understood and will be ignored.", c->key);
+      continue;
+    }
+  }
 
-return (0);
+  return (0);
 }
 
 static int ps_init(void) {
-pagesize_g = sysconf(_SC_PAGESIZE);
-clockTicks = sysconf(_SC_CLK_TCK);
-numCores = (uint)sysconf(_SC_NPROCESSORS_ONLN);
-INFO ("pagesize_g = %li; clockTicks = %li; numCores = %d;",
-		pagesize_g, clockTicks, numCores);
-return (0);
+  pagesize_g = sysconf(_SC_PAGESIZE);
+  clockTicks = sysconf(_SC_CLK_TCK);
+  numCores = (uint)sysconf(_SC_NPROCESSORS_ONLN);
+  INFO ("pagesize_g = %li; clockTicks = %li; numCores = %d;",
+      pagesize_g, clockTicks, numCores);
+  return (0);
 } /* int ps_init */
 
 /* submit info about specific process (e.g.: memory taken, cpu usage, etc..) */
 static void ps_submit_proc_list(procstat_t *ps) {
-value_t values[2];
-value_list_t vl = VALUE_LIST_INIT;
+  value_t values[2];
+  value_list_t vl = VALUE_LIST_INIT;
 
-vl.values = values;
-vl.values_len = 2;
-sstrncpy(vl.host, hostname_g, sizeof(vl.host));
-sstrncpy(vl.plugin, "mapr.process", sizeof(vl.plugin));
-sstrncpy(vl.plugin_instance, ps->processName, sizeof(vl.plugin_instance));
+  vl.values = values;
+  vl.values_len = 2;
+  sstrncpy(vl.host, hostname_g, sizeof(vl.host));
+  sstrncpy(vl.plugin, "mapr.process", sizeof(vl.plugin));
+  sstrncpy(vl.plugin_instance, ps->processName, sizeof(vl.plugin_instance));
 
-sstrncpy(vl.type, "vm", sizeof(vl.type));
-vl.values[0].gauge = ps->vmem_size;
-vl.values_len = 1;
-plugin_dispatch_values(&vl);
+  sstrncpy(vl.type, "vm", sizeof(vl.type));
+  vl.values[0].gauge = ps->vmem_size;
+  vl.values_len = 1;
+  plugin_dispatch_values(&vl);
 
-sstrncpy(vl.type, "rss", sizeof(vl.type));
-vl.values[0].gauge = ps->vmem_rss;
-vl.values_len = 1;
-plugin_dispatch_values(&vl);
+  sstrncpy(vl.type, "rss", sizeof(vl.type));
+  vl.values[0].gauge = ps->vmem_rss;
+  vl.values_len = 1;
+  plugin_dispatch_values(&vl);
 
-sstrncpy(vl.type, "data", sizeof(vl.type));
-vl.values[0].gauge = ps->vmem_data;
-vl.values_len = 1;
-plugin_dispatch_values(&vl);
+  sstrncpy(vl.type, "data", sizeof(vl.type));
+  vl.values[0].gauge = ps->vmem_data;
+  vl.values_len = 1;
+  plugin_dispatch_values(&vl);
 
-sstrncpy(vl.type, "stack_size", sizeof(vl.type));
-vl.values[0].gauge = ps->stack_size;
-vl.values_len = 1;
-plugin_dispatch_values(&vl);
+  sstrncpy(vl.type, "stack_size", sizeof(vl.type));
+  vl.values[0].gauge = ps->stack_size;
+  vl.values_len = 1;
+  plugin_dispatch_values(&vl);
 
-sstrncpy(vl.type, "cpu_time", sizeof(vl.type));
-vl.values[0].derive = ps->cpu_user_counter;
-vl.values[1].derive = ps->cpu_system_counter;
-vl.values_len = 2;
-plugin_dispatch_values(&vl);
+  sstrncpy(vl.type, "cpu_time", sizeof(vl.type));
+  vl.values[0].derive = ps->cpu_user_counter;
+  vl.values[1].derive = ps->cpu_system_counter;
+  vl.values_len = 2;
+  plugin_dispatch_values(&vl);
 
-sstrncpy(vl.type, "cpu_percent", sizeof(vl.type));
-vl.values[0].gauge = ps->cpu_percent;
-vl.values_len = 1;
-plugin_dispatch_values(&vl);
+  sstrncpy(vl.type, "cpu_percent", sizeof(vl.type));
+  vl.values[0].gauge = ps->cpu_percent;
+  vl.values_len = 1;
+  plugin_dispatch_values(&vl);
 
-sstrncpy(vl.type, "mem_percent", sizeof(vl.type));
-vl.values[0].gauge = ps->mem_percent;
-vl.values_len = 1;
-plugin_dispatch_values(&vl);
+  sstrncpy(vl.type, "mem_percent", sizeof(vl.type));
+  vl.values[0].gauge = ps->mem_percent;
+  vl.values_len = 1;
+  plugin_dispatch_values(&vl);
 
-sstrncpy(vl.type, "page_faults", sizeof(vl.type));
-vl.values[0].derive = ps->vmem_minflt_counter;
-vl.values[1].derive = ps->vmem_majflt_counter;
-vl.values_len = 2;
-plugin_dispatch_values(&vl);
+  sstrncpy(vl.type, "page_faults", sizeof(vl.type));
+  vl.values[0].derive = ps->vmem_minflt_counter;
+  vl.values[1].derive = ps->vmem_majflt_counter;
+  vl.values_len = 2;
+  plugin_dispatch_values(&vl);
 
-if ((ps->io_rchar != -1) && (ps->io_wchar != -1)) {
-	sstrncpy(vl.type, "disk_octets", sizeof(vl.type));
-	vl.values[0].derive = ps->io_rchar;
-	vl.values[1].derive = ps->io_wchar;
-	vl.values_len = 2;
-	plugin_dispatch_values(&vl);
-}
+  if ((ps->io_rchar != -1) && (ps->io_wchar != -1)) {
+    sstrncpy(vl.type, "disk_octets", sizeof(vl.type));
+    vl.values[0].derive = ps->io_rchar;
+    vl.values[1].derive = ps->io_wchar;
+    vl.values_len = 2;
+    plugin_dispatch_values(&vl);
+  }
 
-if ((ps->io_syscr != -1) && (ps->io_syscw != -1)) {
-	sstrncpy(vl.type, "disk_ops", sizeof(vl.type));
-	vl.values[0].derive = ps->io_syscr;
-	vl.values[1].derive = ps->io_syscw;
-	vl.values_len = 2;
-	plugin_dispatch_values(&vl);
-}
+  if ((ps->io_syscr != -1) && (ps->io_syscw != -1)) {
+    sstrncpy(vl.type, "disk_ops", sizeof(vl.type));
+    vl.values[0].derive = ps->io_syscr;
+    vl.values[1].derive = ps->io_syscw;
+    vl.values_len = 2;
+    plugin_dispatch_values(&vl);
+  }
 
-if (report_ctx_switch) {
-	sstrncpy(vl.type, "context_switch_voluntary", sizeof(vl.type));
-	vl.values[0].derive = ps->cswitch_vol;
-	vl.values_len = 1;
-	plugin_dispatch_values(&vl);
+  if (report_ctx_switch) {
+    sstrncpy(vl.type, "context_switch_voluntary", sizeof(vl.type));
+    vl.values[0].derive = ps->cswitch_vol;
+    vl.values_len = 1;
+    plugin_dispatch_values(&vl);
 
-	sstrncpy(vl.type, "context_switch_involuntary", sizeof(vl.type));
-	vl.values[0].derive = ps->cswitch_invol;
-	vl.values_len = 1;
-	plugin_dispatch_values(&vl);
-}
+    sstrncpy(vl.type, "context_switch_involuntary", sizeof(vl.type));
+    vl.values[0].derive = ps->cswitch_invol;
+    vl.values_len = 1;
+    plugin_dispatch_values(&vl);
+  }
 
-DEBUG ("name = %s; num_proc = %lu; num_lwp = %lu; "
-		"vmem_size = %lu; vmem_rss = %lu; vmem_data = %lu; "
-		"vmem_code = %lu; "
-		"vmem_minflt_counter = %"PRIi64"; vmem_majflt_counter = %"PRIi64"; "
-		"cpu_user_counter = %"PRIi64"; cpu_system_counter = %"PRIi64"; "
-		"io_rchar = %"PRIi64"; io_wchar = %"PRIi64"; "
-		"io_syscr = %"PRIi64"; io_syscw = %"PRIi64"; "
-		"cswitch_vol = %"PRIi64"; cswitch_invol = %"PRIi64"; "
-		"cpu_percent = %f; mem_percent = %f; pid = %lu; ppid = %lu; "
-		"runtime = %lu secs",
-		ps->name, ps->num_proc, ps->num_lwp,
-		ps->vmem_size, ps->vmem_rss,
-		ps->vmem_data, ps->vmem_code,
-		ps->vmem_minflt_counter, ps->vmem_majflt_counter,
-		ps->cpu_user_counter, ps->cpu_system_counter,
-		ps->io_rchar, ps->io_wchar, ps->io_syscr, ps->io_syscw,
-		ps->cswitch_vol, ps->cswitch_invol, ps->cpu_percent,
-		ps->mem_percent, ps->pid, ps->ppid, ps->runtime_secs);
+  DEBUG ("name = %s; num_proc = %lu; num_lwp = %lu; "
+      "vmem_size = %lu; vmem_rss = %lu; vmem_data = %lu; "
+      "vmem_code = %lu; "
+      "vmem_minflt_counter = %"PRIi64"; vmem_majflt_counter = %"PRIi64"; "
+      "cpu_user_counter = %"PRIi64"; cpu_system_counter = %"PRIi64"; "
+      "io_rchar = %"PRIi64"; io_wchar = %"PRIi64"; "
+      "io_syscr = %"PRIi64"; io_syscw = %"PRIi64"; "
+      "cswitch_vol = %"PRIi64"; cswitch_invol = %"PRIi64"; "
+      "cpu_percent = %f; mem_percent = %f; pid = %lu; ppid = %lu; "
+      "runtime = %lu secs",
+      ps->name, ps->num_proc, ps->num_lwp,
+      ps->vmem_size, ps->vmem_rss,
+      ps->vmem_data, ps->vmem_code,
+      ps->vmem_minflt_counter, ps->vmem_majflt_counter,
+      ps->cpu_user_counter, ps->cpu_system_counter,
+      ps->io_rchar, ps->io_wchar, ps->io_syscr, ps->io_syscw,
+      ps->cswitch_vol, ps->cswitch_invol, ps->cpu_percent,
+      ps->mem_percent, ps->pid, ps->ppid, ps->runtime_secs);
 } /* void ps_submit_proc_list */
 
 static procstat_t *ps_read_tasks_status (int pid, procstat_t *ps)
 {
-char dirname[64];
-DIR *dh;
-char filename[64];
-FILE *fh;
-struct dirent *ent;
-derive_t cswitch_vol = 0;
-derive_t cswitch_invol = 0;
-char buffer[1024];
-char *fields[8];
-int numfields;
+  char dirname[64];
+  DIR *dh;
+  char filename[64];
+  FILE *fh;
+  struct dirent *ent;
+  derive_t cswitch_vol = 0;
+  derive_t cswitch_invol = 0;
+  char buffer[1024];
+  char *fields[8];
+  int numfields;
 
-ssnprintf (dirname, sizeof (dirname), "/proc/%i/task", pid);
+  ssnprintf (dirname, sizeof (dirname), "/proc/%i/task", pid);
 
-if ((dh = opendir (dirname)) == NULL)
-{
-	DEBUG ("Failed to open directory `%s'", dirname);
-	return (NULL);
-}
+  if ((dh = opendir (dirname)) == NULL)
+  {
+    DEBUG ("Failed to open directory `%s'", dirname);
+    return (NULL);
+  }
 
-while ((ent = readdir (dh)) != NULL)
-{
-	char *tpid;
+  while ((ent = readdir (dh)) != NULL)
+  {
+    char *tpid;
 
-	if (!isdigit ((int) ent->d_name[0]))
-	continue;
+    if (!isdigit ((int) ent->d_name[0]))
+      continue;
 
-	tpid = ent->d_name;
+    tpid = ent->d_name;
 
-	ssnprintf (filename, sizeof (filename), "/proc/%i/task/%s/status", pid, tpid);
-	if ((fh = fopen (filename, "r")) == NULL)
-	{
-		DEBUG ("Failed to open file `%s'", filename);
-		continue;
-	}
+    ssnprintf (filename, sizeof (filename), "/proc/%i/task/%s/status", pid, tpid);
+    if ((fh = fopen (filename, "r")) == NULL)
+    {
+      DEBUG ("Failed to open file `%s'", filename);
+      continue;
+    }
 
-	while (fgets (buffer, sizeof(buffer), fh) != NULL)
-	{
-		derive_t tmp;
-		char *endptr;
+    while (fgets (buffer, sizeof(buffer), fh) != NULL)
+    {
+      derive_t tmp;
+      char *endptr;
 
-		if (strncmp (buffer, "voluntary_ctxt_switches", 23) != 0
-				&& strncmp (buffer, "nonvoluntary_ctxt_switches", 26) != 0)
-		continue;
+      if (strncmp (buffer, "voluntary_ctxt_switches", 23) != 0
+          && strncmp (buffer, "nonvoluntary_ctxt_switches", 26) != 0)
+        continue;
 
-		numfields = strsplit (buffer, fields,
-				STATIC_ARRAY_SIZE (fields));
+      numfields = strsplit (buffer, fields,
+          STATIC_ARRAY_SIZE (fields));
 
-		if (numfields < 2)
-		continue;
+      if (numfields < 2)
+        continue;
 
-		errno = 0;
-		endptr = NULL;
-		tmp = (derive_t) strtoll (fields[1], &endptr, /* base = */10);
-		if ((errno == 0) && (endptr != fields[1]))
-		{
-			if (strncmp (buffer, "voluntary_ctxt_switches", 23) == 0)
-			{
-				cswitch_vol += tmp;
-			}
-			else if (strncmp (buffer, "nonvoluntary_ctxt_switches", 26) == 0)
-			{
-				cswitch_invol += tmp;
-			}
-		}
-	} /* while (fgets) */
+      errno = 0;
+      endptr = NULL;
+      tmp = (derive_t) strtoll (fields[1], &endptr, /* base = */10);
+      if ((errno == 0) && (endptr != fields[1]))
+      {
+        if (strncmp (buffer, "voluntary_ctxt_switches", 23) == 0)
+        {
+          cswitch_vol += tmp;
+        }
+        else if (strncmp (buffer, "nonvoluntary_ctxt_switches", 26) == 0)
+        {
+          cswitch_invol += tmp;
+        }
+      }
+    } /* while (fgets) */
 
-	if (fclose (fh))
-	{
-		char errbuf[1024];
-		WARNING ("processes: fclose: %s",
-				sstrerror (errno, errbuf, sizeof (errbuf)));
-	}
-}
-closedir (dh);
+    if (fclose (fh))
+    {
+      char errbuf[1024];
+      WARNING ("processes: fclose: %s",
+          sstrerror (errno, errbuf, sizeof (errbuf)));
+    }
+  }
+  closedir (dh);
 
-ps->cswitch_vol = cswitch_vol;
-ps->cswitch_invol = cswitch_invol;
+  ps->cswitch_vol = cswitch_vol;
+  ps->cswitch_invol = cswitch_invol;
 
-return (ps);
+  return (ps);
 } /* int *ps_read_tasks_status */
 
 /* Read data from /proc/pid/status */
 static procstat_t *ps_read_status (int pid, procstat_t *ps)
 {
-FILE *fh;
-char buffer[1024];
-char filename[64];
-unsigned long lib = 0;
-unsigned long exe = 0;
-unsigned long data = 0;
-unsigned long threads = 0;
-char *fields[8];
-int numfields;
+  FILE *fh;
+  char buffer[1024];
+  char filename[64];
+  unsigned long lib = 0;
+  unsigned long exe = 0;
+  unsigned long data = 0;
+  unsigned long threads = 0;
+  char *fields[8];
+  int numfields;
 
-ssnprintf (filename, sizeof (filename), "/proc/%i/status", pid);
-if ((fh = fopen (filename, "r")) == NULL)
-return (NULL);
+  ssnprintf (filename, sizeof (filename), "/proc/%i/status", pid);
+  if ((fh = fopen (filename, "r")) == NULL)
+    return (NULL);
 
-while (fgets (buffer, sizeof(buffer), fh) != NULL)
-{
-	unsigned long tmp;
-	char *endptr;
+  while (fgets (buffer, sizeof(buffer), fh) != NULL)
+  {
+    unsigned long tmp;
+    char *endptr;
 
-	if (strncmp (buffer, "Vm", 2) != 0
-			&& strncmp (buffer, "Threads", 7) != 0)
-	continue;
+    if (strncmp (buffer, "Vm", 2) != 0
+        && strncmp (buffer, "Threads", 7) != 0)
+      continue;
 
-	numfields = strsplit (buffer, fields,
-			STATIC_ARRAY_SIZE (fields));
+    numfields = strsplit (buffer, fields,
+        STATIC_ARRAY_SIZE (fields));
 
-	if (numfields < 2)
-	continue;
+    if (numfields < 2)
+      continue;
 
-	errno = 0;
-	endptr = NULL;
-	tmp = strtoul (fields[1], &endptr, /* base = */10);
-	if ((errno == 0) && (endptr != fields[1]))
-	{
-		if (strncmp (buffer, "VmData", 6) == 0)
-		{
-			data = tmp;
-		}
-		else if (strncmp (buffer, "VmLib", 5) == 0)
-		{
-			lib = tmp;
-		}
-		else if (strncmp(buffer, "VmExe", 5) == 0)
-		{
-			exe = tmp;
-		}
-		else if (strncmp(buffer, "Threads", 7) == 0)
-		{
-			threads = tmp;
-		}
-	}
-} /* while (fgets) */
+    errno = 0;
+    endptr = NULL;
+    tmp = strtoul (fields[1], &endptr, /* base = */10);
+    if ((errno == 0) && (endptr != fields[1]))
+    {
+      if (strncmp (buffer, "VmData", 6) == 0)
+      {
+        data = tmp;
+      }
+      else if (strncmp (buffer, "VmLib", 5) == 0)
+      {
+        lib = tmp;
+      }
+      else if (strncmp(buffer, "VmExe", 5) == 0)
+      {
+        exe = tmp;
+      }
+      else if (strncmp(buffer, "Threads", 7) == 0)
+      {
+        threads = tmp;
+      }
+    }
+  } /* while (fgets) */
 
-if (fclose (fh))
-{
-	char errbuf[1024];
-	WARNING ("processes: fclose: %s",
-			sstrerror (errno, errbuf, sizeof (errbuf)));
-}
+  if (fclose (fh))
+  {
+    char errbuf[1024];
+    WARNING ("processes: fclose: %s",
+        sstrerror (errno, errbuf, sizeof (errbuf)));
+  }
 
-ps->vmem_data = data;
-ps->vmem_code = (exe + lib);
-if (threads != 0)
-ps->num_lwp = threads;
+  ps->vmem_data = data;
+  ps->vmem_code = (exe + lib);
+  if (threads != 0)
+    ps->num_lwp = threads;
 
-return (ps);
+  return (ps);
 } /* procstat_t *ps_read_vmem */
 
 static procstat_t *ps_read_io (int pid, procstat_t *ps)
 {
-FILE *fh;
-char buffer[1024];
-char filename[64];
+  FILE *fh;
+  char buffer[1024];
+  char filename[64];
 
-char *fields[8];
-int numfields;
+  char *fields[8];
+  int numfields;
 
-ssnprintf (filename, sizeof (filename), "/proc/%i/io", pid);
-if ((fh = fopen (filename, "r")) == NULL)
-return (NULL);
+  ssnprintf (filename, sizeof (filename), "/proc/%i/io", pid);
+  if ((fh = fopen (filename, "r")) == NULL)
+    return (NULL);
 
-while (fgets (buffer, sizeof (buffer), fh) != NULL)
-{
-	derive_t *val = NULL;
-	long long tmp;
-	char *endptr;
+  while (fgets (buffer, sizeof (buffer), fh) != NULL)
+  {
+    derive_t *val = NULL;
+    long long tmp;
+    char *endptr;
 
-	if (strncasecmp (buffer, "rchar:", 6) == 0)
-	val = &(ps->io_rchar);
-	else if (strncasecmp (buffer, "wchar:", 6) == 0)
-	val = &(ps->io_wchar);
-	else if (strncasecmp (buffer, "syscr:", 6) == 0)
-	val = &(ps->io_syscr);
-	else if (strncasecmp (buffer, "syscw:", 6) == 0)
-	val = &(ps->io_syscw);
-	else
-	continue;
+    if (strncasecmp (buffer, "rchar:", 6) == 0)
+      val = &(ps->io_rchar);
+    else if (strncasecmp (buffer, "wchar:", 6) == 0)
+      val = &(ps->io_wchar);
+    else if (strncasecmp (buffer, "syscr:", 6) == 0)
+      val = &(ps->io_syscr);
+    else if (strncasecmp (buffer, "syscw:", 6) == 0)
+      val = &(ps->io_syscw);
+    else
+      continue;
 
-	numfields = strsplit (buffer, fields,
-			STATIC_ARRAY_SIZE (fields));
+    numfields = strsplit (buffer, fields,
+        STATIC_ARRAY_SIZE (fields));
 
-	if (numfields < 2)
-	continue;
+    if (numfields < 2)
+      continue;
 
-	errno = 0;
-	endptr = NULL;
-	tmp = strtoll (fields[1], &endptr, /* base = */10);
-	if ((errno != 0) || (endptr == fields[1]))
-	*val = -1;
-	else
-	*val = (derive_t) tmp;
-} /* while (fgets) */
+    errno = 0;
+    endptr = NULL;
+    tmp = strtoll (fields[1], &endptr, /* base = */10);
+    if ((errno != 0) || (endptr == fields[1]))
+      *val = -1;
+    else
+      *val = (derive_t) tmp;
+  } /* while (fgets) */
 
-if (fclose (fh))
-{
-	char errbuf[1024];
-	WARNING ("processes: fclose: %s",
-			sstrerror (errno, errbuf, sizeof (errbuf)));
-}
+  if (fclose (fh))
+  {
+    char errbuf[1024];
+    WARNING ("processes: fclose: %s",
+        sstrerror (errno, errbuf, sizeof (errbuf)));
+  }
 
-return (ps);
+  return (ps);
 } /* procstat_t *ps_read_io */
 
 static sysstat_t *ps_read_sys_stat(void)
 {
-char buffer[1024];
-char name[32];
-unsigned long long sys_cpu_user_counter;
-unsigned long long sys_cpu_user_nice_counter;
-unsigned long long sys_cpu_system_counter;
-unsigned long long sys_cpu_idle_counter;
-unsigned long long sys_cpu_iowait_counter;
-unsigned long long sys_cpu_irq_counter;
-unsigned long long sys_cpu_softirq_counter;
-unsigned long long sys_cpu_steal_counter;
-unsigned long long sys_cpu_guest_counter;
-unsigned long long sys_tot_phys_mem;
-unsigned long sys_boot_time_secs;
-struct sysinfo si;
-sysstat_t *ss;
+  char buffer[1024];
+  char name[32];
+  unsigned long long sys_cpu_user_counter;
+  unsigned long long sys_cpu_user_nice_counter;
+  unsigned long long sys_cpu_system_counter;
+  unsigned long long sys_cpu_idle_counter;
+  unsigned long long sys_cpu_iowait_counter;
+  unsigned long long sys_cpu_irq_counter;
+  unsigned long long sys_cpu_softirq_counter;
+  unsigned long long sys_cpu_steal_counter;
+  unsigned long long sys_cpu_guest_counter;
+  unsigned long long sys_tot_phys_mem;
+  struct sysinfo si;
+  sysstat_t *ss;
 
-read_file_contents("/proc/stat", buffer, sizeof(buffer));
-sscanf(buffer, "%s %llu %llu %llu %llu %llu %llu %llu %llu %llu", name,
-		&sys_cpu_user_counter, &sys_cpu_user_nice_counter,
-		&sys_cpu_system_counter, &sys_cpu_idle_counter, &sys_cpu_iowait_counter, &sys_cpu_irq_counter, &sys_cpu_softirq_counter, &sys_cpu_steal_counter, &sys_cpu_guest_counter);
-if (strcmp(name, "cpu") != 0) {
-	ERROR ("processes plugin: unexpected string in /proc/stat");
-	return NULL;
-}
+  read_file_contents("/proc/stat", buffer, sizeof(buffer));
+  sscanf(buffer, "%s %llu %llu %llu %llu %llu %llu %llu %llu %llu", name,
+      &sys_cpu_user_counter, &sys_cpu_user_nice_counter,
+      &sys_cpu_system_counter, &sys_cpu_idle_counter, &sys_cpu_iowait_counter, &sys_cpu_irq_counter, &sys_cpu_softirq_counter, &sys_cpu_steal_counter, &sys_cpu_guest_counter);
+  if (strcmp(name, "cpu") != 0) {
+    ERROR ("processes plugin: unexpected string in /proc/stat");
+    return NULL;
+  }
 
-if (sysinfo(&si) < 0) {
-	ERROR ("processes plugin: cannot obtain system info via sysinfo()");
-	return NULL;
-}
+  if (sysinfo(&si) < 0) {
+    ERROR ("processes plugin: cannot obtain system info via sysinfo()");
+    return NULL;
+  }
 
-sys_tot_phys_mem = si.totalram * si.mem_unit;
+  sys_tot_phys_mem = si.totalram * si.mem_unit;
 
-ss = (sysstat_t *)malloc(sizeof(sysstat_t));
-if (ss == NULL) {
-	ERROR ("processes plugin: error allocating memory");
-	return NULL;
-}
-ss->sys_cpu_user_counter = sys_cpu_user_counter;
-ss->sys_cpu_system_counter = sys_cpu_system_counter;
-ss->sys_cpu_tot_time_counter = sys_cpu_user_counter +
-sys_cpu_user_nice_counter + sys_cpu_system_counter +
-sys_cpu_idle_counter + sys_cpu_iowait_counter + sys_cpu_irq_counter + sys_cpu_softirq_counter + sys_cpu_steal_counter + sys_cpu_guest_counter;
-ss->sys_cpu_tot_time_counter = ss->sys_cpu_tot_time_counter / clockTicks;
-ss->sys_boot_time_secs = si.uptime;
-ss->sys_tot_phys_mem = sys_tot_phys_mem;
-ss->sys_boot_time_secs = time(NULL) - sys_boot_time_secs;
-INFO ("%s sys u:%llu n:%llu s:%llu i:%llu physmem: %llu, boottime: %lu\n",
-		name, sys_cpu_user_counter, sys_cpu_user_nice_counter,
-		sys_cpu_system_counter, sys_cpu_idle_counter, sys_tot_phys_mem,
-		sys_boot_time_secs);
-return ss;
+  ss = (sysstat_t *)malloc(sizeof(sysstat_t));
+  if (ss == NULL) {
+    ERROR ("processes plugin: error allocating memory");
+    return NULL;
+  }
+  ss->sys_cpu_user_counter = sys_cpu_user_counter;
+  ss->sys_cpu_system_counter = sys_cpu_system_counter;
+  ss->sys_cpu_tot_time_counter = sys_cpu_user_counter +
+      sys_cpu_user_nice_counter + sys_cpu_system_counter +
+      sys_cpu_idle_counter + sys_cpu_iowait_counter + sys_cpu_irq_counter + sys_cpu_softirq_counter + sys_cpu_steal_counter + sys_cpu_guest_counter;
+  ss->sys_cpu_tot_time_counter = ss->sys_cpu_tot_time_counter / clockTicks;
+  ss->sys_boot_time_secs = si.uptime;
+  ss->sys_tot_phys_mem = sys_tot_phys_mem;
+  ss->sys_boot_time_secs = time(NULL) - ss->sys_boot_time_secs;
+  INFO ("%s sys u:%llu n:%llu s:%llu i:%llu physmem: %llu, boottime: %lu\n",
+      name, sys_cpu_user_counter, sys_cpu_user_nice_counter,
+      sys_cpu_system_counter, sys_cpu_idle_counter, sys_tot_phys_mem,
+      sys_boot_time_secs);
+  return ss;
 }
 
 int ps_read_process (int pid, procstat_t *ps, char *state)
@@ -857,7 +856,7 @@ int ps_read_process (int pid, procstat_t *ps, char *state)
 
   status = read_file_contents (filename, buffer, sizeof(buffer) - 1);
   if (status <= 0)
-  return (-1);
+    return (-1);
   buffer_len = (size_t) status;
   buffer[buffer_len] = 0;
 
@@ -869,12 +868,12 @@ int ps_read_process (int pid, procstat_t *ps, char *state)
   name_start_pos = 0;
   while ((buffer[name_start_pos] != '(')
       && (name_start_pos < buffer_len))
-  name_start_pos++;
+    name_start_pos++;
 
   name_end_pos = buffer_len;
   while ((buffer[name_end_pos] != ')')
       && (name_end_pos > 0))
-  name_end_pos--;
+    name_end_pos--;
 
   /* Either '(' or ')' is not found or they are in the wrong order.
    * Anyway, something weird that shouldn't happen ever. */
@@ -887,12 +886,12 @@ int ps_read_process (int pid, procstat_t *ps, char *state)
 
   name_len = (name_end_pos - name_start_pos) - 1;
   if (name_len >= sizeof (ps->name))
-  name_len = sizeof (ps->name) - 1;
+    name_len = sizeof (ps->name) - 1;
 
   sstrncpy (ps->name, &buffer[name_start_pos + 1], name_len + 1);
 
   if ((buffer_len - name_end_pos) < 2)
-  return (-1);
+    return (-1);
   buffer_ptr = &buffer[name_end_pos + 2];
 
   fields_len = strsplit (buffer_ptr, fields, STATIC_ARRAY_SIZE (fields));
@@ -922,7 +921,7 @@ int ps_read_process (int pid, procstat_t *ps, char *state)
       DEBUG("ps_read_process: did not get vmem data for pid %i",pid);
     }
     if (ps->num_lwp <= 0)
-    ps->num_lwp = 1;
+      ps->num_lwp = 1;
     ps->num_proc = 1;
   }
 
@@ -952,8 +951,8 @@ int ps_read_process (int pid, procstat_t *ps, char *state)
     unsigned long long stack_ptr = atoll (fields[26]);
 
     stack_size = (stack_start > stack_ptr)
-    ? stack_start - stack_ptr
-    : stack_ptr - stack_start;
+        ? stack_start - stack_ptr
+            : stack_ptr - stack_start;
   }
 
   /* Convert clockticks to seconds */
@@ -1042,15 +1041,14 @@ static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *p
     INFO("Previous system stats for cpu percent: %ld, %ld",prev_ss->sys_cpu_system_counter, prev_ss->sys_cpu_tot_time_counter);
     INFO("Current system stats for cpu percent: %ld, %ld",ss->sys_cpu_system_counter, ss->sys_cpu_tot_time_counter);
     unsigned long ps_cpu_user_delta, ps_cpu_system_delta;
-	  unsigned long ss_cpu_tot_time_delta;
-	  //unsigned long ss_cpu_boot_time_delta;
-	  double cpu_percent;
+    unsigned long ss_cpu_tot_time_delta;
+    //unsigned long ss_cpu_boot_time_delta;
+    double cpu_percent;
     ps_find_cpu_delta(ps, &ps_cpu_user_delta, &ps_cpu_system_delta);
-	  ss_cpu_tot_time_delta = ss->sys_cpu_tot_time_counter - prev_ss->sys_cpu_tot_time_counter;
-	  //ss_cpu_boot_time_delta = ss->sys_boot_time_secs - prev_ss->sys_boot_time_secs;
-	  cpu_percent = (ps_cpu_system_delta + ps_cpu_user_delta) * 100.0 / ss_cpu_tot_time_delta;
-	  INFO ("%s proc with %lu pid delta: u: %lu, s: %lu, tot: %lu, percent: %f\n", ps->name, ps->pid,ps_cpu_user_delta, ps_cpu_system_delta, ss_cpu_tot_time_delta,cpu_percent);
-	  ps->cpu_percent = cpu_percent;
+    ss_cpu_tot_time_delta = ss->sys_cpu_tot_time_counter - prev_ss->sys_cpu_tot_time_counter;
+    cpu_percent = (ps_cpu_system_delta + ps_cpu_user_delta) * 100.0 / ss_cpu_tot_time_delta;
+    INFO ("%s proc with %lu pid delta: u: %lu, s: %lu, tot: %lu, percent: %f\n", ps->name, ps->pid,ps_cpu_user_delta, ps_cpu_system_delta, ss_cpu_tot_time_delta,cpu_percent);
+    ps->cpu_percent = cpu_percent;
   }
 }
 
@@ -1081,7 +1079,7 @@ static int ps_read(void) {
    */
 
   for (dirlist=directory_list_head_g;dirlist != NULL;dirlist = dirlist->next) {
-     getPids(dirlist->directoryName);
+    getPids(dirlist->directoryName);
   }
 
   ss = ps_read_sys_stat();
@@ -1119,7 +1117,7 @@ static int ps_read(void) {
 } /* int ps_read */
 
 void module_register(void) {
-plugin_register_complex_config("mapr_process", ps_config);
-plugin_register_init("mapr_process", ps_init);
-plugin_register_read("mapr_process", ps_read);
+  plugin_register_complex_config("mapr_process", ps_config);
+  plugin_register_init("mapr_process", ps_init);
+  plugin_register_read("mapr_process", ps_read);
 } /* void module_register */
