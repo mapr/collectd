@@ -296,10 +296,9 @@ static void ps_list_register(int pid, char *name) {
       sfree(new);
       return;
     }
+    if (ptr->next == NULL)
+      break;
   }
-
-  if (ptr->next == NULL)
-    break;
 
   if (ptr == NULL) {
     list_head_g = new;
@@ -461,8 +460,7 @@ static int ps_init(void) {
   numCores = (uint)sysconf(_SC_NPROCESSORS_ONLN);
   INFO ("pagesize_g = %li; clockTicks = %li; numCores = %d;",
       pagesize_g, clockTicks, numCores);
-  flags |= L_DEFAULT;
-  return (0);
+ return (0);
 } /* int ps_init */
 
 /* submit info about specific process (e.g.: memory taken, cpu usage, etc..) */
@@ -955,8 +953,8 @@ int ps_read_process (int pid, procstat_t *ps, char *state)
     unsigned long long stack_ptr = atoll (fields[26]);
 
     stack_size = (stack_start > stack_ptr)
-                            ? stack_start - stack_ptr
-                                : stack_ptr - stack_start;
+                                ? stack_start - stack_ptr
+                                    : stack_ptr - stack_start;
   }
 
   /* Convert clockticks to seconds */
