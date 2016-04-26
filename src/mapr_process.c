@@ -37,17 +37,17 @@
 # if HAVE_LINUX_CONFIG_H
 #   include <linux/config.h>
 # endif
-# define PSCMD 	"ps -eo uid,pid,ppid,pgid,args"
-# define PSFORMAT 	"%ld %ld %ld %ld %[^\n]"
-# define PSVARS	&P[i].uid, &P[i].pid, &P[i].ppid, &P[i].pgid, P[i].cmd
-# define PSVARSN	5
+# define PSCMD  "ps -eo uid,pid,ppid,pgid,args"
+# define PSFORMAT   "%ld %ld %ld %ld %[^\n]"
+# define PSVARS &P[i].uid, &P[i].pid, &P[i].ppid, &P[i].pgid, P[i].cmd
+# define PSVARSN  5
 # define CMDLINE_BUFFER_SIZE 4096
 # include <stdio.h>
 # include <stdlib.h>
 # include <string.h>
-# include <unistd.h>		/* For getopt() */
-# include <pwd.h>		/* For getpwnam() */
-# include <sys/ioctl.h>		/* For TIOCGSIZE/TIOCGWINSZ */
+# include <unistd.h>    /* For getopt() */
+# include <pwd.h>   /* For getpwnam() */
+# include <sys/ioctl.h>   /* For TIOCGSIZE/TIOCGWINSZ */
 #include <sys/times.h>
 #include <time.h>
 
