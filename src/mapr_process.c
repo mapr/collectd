@@ -1074,9 +1074,9 @@ static void ps_find_cpu_delta(procstat_t *ps, unsigned long *out_userd, unsigned
   }
 
   if (ps_ptr) {
-    INFO ("Current cpu user counter %"PRIi64" , previous counter %"PRIi64" ",ps->cpu_user_counter, ps_ptr->cpu_user_counter);
+    INFO ("Current cpu user counter %"PRIi64" , previous counter %"PRIi64" for pid %lu for process %s",ps->pid, ps->name,ps->cpu_user_counter, ps_ptr->cpu_user_counter);
     *out_userd = ps->cpu_user_counter - ps_ptr->cpu_user_counter;
-    INFO ("Current cpu system counter %"PRIi64" , previous counter %"PRIi64" ",ps->cpu_system_counter, ps_ptr->cpu_system_counter);
+    INFO ("Current cpu system counter %"PRIi64" , previous counter %"PRIi64" for pid %lu for process %s",ps->pid, ps->name,ps->cpu_system_counter, ps_ptr->cpu_system_counter);
     *out_sysd = ps->cpu_system_counter - ps_ptr->cpu_system_counter;
   }
   else {
@@ -1099,8 +1099,8 @@ static void ps_calc_runtime(sysstat_t *ss, procstat_t *ps)
 static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *ps)
 {
   if (ss && prev_ss) {
-    INFO("Previous system stats for cpu percent: %ld, %ld",prev_ss->sys_cpu_system_counter, prev_ss->sys_cpu_tot_time_counter);
-    INFO("Current system stats for cpu percent: %ld, %ld",ss->sys_cpu_system_counter, ss->sys_cpu_tot_time_counter);
+    INFO("Previous system stats for cpu percent for pid %lu for process %s : %ld, %ld",ps->pid, ps->name,prev_ss->sys_cpu_system_counter, prev_ss->sys_cpu_tot_time_counter);
+    INFO("Current system stats for cpu percent for pid %lu for process %s : %ld, %ld",ps->pid, ps->name,ss->sys_cpu_system_counter, ss->sys_cpu_tot_time_counter);
     unsigned long ps_cpu_user_delta, ps_cpu_system_delta;
     unsigned long ss_cpu_tot_time_delta;
     //unsigned long ss_cpu_boot_time_delta;
@@ -1149,7 +1149,6 @@ static int ps_read(void) {
       DEBUG ("ps_read_process failed: %i", status);
       continue;
     }
-    INFO ("Collecting stats for process %s with pid %lu: ",ps_ptr->name, ps_ptr->pid);
     ps_calc_runtime(ss, &ps);
     ps_calc_mem_percent(ss, &ps);
     ps_calc_cpu_percent(ss, prev_ss, &ps);
