@@ -649,6 +649,7 @@ static procstat_t *ps_read_tasks_status (int pid, procstat_t *ps)
 
     // Read /proc/pid/task/taskid/stat file
     ssnprintf (filename, sizeof (filename), "/proc/%i/task/%s/stat", pid, tpid);
+    INFO ("mapr_process plugin: Reading task %s file for process %s", tpid, ps->name);
     status = read_file_contents (filename, statBuffer, sizeof(statBuffer) - 1);
     if (status <= 0)
       return (NULL);
@@ -699,8 +700,12 @@ static procstat_t *ps_read_tasks_status (int pid, procstat_t *ps)
   // Convert clock ticks to seconds
   cpu_user_counter = cpu_user_counter/clockTicks;
   cpu_system_counter = cpu_system_counter/clockTicks;
+  INFO ("mapr_process plugin: Before cpu user counter %"PRIi64"",ps->cpu_user_counter);
   ps->cpu_user_counter = ps->cpu_user_counter + cpu_user_counter;
+  INFO ("mapr_process plugin: After cpu user counter %"PRIi64"",ps->cpu_user_counter);
+  INFO ("mapr_process plugin: Before cpu system counter %"PRIi64"",ps->cpu_system_counter);
   ps->cpu_system_counter = ps->cpu_system_counter + cpu_system_counter;
+  INFO ("mapr_process plugin: After cpu system counter %"PRIi64"",ps->cpu_system_counter);
 
   return (ps);
 } /* int *ps_read_tasks_status */
