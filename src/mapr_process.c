@@ -571,8 +571,8 @@ static procstat_t *ps_read_tasks_status (int pid, procstat_t *ps)
   struct dirent *ent;
   derive_t cswitch_vol = 0;
   derive_t cswitch_invol = 0;
-  derive_t user_counter = 0;
-  derive_t system_counter = 0;
+  derive_t cpu_user_counter = 0;
+  derive_t cpu_system_counter = 0;
   char buffer[1024];
   char *fields[8];
   int numfields;
@@ -651,7 +651,7 @@ static procstat_t *ps_read_tasks_status (int pid, procstat_t *ps)
     ssnprintf (filename, sizeof (filename), "/proc/%i/task/%s/stat", pid, tpid);
     status = read_file_contents (filename, statBuffer, sizeof(statBuffer) - 1);
     if (status <= 0)
-      return (-1);
+      return (NULL);
     buffer_len = (size_t) status;
     buffer[buffer_len] = 0;
     name_start_pos = 0;
@@ -670,11 +670,11 @@ static procstat_t *ps_read_tasks_status (int pid, procstat_t *ps)
     {
       ERROR ("mapr_process plugin: name_start_pos = %zu >= name_end_pos = %zu",
           name_start_pos, name_end_pos);
-      return (-1);
+      return (NULL);
     }
 
     if ((buffer_len - name_end_pos) < 2)
-      return (-1);
+      return (NULL);
     buffer_ptr = &buffer[name_end_pos + 2];
 
     // Split the fields
@@ -684,13 +684,12 @@ static procstat_t *ps_read_tasks_status (int pid, procstat_t *ps)
       DEBUG ("mapr_process plugin: ps_read_task (pid = %i): for task %s"
           " `%s' has only %i fields..",
           (int) pid, tpid,filename, fields_len);
-      return (-1);
+      return (NULL);
     }
 
     // Aggregate it for all tasks
-    user_counter = user_counter + atoll (statFields[11] + statFields[13]);
-    system_counter = system_counter + atoll (statFields[12] + statFields[14]);
-
+    cpu_user_counter = cpu_user_counter + atoll (fields[11]) + atoll(fields[13]);
+    cpu_system_counter = cpu_system_counter + atoll (fields[12]) + atoll (fields[14]);
   }
   closedir (dh);
 
@@ -698,10 +697,10 @@ static procstat_t *ps_read_tasks_status (int pid, procstat_t *ps)
   ps->cswitch_invol = cswitch_invol;
 
   // Convert clock ticks to seconds
-  user_counter = user_counter/clockTicks;
-  system_counter = system_counter/clockTicks;
-  ps->cpu_user_counter = ps->cpu_user_counter + user_counter;
-  ps->cpu_system_counter = ps->cpu_system_counter + system_counter;
+  cpu_user_counter = cpu_user_counter/clockTicks;
+  cpu_system_counter = cpu_system_counter/clockTicks;
+  ps->cpu_user_counter = ps->cpu_user_counter + cpu_user_counter;
+  ps->cpu_system_counter = ps->cpu_system_counter + cpu_system_counter;
 
   return (ps);
 } /* int *ps_read_tasks_status */
