@@ -26,6 +26,9 @@
 #include "stdio.h"
 #include "sys/types.h"
 #include "dirent.h"
+#include "<proc/procps.h>"
+#include "<proc/readproc.h>"
+
 
 # include <glob.h>
 # include <sys/stat.h>
@@ -65,46 +68,48 @@ struct Proc {
   unsigned long thcount;
 }*P;
 
-static void uid2user(uid_t uid, char *name, int len) {
-#define NUMUN 128
-  static struct un_ {
-    uid_t uid;
-    char name[32];
-  }un[NUMUN];
-  static short n = 0;
-  short i;
-  char uid_name[32];
-  char *found;
-#ifdef DEBUG
-  if (name == NULL) {
-    for (i = 0; i < n; i++)
-      fprintf(stderr, "uid = %3d, name = %s\n", un[i].uid, un[i].name);
-    return;
-  }
-#endif
-  for (i = n - 1; i >= 0 && un[i].uid != uid; i--);
-  if (i >= 0) { /* found locally */
-    found = un[i].name;
-  } else {
-    struct passwd *pw = getpwuid(uid);
-    if (pw) {
-      found = pw->pw_name;
-    } else {
-      /* fix by Stan Sieler & Philippe Torche */
-      snprintf(uid_name, sizeof(uid_name), "#%d", uid);
-      found = uid_name;
-    }
-    if (n < NUMUN) {
-      un[n].uid = uid;
-      strncpy(un[n].name, found, 9);
-      un[n].name[8] = '\0';
-      n++;
-    }
-  }
-  strncpy(name, found, len);
-  name[len-1] = '\0';
-}
+//static void uid2user(uid_t uid, char *name, int len) {
+//#define NUMUN 128
+//  static struct un_ {
+//    uid_t uid;
+//    char name[32];
+//  }un[NUMUN];
+//  static short n = 0;
+//  short i;
+//  char uid_name[32];
+//  char *found;
+//#ifdef DEBUG
+//  if (name == NULL) {
+//    for (i = 0; i < n; i++)
+//      fprintf(stderr, "uid = %3d, name = %s\n", un[i].uid, un[i].name);
+//    return;
+//  }
+//#endif
+//  for (i = n - 1; i >= 0 && un[i].uid != uid; i--);
+//  if (i >= 0) { /* found locally */
+//    found = un[i].name;
+//  } else {
+//    struct passwd *pw = getpwuid(uid);
+//    if (pw) {
+//      found = pw->pw_name;
+//    } else {
+//      /* fix by Stan Sieler & Philippe Torche */
+//      snprintf(uid_name, sizeof(uid_name), "#%d", uid);
+//      found = uid_name;
+//    }
+//    if (n < NUMUN) {
+//      un[n].uid = uid;
+//      strncpy(un[n].name, found, 9);
+//      un[n].name[8] = '\0';
+//      n++;
+//    }
+//  }
+//  strncpy(name, found, len);
+//  name[len-1] = '\0';
+//}
 #define PROCSTAT_NAME_LEN 256
+#define L_DEFAULT  PROC_FILLSTAT | PROC_PID | PROC_FILLARG
+
 typedef struct procstat {
   char name[PROCSTAT_NAME_LEN];
   char processName[PROCSTAT_NAME_LEN];
@@ -161,111 +166,115 @@ static procstat_t *list_head_g = NULL;
 static procstat_t *proc_list_head_g = NULL;
 static procstat_t *prev_proc_list_head_g = NULL;
 static directorylist_t *directory_list_head_g = NULL;
+#define MONPIDMAX  20
+static pid_t Monpids [MONPIDMAX] = { 0 };
+static int   Monpidsidx = 0;
 
 /* configuration globals */
 static float filter_mincpupct_g = 0.0;
 static float filter_minmempct_g = 0.0;
-static int numOfProcesses = 0;
+//static int numOfProcesses = 0;
 static _Bool report_ctx_switch = 1;
 
 static long pagesize_g;
 static long clockTicks;
 static int numCores;
+static int flags;       // PROC_FILLxxx flags (0 = need new)
 
 /* Read /proc/ */
-static int getProcesses(void) {
-  glob_t globbuf;
-  unsigned int i, j;
+//static int getProcesses(void) {
+//  glob_t globbuf;
+//  unsigned int i, j;
+//
+//  glob("/proc/[0-9]*", GLOB_NOSORT, NULL, &globbuf);
+//
+//  P = calloc(globbuf.gl_pathc, sizeof(struct Proc));
+//  if (P == NULL) {
+//    fprintf(stderr, "Problems with malloc.\n");
+//    exit(1);
+//  }
+//
+//  for (i = j = 0; i < globbuf.gl_pathc; i++) {
+//    char *pdir, name[32];
+//    int c;
+//    FILE *processFP;
+//    int k = 0;
+//
+//    pdir = globbuf.gl_pathv[globbuf.gl_pathc - i - 1];
+//
+//    /* if processes change their UID this change is only reflected in the owner of pdir.
+//     * fixed since version 2.36 */
+//    {
+//      struct stat st;
+//      if (stat(pdir, &st) != 0) { /* get uid */
+//        continue; /* process vanished since glob() */
+//      }
+//      P[j].uid = st.st_uid;
+//      uid2user(P[j].uid, P[j].name, sizeof(P[j].name));
+//    }
+//
+//    snprintf(name, sizeof(name), "%s%s",
+//        globbuf.gl_pathv[globbuf.gl_pathc - i - 1], "/stat");
+//    processFP = fopen(name, "r");
+//    if (processFP == NULL)
+//      continue; /* process vanished since glob() */
+//    int status = fscanf(processFP, "%ld %s %*c %ld %ld", &P[j].pid, P[j].cmd, &P[j].ppid,
+//        &P[j].pgid);
+//    if (status == 0) {
+//      ERROR("mapr_process plugin: Failed to read from /proc/pid/stat.");
+//      continue;
+//    }
+//    fclose(processFP);
+//    P[j].thcount = 1;
+//
+//    snprintf(name, sizeof(name), "%s%s",
+//        globbuf.gl_pathv[globbuf.gl_pathc - i - 1], "/cmdline");
+//    processFP = fopen(name, "r");
+//    if (processFP == NULL)
+//      continue; /* process vanished since glob() */
+//    while (k < MAXLINE - 1 && EOF != (c = fgetc(processFP))) {
+//      P[j].cmd[k++] = c == '\0' ? ' ' : c;
+//    }
+//    if (k > 0)
+//      P[j].cmd[k] = '\0';
+//    fclose(processFP);
+//    P[j].parent = P[j].child = P[j].sister = -1;
+//    j++;
+//  }
+//  globfree(&globbuf);
+//  return j;
+//} /* int getProcesses() */
+//
+//int get_pid_index(long pid) {
+//  int me;
+//  for (me = numOfProcesses - 1; me >= 0 && P[me].pid != pid; me--)
+//    ; /* Search process */
+//  return me;
+//}
+//
+//#define EXIST(idx) ((idx) != -1)
 
-  glob("/proc/[0-9]*", GLOB_NOSORT, NULL, &globbuf);
-
-  P = calloc(globbuf.gl_pathc, sizeof(struct Proc));
-  if (P == NULL) {
-    fprintf(stderr, "Problems with malloc.\n");
-    exit(1);
-  }
-
-  for (i = j = 0; i < globbuf.gl_pathc; i++) {
-    char *pdir, name[32];
-    int c;
-    FILE *processFP;
-    int k = 0;
-
-    pdir = globbuf.gl_pathv[globbuf.gl_pathc - i - 1];
-
-    /* if processes change their UID this change is only reflected in the owner of pdir.
-     * fixed since version 2.36 */
-    {
-      struct stat st;
-      if (stat(pdir, &st) != 0) { /* get uid */
-        continue; /* process vanished since glob() */
-      }
-      P[j].uid = st.st_uid;
-      uid2user(P[j].uid, P[j].name, sizeof(P[j].name));
-    }
-
-    snprintf(name, sizeof(name), "%s%s",
-        globbuf.gl_pathv[globbuf.gl_pathc - i - 1], "/stat");
-    processFP = fopen(name, "r");
-    if (processFP == NULL)
-      continue; /* process vanished since glob() */
-    int status = fscanf(processFP, "%ld %s %*c %ld %ld", &P[j].pid, P[j].cmd, &P[j].ppid,
-        &P[j].pgid);
-    if (status == 0) {
-      ERROR("mapr_process plugin: Failed to read from /proc/pid/stat.");
-      continue;
-    }
-    fclose(processFP);
-    P[j].thcount = 1;
-
-    snprintf(name, sizeof(name), "%s%s",
-        globbuf.gl_pathv[globbuf.gl_pathc - i - 1], "/cmdline");
-    processFP = fopen(name, "r");
-    if (processFP == NULL)
-      continue; /* process vanished since glob() */
-    while (k < MAXLINE - 1 && EOF != (c = fgetc(processFP))) {
-      P[j].cmd[k++] = c == '\0' ? ' ' : c;
-    }
-    if (k > 0)
-      P[j].cmd[k] = '\0';
-    fclose(processFP);
-    P[j].parent = P[j].child = P[j].sister = -1;
-    j++;
-  }
-  globfree(&globbuf);
-  return j;
-} /* int getProcesses() */
-
-int get_pid_index(long pid) {
-  int me;
-  for (me = numOfProcesses - 1; me >= 0 && P[me].pid != pid; me--)
-    ; /* Search process */
-  return me;
-}
-
-#define EXIST(idx) ((idx) != -1)
-
-static void MakeTree(void) {
-  /* Build the process hierarchy. Every process marks itself as first child
-   * of it's parent or as sister of first child of it's parent */
-  int me;
-  for (me = 0; me < numOfProcesses; me++) {
-    int parent;
-    parent = get_pid_index(P[me].ppid);
-    if (parent != me && parent != -1) { /* valid process, not me */
-      P[me].parent = parent;
-      if (P[parent].child == -1) /* first child */
-        P[parent].child = me;
-      else {
-        int sister;
-        for (sister = P[parent].child; EXIST(P[sister].sister); sister =
-            P[sister].sister)
-          ;
-        P[sister].sister = me;
-      }
-    }
-  }
-}
+//static void MakeTree(void) {
+//  /* Build the process hierarchy. Every process marks itself as first child
+//   * of it's parent or as sister of first child of it's parent */
+//  int me;
+//  for (me = 0; me < numOfProcesses; me++) {
+//    int parent;
+//    parent = get_pid_index(P[me].ppid);
+//    if (parent != me && parent != -1) { /* valid process, not me */
+//      P[me].parent = parent;
+//      if (P[parent].child == -1) /* first child */
+//        P[parent].child = me;
+//      else {
+//        int sister;
+//        for (sister = P[parent].child; EXIST(P[sister].sister); sister =
+//            P[sister].sister)
+//          ;
+//        P[sister].sister = me;
+//      }
+//    }
+//  }
+//}
 
 /* put name of process from config to list_head_g tree
  * list_head_g is a list of 'procstat_t' structs with
@@ -291,11 +300,17 @@ static void ps_list_register(int pid, char *name) {
       WARNING ("Found an entry for pid %d for service %s in the list",pid, serviceName);
       sfree(new);
       return;
+    } else {
+      if (Monpidsidx >= MONPIDMAX)
+        ERROR("mapr_process plugin: pid limit (%d) exceeded", MONPIDMAX);
+      if (sscanf(pid, "%d", &Monpids[Monpidsidx]) != 1 || Monpids[Monpidsidx] < 0)
+        ERROR("mapr_process plugin: bad pid '%d'", pid);
+      Monpidsidx++;
     }
-
-    if (ptr->next == NULL)
-      break;
   }
+
+  if (ptr->next == NULL)
+    break;
 
   if (ptr == NULL) {
     list_head_g = new;
@@ -457,6 +472,7 @@ static int ps_init(void) {
   numCores = (uint)sysconf(_SC_NPROCESSORS_ONLN);
   INFO ("pagesize_g = %li; clockTicks = %li; numCores = %d;",
       pagesize_g, clockTicks, numCores);
+  flags |= L_DEFAULT;
   return (0);
 } /* int ps_init */
 
@@ -950,8 +966,8 @@ int ps_read_process (int pid, procstat_t *ps, char *state)
     unsigned long long stack_ptr = atoll (fields[26]);
 
     stack_size = (stack_start > stack_ptr)
-        ? stack_start - stack_ptr
-            : stack_ptr - stack_start;
+                        ? stack_start - stack_ptr
+                            : stack_ptr - stack_start;
   }
 
   /* Convert clockticks to seconds */
@@ -1060,18 +1076,17 @@ static int ps_read(void) {
   char state;
   directorylist_t *dirlist;
   static sysstat_t *prev_ss=NULL;
+  PROCTAB* PT;
 
   /*
    * Read /proc file and get the number of processes and
    */
-  numOfProcesses = getProcesses();
+  //numOfProcesses = getProcesses();
 
   /*
    * Make the process tree
    */
-  MakeTree();
-
-  // TODO -- Get the latest PIDs and Aggregate by parent PID
+  //MakeTree();
 
   /*
    * Check if the PIDs changed
@@ -1081,9 +1096,20 @@ static int ps_read(void) {
     getPids(dirlist->directoryName);
   }
 
+  PT = openproc(flags, Monpids);
   ss = ps_read_sys_stat();
 
+//    prochlp(ptsk);                 // tally & complete this proc_t
+//  }
+
   for (ps_ptr = list_head_g; ps_ptr != NULL; ps_ptr = ps_ptr->next) {
+    proc_t *ptsk = (proc_t *)ps_ptr->pid;
+    if (likely(ptsk = readproc(PT, ptsk))) {
+      INFO ("ps_read_process succeeded for pid %d", ptsk->tid);
+    } else {
+      ERROR ("ps_read_process failed for pid %lu",ps_ptr->pid);
+      continue;
+    }
     status = ps_read_process (ps_ptr->pid, &ps, &state);
     if (status != 0) {
       DEBUG ("ps_read_process failed: %i", status);
