@@ -688,8 +688,8 @@ static procstat_t *ps_read_tasks_status (int pid, procstat_t *ps)
     }
 
     // Aggregate it for all tasks
-    cpu_user_counter = cpu_user_counter + atoll (fields[11]) + atoll(fields[13]);
-    cpu_system_counter = cpu_system_counter + atoll (fields[12]) + atoll (fields[14]);
+    cpu_user_counter = cpu_user_counter + atoll (statFields[11]) + atoll(statFields[13]);
+    cpu_system_counter = cpu_system_counter + atoll (statFields[12]) + atoll (statFields[14]);
   }
   closedir (dh);
 
