@@ -26,8 +26,8 @@
 #include "stdio.h"
 #include "sys/types.h"
 #include "dirent.h"
-#include "proc/procps.h"
-#include "proc/readproc.h"
+#include "<proc/procps.h>"
+#include "<proc/readproc.h>"
 
 
 # include <glob.h>
