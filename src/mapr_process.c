@@ -179,7 +179,7 @@ static _Bool report_ctx_switch = 1;
 static long pagesize_g;
 static long clockTicks;
 static int numCores;
-static int flags;       // PROC_FILLxxx flags (0 = need new)
+
 
 /* Read /proc/ */
 //static int getProcesses(void) {
