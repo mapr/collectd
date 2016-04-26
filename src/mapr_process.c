@@ -26,8 +26,6 @@
 #include "stdio.h"
 #include "sys/types.h"
 #include "dirent.h"
-#include "<proc/procps.h>"
-#include "<proc/readproc.h>"
 
 
 # include <glob.h>
@@ -108,7 +106,7 @@ struct Proc {
 //  name[len-1] = '\0';
 //}
 #define PROCSTAT_NAME_LEN 256
-#define L_DEFAULT  PROC_FILLSTAT | PROC_PID | PROC_FILLARG
+
 
 typedef struct procstat {
   char name[PROCSTAT_NAME_LEN];
@@ -166,14 +164,11 @@ static procstat_t *list_head_g = NULL;
 static procstat_t *proc_list_head_g = NULL;
 static procstat_t *prev_proc_list_head_g = NULL;
 static directorylist_t *directory_list_head_g = NULL;
-#define MONPIDMAX  20
-static pid_t Monpids [MONPIDMAX] = { 0 };
-static int   Monpidsidx = 0;
 
 /* configuration globals */
 static float filter_mincpupct_g = 0.0;
 static float filter_minmempct_g = 0.0;
-//static int numOfProcesses = 0;
+static int numOfProcesses = 0;
 static _Bool report_ctx_switch = 1;
 
 static long pagesize_g;
@@ -300,13 +295,8 @@ static void ps_list_register(int pid, char *name) {
       WARNING ("Found an entry for pid %d for service %s in the list",pid, serviceName);
       sfree(new);
       return;
-    } else {
-      if (Monpidsidx >= MONPIDMAX)
-        ERROR("mapr_process plugin: pid limit (%d) exceeded", MONPIDMAX);
-      if (sscanf(pid, "%d", &Monpids[Monpidsidx]) != 1 || Monpids[Monpidsidx] < 0)
-        ERROR("mapr_process plugin: bad pid '%d'", pid);
-      Monpidsidx++;
     }
+
   }
 
   if (ptr->next == NULL)
@@ -1076,7 +1066,6 @@ static int ps_read(void) {
   char state;
   directorylist_t *dirlist;
   static sysstat_t *prev_ss=NULL;
-  PROCTAB* PT;
 
   /*
    * Read /proc file and get the number of processes and
@@ -1096,20 +1085,9 @@ static int ps_read(void) {
     getPids(dirlist->directoryName);
   }
 
-  PT = openproc(flags, Monpids);
   ss = ps_read_sys_stat();
 
-//    prochlp(ptsk);                 // tally & complete this proc_t
-//  }
-
   for (ps_ptr = list_head_g; ps_ptr != NULL; ps_ptr = ps_ptr->next) {
-    proc_t *ptsk = (proc_t *)ps_ptr->pid;
-    if (likely(ptsk = readproc(PT, ptsk))) {
-      INFO ("ps_read_process succeeded for pid %d", ptsk->tid);
-    } else {
-      ERROR ("ps_read_process failed for pid %lu",ps_ptr->pid);
-      continue;
-    }
     status = ps_read_process (ps_ptr->pid, &ps, &state);
     if (status != 0) {
       DEBUG ("ps_read_process failed: %i", status);
