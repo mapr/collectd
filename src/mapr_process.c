@@ -1103,11 +1103,24 @@ static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *p
     INFO("Current system stats for cpu percent for pid %lu for process %s : %ld, %ld",ps->pid, ps->name,ss->sys_cpu_system_counter, ss->sys_cpu_tot_time_counter);
     unsigned long ps_cpu_user_delta, ps_cpu_system_delta;
     unsigned long ss_cpu_tot_time_delta;
+    static struct timeval oldtimev;
+    struct timeval timev;
+    struct timezone timez;
+    float et;
+
+    gettimeofday(&timev, &timez);
+    et = (timev.tv_sec - oldtimev.tv_sec)
+                 + (float)(timev.tv_usec - oldtimev.tv_usec) / 1000000.0;
+    oldtimev.tv_sec = timev.tv_sec;
+    oldtimev.tv_usec = timev.tv_usec;
+
     //unsigned long ss_cpu_boot_time_delta;
     double cpu_percent;
     ps_find_cpu_delta(ps, &ps_cpu_user_delta, &ps_cpu_system_delta);
     ss_cpu_tot_time_delta = ss->sys_cpu_tot_time_counter - prev_ss->sys_cpu_tot_time_counter;
-    cpu_percent = (ps_cpu_system_delta + ps_cpu_user_delta) * 100.0 / ss_cpu_tot_time_delta;
+    //cpu_percent = (ps_cpu_system_delta + ps_cpu_user_delta) * 100.0 / ss_cpu_tot_time_delta;
+    cpu_percent = (ps_cpu_system_delta + ps_cpu_user_delta) * 100.0 / et ;
+
     INFO ("%s proc with %lu pid delta: u: %lu, s: %lu, tot: %lu, percent: %f\n", ps->name, ps->pid,ps_cpu_user_delta, ps_cpu_system_delta, ss_cpu_tot_time_delta,cpu_percent);
     ps->cpu_percent = cpu_percent;
   }
