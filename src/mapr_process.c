@@ -1074,7 +1074,7 @@ static void ps_find_cpu_delta(procstat_t *ps, unsigned long *out_userd, unsigned
   }
 
   if (ps_ptr) {
-    INFO ("Current cpu user counter %"PRIi64" , previous counter %"PRIi64" for pid %lu for process %s",ps->cpu_user_counter, ps_ptr->cpu_user_counter,ps->pid, ps->name,);
+    INFO ("Current cpu user counter %"PRIi64" , previous counter %"PRIi64" for pid %lu for process %s",ps->cpu_user_counter, ps_ptr->cpu_user_counter,ps->pid, ps->name);
     *out_userd = ps->cpu_user_counter - ps_ptr->cpu_user_counter;
     INFO ("Current cpu system counter %"PRIi64" , previous counter %"PRIi64" for pid %lu for process %s",ps->cpu_system_counter, ps_ptr->cpu_system_counter,ps->pid, ps->name);
     *out_sysd = ps->cpu_system_counter - ps_ptr->cpu_system_counter;
