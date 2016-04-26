@@ -606,7 +606,7 @@ static procstat_t *ps_read_tasks_status (int pid, procstat_t *ps)
     ssnprintf (filename, sizeof (filename), "/proc/%i/task/%s/status", pid, tpid);
     if ((fh = fopen (filename, "r")) == NULL)
     {
-      DEBUG ("Failed to open file `%s'", filename);
+      ERROR ("Failed to open file `%s'", filename);
       continue;
     }
 
