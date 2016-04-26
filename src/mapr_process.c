@@ -654,14 +654,14 @@ static procstat_t *ps_read_tasks_status (int pid, procstat_t *ps)
     if (status <= 0)
       return (NULL);
     buffer_len = (size_t) status;
-    buffer[buffer_len] = 0;
+    statBuffer[buffer_len] = 0;
     name_start_pos = 0;
-    while ((buffer[name_start_pos] != '(')
+    while ((statBuffer[name_start_pos] != '(')
         && (name_start_pos < buffer_len))
       name_start_pos++;
 
     name_end_pos = buffer_len;
-    while ((buffer[name_end_pos] != ')')
+    while ((statBuffer[name_end_pos] != ')')
         && (name_end_pos > 0))
       name_end_pos--;
 
@@ -676,7 +676,7 @@ static procstat_t *ps_read_tasks_status (int pid, procstat_t *ps)
 
     if ((buffer_len - name_end_pos) < 2)
       return (NULL);
-    buffer_ptr = &buffer[name_end_pos + 2];
+    buffer_ptr = &statBuffer[name_end_pos + 2];
 
     // Split the fields
     fields_len = strsplit (buffer_ptr, statFields, STATIC_ARRAY_SIZE (statFields));
