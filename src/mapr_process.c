@@ -581,9 +581,9 @@ static procstat_t *ps_read_tasks_status (int pid, procstat_t *ps)
   char *buffer_ptr;
   size_t name_start_pos;
   size_t name_end_pos;
-  char *fields[64];
+  char *statFields[64];
   char fields_len;
-  char buffer[1024];
+  char statBuffer[1024];
 
 
   ssnprintf (dirname, sizeof (dirname), "/proc/%i/task", pid);
@@ -649,7 +649,7 @@ static procstat_t *ps_read_tasks_status (int pid, procstat_t *ps)
 
     // Read /proc/pid/task/taskid/stat file
     ssnprintf (filename, sizeof (filename), "/proc/%i/task/%s/stat", pid, tpid);
-    status = read_file_contents (filename, buffer, sizeof(buffer) - 1);
+    status = read_file_contents (filename, statBuffer, sizeof(statBuffer) - 1);
     if (status <= 0)
       return (-1);
     buffer_len = (size_t) status;
@@ -678,7 +678,7 @@ static procstat_t *ps_read_tasks_status (int pid, procstat_t *ps)
     buffer_ptr = &buffer[name_end_pos + 2];
 
     // Split the fields
-    fields_len = strsplit (buffer_ptr, fields, STATIC_ARRAY_SIZE (fields));
+    fields_len = strsplit (buffer_ptr, statFields, STATIC_ARRAY_SIZE (statFields));
     if (fields_len < 22)
     {
       DEBUG ("mapr_process plugin: ps_read_task (pid = %i): for task %s"
@@ -688,8 +688,8 @@ static procstat_t *ps_read_tasks_status (int pid, procstat_t *ps)
     }
 
     // Aggregate it for all tasks
-    user_counter =+ atoll (fields[11] + fields[13]);
-    system_counter =+ atoll (fields[12] + fields[14]);
+    user_counter = user_counter + atoll (statFields[11] + statFields[13]);
+    system_counter = system_counter + atoll (statFields[12] + statFields[14]);
 
   }
   closedir (dh);
