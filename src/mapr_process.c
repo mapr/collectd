@@ -169,7 +169,6 @@ static directorylist_t *directory_list_head_g = NULL;
 static float filter_mincpupct_g = 0.0;
 static float filter_minmempct_g = 0.0;
 //static int numOfProcesses = 0;
-static _Bool report_ctx_switch = 1;
 
 static long pagesize_g;
 static long clockTicks;
@@ -460,7 +459,7 @@ static int ps_init(void) {
   numCores = (uint)sysconf(_SC_NPROCESSORS_ONLN);
   INFO ("pagesize_g = %li; clockTicks = %li; numCores = %d;",
       pagesize_g, clockTicks, numCores);
- return (0);
+  return (0);
 } /* int ps_init */
 
 /* submit info about specific process (e.g.: memory taken, cpu usage, etc..) */
@@ -532,17 +531,16 @@ static void ps_submit_proc_list(procstat_t *ps) {
     plugin_dispatch_values(&vl);
   }
 
-  if (report_ctx_switch) {
-    sstrncpy(vl.type, "context_switch_voluntary", sizeof(vl.type));
-    vl.values[0].derive = ps->cswitch_vol;
-    vl.values_len = 1;
-    plugin_dispatch_values(&vl);
+  sstrncpy(vl.type, "context_switch_voluntary", sizeof(vl.type));
+  vl.values[0].derive = ps->cswitch_vol;
+  vl.values_len = 1;
+  plugin_dispatch_values(&vl);
 
-    sstrncpy(vl.type, "context_switch_involuntary", sizeof(vl.type));
-    vl.values[0].derive = ps->cswitch_invol;
-    vl.values_len = 1;
-    plugin_dispatch_values(&vl);
-  }
+  sstrncpy(vl.type, "context_switch_involuntary", sizeof(vl.type));
+  vl.values[0].derive = ps->cswitch_invol;
+  vl.values_len = 1;
+  plugin_dispatch_values(&vl);
+
 
   DEBUG ("name = %s; num_proc = %lu; num_lwp = %lu; "
       "vmem_size = %lu; vmem_rss = %lu; vmem_data = %lu; "
@@ -573,9 +571,20 @@ static procstat_t *ps_read_tasks_status (int pid, procstat_t *ps)
   struct dirent *ent;
   derive_t cswitch_vol = 0;
   derive_t cswitch_invol = 0;
+  derive_t user_counter = 0;
+  derive_t system_counter = 0;
   char buffer[1024];
   char *fields[8];
   int numfields;
+  ssize_t status;
+  size_t buffer_len;
+  char *buffer_ptr;
+  size_t name_start_pos;
+  size_t name_end_pos;
+  char *fields[64];
+  char fields_len;
+  char buffer[1024];
+
 
   ssnprintf (dirname, sizeof (dirname), "/proc/%i/task", pid);
 
@@ -635,14 +644,64 @@ static procstat_t *ps_read_tasks_status (int pid, procstat_t *ps)
     if (fclose (fh))
     {
       char errbuf[1024];
-      WARNING ("processes: fclose: %s",
-          sstrerror (errno, errbuf, sizeof (errbuf)));
+      WARNING ("mapr_process plugin: fclose: %s", sstrerror (errno, errbuf, sizeof (errbuf)));
     }
+
+    // Read /proc/pid/task/taskid/stat file
+    ssnprintf (filename, sizeof (filename), "/proc/%i/task/%s/stat", pid, tpid);
+    status = read_file_contents (filename, buffer, sizeof(buffer) - 1);
+    if (status <= 0)
+      return (-1);
+    buffer_len = (size_t) status;
+    buffer[buffer_len] = 0;
+    name_start_pos = 0;
+    while ((buffer[name_start_pos] != '(')
+        && (name_start_pos < buffer_len))
+      name_start_pos++;
+
+    name_end_pos = buffer_len;
+    while ((buffer[name_end_pos] != ')')
+        && (name_end_pos > 0))
+      name_end_pos--;
+
+    /* Either '(' or ')' is not found or they are in the wrong order.
+     * Anyway, something weird that shouldn't happen ever. */
+    if (name_start_pos >= name_end_pos)
+    {
+      ERROR ("mapr_process plugin: name_start_pos = %zu >= name_end_pos = %zu",
+          name_start_pos, name_end_pos);
+      return (-1);
+    }
+
+    if ((buffer_len - name_end_pos) < 2)
+      return (-1);
+    buffer_ptr = &buffer[name_end_pos + 2];
+
+    // Split the fields
+    fields_len = strsplit (buffer_ptr, fields, STATIC_ARRAY_SIZE (fields));
+    if (fields_len < 22)
+    {
+      DEBUG ("mapr_process plugin: ps_read_task (pid = %i): for task %s"
+          " `%s' has only %i fields..",
+          (int) pid, tpid,filename, fields_len);
+      return (-1);
+    }
+
+    // Aggregate it for all tasks
+    user_counter =+ atoll (fields[11] + fields[13]);
+    system_counter =+ atoll (fields[12] + fields[14]);
+
   }
   closedir (dh);
 
   ps->cswitch_vol = cswitch_vol;
   ps->cswitch_invol = cswitch_invol;
+
+  // Convert clock ticks to seconds
+  user_counter = user_counter/clockTicks;
+  system_counter = system_counter/clockTicks;
+  ps->cpu_user_counter = ps->cpu_user_counter + user_counter;
+  ps->cpu_system_counter = ps->cpu_system_counter + system_counter;
 
   return (ps);
 } /* int *ps_read_tasks_status */
@@ -881,7 +940,7 @@ int ps_read_process (int pid, procstat_t *ps, char *state)
    * Anyway, something weird that shouldn't happen ever. */
   if (name_start_pos >= name_end_pos)
   {
-    ERROR ("processes plugin: name_start_pos = %zu >= name_end_pos = %zu",
+    ERROR ("mapr_process plugin: name_start_pos = %zu >= name_end_pos = %zu",
         name_start_pos, name_end_pos);
     return (-1);
   }
@@ -899,7 +958,7 @@ int ps_read_process (int pid, procstat_t *ps, char *state)
   fields_len = strsplit (buffer_ptr, fields, STATIC_ARRAY_SIZE (fields));
   if (fields_len < 22)
   {
-    DEBUG ("processes plugin: ps_read_process (pid = %i):"
+    DEBUG ("mapr_process plugin: ps_read_process (pid = %i):"
         " `%s' has only %i fields..",
         (int) pid, filename, fields_len);
     return (-1);
@@ -952,9 +1011,7 @@ int ps_read_process (int pid, procstat_t *ps, char *state)
     unsigned long long stack_start = atoll (fields[25]);
     unsigned long long stack_ptr = atoll (fields[26]);
 
-    stack_size = (stack_start > stack_ptr)
-                                ? stack_start - stack_ptr
-                                    : stack_ptr - stack_start;
+    stack_size = (stack_start > stack_ptr) ? stack_start - stack_ptr : stack_ptr - stack_start;
   }
 
   /* Convert clockticks to seconds */
@@ -980,17 +1037,15 @@ int ps_read_process (int pid, procstat_t *ps, char *state)
     DEBUG("ps_read_process: not get io data for pid %i",pid);
   }
 
-  if ( report_ctx_switch )
+  if ( (ps_read_tasks_status(pid, ps)) == NULL)
   {
-    if ( (ps_read_tasks_status(pid, ps)) == NULL)
-    {
-      ps->cswitch_vol = -1;
-      ps->cswitch_invol = -1;
+    ps->cswitch_vol = -1;
+    ps->cswitch_invol = -1;
 
-      DEBUG("ps_read_tasks_status: not get context "
-          "switch data for pid %i",pid);
-    }
+    DEBUG("ps_read_tasks_status: not get context "
+        "switch data for pid %i",pid);
   }
+
 
   /* success */
   return (0);
