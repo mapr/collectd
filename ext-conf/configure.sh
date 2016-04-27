@@ -47,6 +47,7 @@ MAPR_HOME=${MAPR_HOME:-/opt/mapr}
 MAPR_USER=${MAPR_USER:-mapr}
 MAPR_GROUP=${MAPR_GROUP:-mapr}
 MAPR_CONF_DIR="${MAPR_HOME}/conf/conf.d"
+CLUSTER_ID_FILE="${MAPR_HOME}/conf/clusterid"
 HADOOP_VER=$(cat "$MAPR_HOME/hadoop/hadoopversion")
 YARN_BIN="${MAPR_HOME}/hadoop/hadoop-${HADOOP_VER}/bin/yarn"
 CD_CONF_ASSUME_RUNNING_CORE=${isOnlyRoles:-0}
@@ -482,7 +483,7 @@ function waitForCLDB() {
 #############################################################################
 function configureClusterId() {
     if [ $CLDB_RUNNING -eq 1 ]; then
-        CLUSTER_ID=`cat /opt/mapr/conf/clusterid`
+        CLUSTER_ID=$(cat "$CLUSTER_ID_FILE")
         sed -i 's/\"clusterid=.*/\"clusterid='$CLUSTER_ID'\"/g' ${NEW_CD_CONF_FILE}
         return 0
     else
@@ -586,7 +587,9 @@ configurejavajmxplugin
 createFastJMXLink
 configureHadoopJMX
 if [ $CD_CONF_ASSUME_RUNNING_CORE -eq 1 ]; then
-    waitForCLDB
+    if ! [ -f "$CLUSTER_ID_FILE" ]; then
+        waitForCLDB
+    fi
     # we are not going to restart automatically
     # documented that jmx stats will not be available until next warden/nm/rm restart
     #restartNM_RM_service
