@@ -689,8 +689,8 @@ static procstat_t *ps_read_tasks_status (int pid, procstat_t *ps)
     }
 
     // Aggregate it for all tasks
-    cpu_user_counter = cpu_user_counter + atoll (statFields[11]) + atoll(statFields[13]);
-    cpu_system_counter = cpu_system_counter + atoll (statFields[12]) + atoll (statFields[14]);
+    cpu_user_counter = cpu_user_counter + atoll (statFields[11]);
+    cpu_system_counter = cpu_system_counter + atoll (statFields[12]);
   }
   closedir (dh);
 
@@ -1000,8 +1000,11 @@ int ps_read_process (int pid, procstat_t *ps, char *state)
 
   cpu_user_counter = atoll (fields[11]);
   cpu_system_counter = atoll (fields[12]);
-  cpu_child_user_counter = atoll (fields[13]);
-  cpu_child_system_counter = atoll (fields[14]);
+  cpu_child_user_counter = 0;
+  cpu_child_system_counter = 0;
+
+  //cpu_child_user_counter = atoll (fields[13]);
+  //cpu_child_system_counter = atoll (fields[14]);
 
   vmem_size = atoll (fields[20]);
   vmem_rss = atoll (fields[21]);
