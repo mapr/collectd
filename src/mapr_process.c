@@ -27,6 +27,8 @@
 #include "sys/types.h"
 #include "dirent.h"
 
+
+
 # include <glob.h>
 # include <sys/stat.h>
 # include <linux/limits.h>
@@ -34,17 +36,17 @@
 # if HAVE_LINUX_CONFIG_H
 #   include <linux/config.h>
 # endif
-# define PSCMD 	"ps -eo uid,pid,ppid,pgid,args"
-# define PSFORMAT 	"%ld %ld %ld %ld %[^\n]"
-# define PSVARS	&P[i].uid, &P[i].pid, &P[i].ppid, &P[i].pgid, P[i].cmd
-# define PSVARSN	5
+# define PSCMD  "ps -eo uid,pid,ppid,pgid,args"
+# define PSFORMAT   "%ld %ld %ld %ld %[^\n]"
+# define PSVARS &P[i].uid, &P[i].pid, &P[i].ppid, &P[i].pgid, P[i].cmd
+# define PSVARSN  5
 # define CMDLINE_BUFFER_SIZE 4096
 # include <stdio.h>
 # include <stdlib.h>
 # include <string.h>
-# include <unistd.h>		/* For getopt() */
-# include <pwd.h>		/* For getpwnam() */
-# include <sys/ioctl.h>		/* For TIOCGSIZE/TIOCGWINSZ */
+# include <unistd.h>    /* For getopt() */
+# include <pwd.h>   /* For getpwnam() */
+# include <sys/ioctl.h>   /* For TIOCGSIZE/TIOCGWINSZ */
 #include <sys/times.h>
 #include <time.h>
 
@@ -65,46 +67,47 @@ struct Proc {
   unsigned long thcount;
 }*P;
 
-static void uid2user(uid_t uid, char *name, int len) {
-#define NUMUN 128
-  static struct un_ {
-    uid_t uid;
-    char name[32];
-  }un[NUMUN];
-  static short n = 0;
-  short i;
-  char uid_name[32];
-  char *found;
-#ifdef DEBUG
-  if (name == NULL) {
-    for (i = 0; i < n; i++)
-      fprintf(stderr, "uid = %3d, name = %s\n", un[i].uid, un[i].name);
-    return;
-  }
-#endif
-  for (i = n - 1; i >= 0 && un[i].uid != uid; i--);
-  if (i >= 0) { /* found locally */
-    found = un[i].name;
-  } else {
-    struct passwd *pw = getpwuid(uid);
-    if (pw) {
-      found = pw->pw_name;
-    } else {
-      /* fix by Stan Sieler & Philippe Torche */
-      snprintf(uid_name, sizeof(uid_name), "#%d", uid);
-      found = uid_name;
-    }
-    if (n < NUMUN) {
-      un[n].uid = uid;
-      strncpy(un[n].name, found, 9);
-      un[n].name[8] = '\0';
-      n++;
-    }
-  }
-  strncpy(name, found, len);
-  name[len-1] = '\0';
-}
+//static void uid2user(uid_t uid, char *name, int len) {
+//#define NUMUN 128
+//  static struct un_ {
+//    uid_t uid;
+//    char name[32];
+//  }un[NUMUN];
+//  static short n = 0;
+//  short i;
+//  char uid_name[32];
+//  char *found;
+//#ifdef DEBUG
+//  if (name == NULL) {
+//    for (i = 0; i < n; i++)
+//      fprintf(stderr, "uid = %3d, name = %s\n", un[i].uid, un[i].name);
+//    return;
+//  }
+//#endif
+//  for (i = n - 1; i >= 0 && un[i].uid != uid; i--);
+//  if (i >= 0) { /* found locally */
+//    found = un[i].name;
+//  } else {
+//    struct passwd *pw = getpwuid(uid);
+//    if (pw) {
+//      found = pw->pw_name;
+//    } else {
+//      /* fix by Stan Sieler & Philippe Torche */
+//      snprintf(uid_name, sizeof(uid_name), "#%d", uid);
+//      found = uid_name;
+//    }
+//    if (n < NUMUN) {
+//      un[n].uid = uid;
+//      strncpy(un[n].name, found, 9);
+//      un[n].name[8] = '\0';
+//      n++;
+//    }
+//  }
+//  strncpy(name, found, len);
+//  name[len-1] = '\0';
+//}
 #define PROCSTAT_NAME_LEN 256
+
 typedef struct procstat {
   char name[PROCSTAT_NAME_LEN];
   char processName[PROCSTAT_NAME_LEN];
@@ -165,107 +168,107 @@ static directorylist_t *directory_list_head_g = NULL;
 /* configuration globals */
 static float filter_mincpupct_g = 0.0;
 static float filter_minmempct_g = 0.0;
-static int numOfProcesses = 0;
-static _Bool report_ctx_switch = 1;
+//static int numOfProcesses = 0;
 
 static long pagesize_g;
 static long clockTicks;
 static int numCores;
 
+
 /* Read /proc/ */
-static int getProcesses(void) {
-  glob_t globbuf;
-  unsigned int i, j;
+//static int getProcesses(void) {
+//  glob_t globbuf;
+//  unsigned int i, j;
+//
+//  glob("/proc/[0-9]*", GLOB_NOSORT, NULL, &globbuf);
+//
+//  P = calloc(globbuf.gl_pathc, sizeof(struct Proc));
+//  if (P == NULL) {
+//    fprintf(stderr, "Problems with malloc.\n");
+//    exit(1);
+//  }
+//
+//  for (i = j = 0; i < globbuf.gl_pathc; i++) {
+//    char *pdir, name[32];
+//    int c;
+//    FILE *processFP;
+//    int k = 0;
+//
+//    pdir = globbuf.gl_pathv[globbuf.gl_pathc - i - 1];
+//
+//    /* if processes change their UID this change is only reflected in the owner of pdir.
+//     * fixed since version 2.36 */
+//    {
+//      struct stat st;
+//      if (stat(pdir, &st) != 0) { /* get uid */
+//        continue; /* process vanished since glob() */
+//      }
+//      P[j].uid = st.st_uid;
+//      uid2user(P[j].uid, P[j].name, sizeof(P[j].name));
+//    }
+//
+//    snprintf(name, sizeof(name), "%s%s",
+//        globbuf.gl_pathv[globbuf.gl_pathc - i - 1], "/stat");
+//    processFP = fopen(name, "r");
+//    if (processFP == NULL)
+//      continue; /* process vanished since glob() */
+//    int status = fscanf(processFP, "%ld %s %*c %ld %ld", &P[j].pid, P[j].cmd, &P[j].ppid,
+//        &P[j].pgid);
+//    if (status == 0) {
+//      ERROR("mapr_process plugin: Failed to read from /proc/pid/stat.");
+//      continue;
+//    }
+//    fclose(processFP);
+//    P[j].thcount = 1;
+//
+//    snprintf(name, sizeof(name), "%s%s",
+//        globbuf.gl_pathv[globbuf.gl_pathc - i - 1], "/cmdline");
+//    processFP = fopen(name, "r");
+//    if (processFP == NULL)
+//      continue; /* process vanished since glob() */
+//    while (k < MAXLINE - 1 && EOF != (c = fgetc(processFP))) {
+//      P[j].cmd[k++] = c == '\0' ? ' ' : c;
+//    }
+//    if (k > 0)
+//      P[j].cmd[k] = '\0';
+//    fclose(processFP);
+//    P[j].parent = P[j].child = P[j].sister = -1;
+//    j++;
+//  }
+//  globfree(&globbuf);
+//  return j;
+//} /* int getProcesses() */
+//
+//int get_pid_index(long pid) {
+//  int me;
+//  for (me = numOfProcesses - 1; me >= 0 && P[me].pid != pid; me--)
+//    ; /* Search process */
+//  return me;
+//}
+//
+//#define EXIST(idx) ((idx) != -1)
 
-  glob("/proc/[0-9]*", GLOB_NOSORT, NULL, &globbuf);
-
-  P = calloc(globbuf.gl_pathc, sizeof(struct Proc));
-  if (P == NULL) {
-    fprintf(stderr, "Problems with malloc.\n");
-    exit(1);
-  }
-
-  for (i = j = 0; i < globbuf.gl_pathc; i++) {
-    char *pdir, name[32];
-    int c;
-    FILE *processFP;
-    int k = 0;
-
-    pdir = globbuf.gl_pathv[globbuf.gl_pathc - i - 1];
-
-    /* if processes change their UID this change is only reflected in the owner of pdir.
-     * fixed since version 2.36 */
-    {
-      struct stat st;
-      if (stat(pdir, &st) != 0) { /* get uid */
-        continue; /* process vanished since glob() */
-      }
-      P[j].uid = st.st_uid;
-      uid2user(P[j].uid, P[j].name, sizeof(P[j].name));
-    }
-
-    snprintf(name, sizeof(name), "%s%s",
-        globbuf.gl_pathv[globbuf.gl_pathc - i - 1], "/stat");
-    processFP = fopen(name, "r");
-    if (processFP == NULL)
-      continue; /* process vanished since glob() */
-    int status = fscanf(processFP, "%ld %s %*c %ld %ld", &P[j].pid, P[j].cmd, &P[j].ppid,
-        &P[j].pgid);
-    if (status == 0) {
-      ERROR("mapr_process plugin: Failed to read from /proc/pid/stat.");
-      continue;
-    }
-    fclose(processFP);
-    P[j].thcount = 1;
-
-    snprintf(name, sizeof(name), "%s%s",
-        globbuf.gl_pathv[globbuf.gl_pathc - i - 1], "/cmdline");
-    processFP = fopen(name, "r");
-    if (processFP == NULL)
-      continue; /* process vanished since glob() */
-    while (k < MAXLINE - 1 && EOF != (c = fgetc(processFP))) {
-      P[j].cmd[k++] = c == '\0' ? ' ' : c;
-    }
-    if (k > 0)
-      P[j].cmd[k] = '\0';
-    fclose(processFP);
-    P[j].parent = P[j].child = P[j].sister = -1;
-    j++;
-  }
-  globfree(&globbuf);
-  return j;
-} /* int getProcesses() */
-
-int get_pid_index(long pid) {
-  int me;
-  for (me = numOfProcesses - 1; me >= 0 && P[me].pid != pid; me--)
-    ; /* Search process */
-  return me;
-}
-
-#define EXIST(idx) ((idx) != -1)
-
-static void MakeTree(void) {
-  /* Build the process hierarchy. Every process marks itself as first child
-   * of it's parent or as sister of first child of it's parent */
-  int me;
-  for (me = 0; me < numOfProcesses; me++) {
-    int parent;
-    parent = get_pid_index(P[me].ppid);
-    if (parent != me && parent != -1) { /* valid process, not me */
-      P[me].parent = parent;
-      if (P[parent].child == -1) /* first child */
-        P[parent].child = me;
-      else {
-        int sister;
-        for (sister = P[parent].child; EXIST(P[sister].sister); sister =
-            P[sister].sister)
-          ;
-        P[sister].sister = me;
-      }
-    }
-  }
-}
+//static void MakeTree(void) {
+//  /* Build the process hierarchy. Every process marks itself as first child
+//   * of it's parent or as sister of first child of it's parent */
+//  int me;
+//  for (me = 0; me < numOfProcesses; me++) {
+//    int parent;
+//    parent = get_pid_index(P[me].ppid);
+//    if (parent != me && parent != -1) { /* valid process, not me */
+//      P[me].parent = parent;
+//      if (P[parent].child == -1) /* first child */
+//        P[parent].child = me;
+//      else {
+//        int sister;
+//        for (sister = P[parent].child; EXIST(P[sister].sister); sister =
+//            P[sister].sister)
+//          ;
+//        P[sister].sister = me;
+//      }
+//    }
+//  }
+//}
 
 /* put name of process from config to list_head_g tree
  * list_head_g is a list of 'procstat_t' structs with
@@ -292,7 +295,6 @@ static void ps_list_register(int pid, char *name) {
       sfree(new);
       return;
     }
-
     if (ptr->next == NULL)
       break;
   }
@@ -529,17 +531,16 @@ static void ps_submit_proc_list(procstat_t *ps) {
     plugin_dispatch_values(&vl);
   }
 
-  if (report_ctx_switch) {
-    sstrncpy(vl.type, "context_switch_voluntary", sizeof(vl.type));
-    vl.values[0].derive = ps->cswitch_vol;
-    vl.values_len = 1;
-    plugin_dispatch_values(&vl);
+  sstrncpy(vl.type, "context_switch_voluntary", sizeof(vl.type));
+  vl.values[0].derive = ps->cswitch_vol;
+  vl.values_len = 1;
+  plugin_dispatch_values(&vl);
 
-    sstrncpy(vl.type, "context_switch_involuntary", sizeof(vl.type));
-    vl.values[0].derive = ps->cswitch_invol;
-    vl.values_len = 1;
-    plugin_dispatch_values(&vl);
-  }
+  sstrncpy(vl.type, "context_switch_involuntary", sizeof(vl.type));
+  vl.values[0].derive = ps->cswitch_invol;
+  vl.values_len = 1;
+  plugin_dispatch_values(&vl);
+
 
   DEBUG ("name = %s; num_proc = %lu; num_lwp = %lu; "
       "vmem_size = %lu; vmem_rss = %lu; vmem_data = %lu; "
@@ -570,9 +571,20 @@ static procstat_t *ps_read_tasks_status (int pid, procstat_t *ps)
   struct dirent *ent;
   derive_t cswitch_vol = 0;
   derive_t cswitch_invol = 0;
+  derive_t cpu_user_counter = 0;
+  derive_t cpu_system_counter = 0;
   char buffer[1024];
   char *fields[8];
   int numfields;
+  ssize_t status;
+  size_t buffer_len;
+  char *buffer_ptr;
+  size_t name_start_pos;
+  size_t name_end_pos;
+  char *statFields[64];
+  char fields_len;
+  char statBuffer[1024];
+
 
   ssnprintf (dirname, sizeof (dirname), "/proc/%i/task", pid);
 
@@ -594,7 +606,7 @@ static procstat_t *ps_read_tasks_status (int pid, procstat_t *ps)
     ssnprintf (filename, sizeof (filename), "/proc/%i/task/%s/status", pid, tpid);
     if ((fh = fopen (filename, "r")) == NULL)
     {
-      DEBUG ("Failed to open file `%s'", filename);
+      ERROR ("Failed to open file `%s'", filename);
       continue;
     }
 
@@ -632,14 +644,68 @@ static procstat_t *ps_read_tasks_status (int pid, procstat_t *ps)
     if (fclose (fh))
     {
       char errbuf[1024];
-      WARNING ("processes: fclose: %s",
-          sstrerror (errno, errbuf, sizeof (errbuf)));
+      WARNING ("mapr_process plugin: fclose: %s", sstrerror (errno, errbuf, sizeof (errbuf)));
     }
+
+    // Read /proc/pid/task/taskid/stat file
+    ssnprintf (filename, sizeof (filename), "/proc/%i/task/%s/stat", pid, tpid);
+    INFO ("mapr_process plugin: Reading task %s file for process %s", tpid, ps->name);
+    status = read_file_contents (filename, statBuffer, sizeof(statBuffer) - 1);
+    if (status <= 0)
+      return (NULL);
+    buffer_len = (size_t) status;
+    statBuffer[buffer_len] = 0;
+    name_start_pos = 0;
+    while ((statBuffer[name_start_pos] != '(')
+        && (name_start_pos < buffer_len))
+      name_start_pos++;
+
+    name_end_pos = buffer_len;
+    while ((statBuffer[name_end_pos] != ')')
+        && (name_end_pos > 0))
+      name_end_pos--;
+
+    /* Either '(' or ')' is not found or they are in the wrong order.
+     * Anyway, something weird that shouldn't happen ever. */
+    if (name_start_pos >= name_end_pos)
+    {
+      ERROR ("mapr_process plugin: name_start_pos = %zu >= name_end_pos = %zu",
+          name_start_pos, name_end_pos);
+      return (NULL);
+    }
+
+    if ((buffer_len - name_end_pos) < 2)
+      return (NULL);
+    buffer_ptr = &statBuffer[name_end_pos + 2];
+
+    // Split the fields
+    fields_len = strsplit (buffer_ptr, statFields, STATIC_ARRAY_SIZE (statFields));
+    if (fields_len < 22)
+    {
+      DEBUG ("mapr_process plugin: ps_read_task (pid = %i): for task %s"
+          " `%s' has only %i fields..",
+          (int) pid, tpid,filename, fields_len);
+      return (NULL);
+    }
+
+    // Aggregate it for all tasks
+    cpu_user_counter = cpu_user_counter + atoll (statFields[11]);
+    cpu_system_counter = cpu_system_counter + atoll (statFields[12]);
   }
   closedir (dh);
 
   ps->cswitch_vol = cswitch_vol;
   ps->cswitch_invol = cswitch_invol;
+
+  // Convert clock ticks to seconds
+  cpu_user_counter = cpu_user_counter/clockTicks;
+  cpu_system_counter = cpu_system_counter/clockTicks;
+  INFO ("mapr_process plugin: Before cpu user counter %"PRIi64" for pid %lu for process %s", ps->cpu_user_counter,ps->pid, ps->name);
+  ps->cpu_user_counter = ps->cpu_user_counter + cpu_user_counter;
+  INFO ("mapr_process plugin: After cpu user counter %"PRIi64" for pid %lu for process %s",ps->cpu_user_counter,ps->pid, ps->name);
+  INFO ("mapr_process plugin: Before cpu system counter %"PRIi64" for pid %lu for process %s",ps->cpu_system_counter,ps->pid, ps->name);
+  ps->cpu_system_counter = ps->cpu_system_counter + cpu_system_counter;
+  INFO ("mapr_process plugin: After cpu system counter %"PRIi64" for pid %lu for process %s",ps->cpu_system_counter,ps->pid, ps->name);
 
   return (ps);
 } /* int *ps_read_tasks_status */
@@ -878,7 +944,7 @@ int ps_read_process (int pid, procstat_t *ps, char *state)
    * Anyway, something weird that shouldn't happen ever. */
   if (name_start_pos >= name_end_pos)
   {
-    ERROR ("processes plugin: name_start_pos = %zu >= name_end_pos = %zu",
+    ERROR ("mapr_process plugin: name_start_pos = %zu >= name_end_pos = %zu",
         name_start_pos, name_end_pos);
     return (-1);
   }
@@ -896,7 +962,7 @@ int ps_read_process (int pid, procstat_t *ps, char *state)
   fields_len = strsplit (buffer_ptr, fields, STATIC_ARRAY_SIZE (fields));
   if (fields_len < 22)
   {
-    DEBUG ("processes plugin: ps_read_process (pid = %i):"
+    DEBUG ("mapr_process plugin: ps_read_process (pid = %i):"
         " `%s' has only %i fields..",
         (int) pid, filename, fields_len);
     return (-1);
@@ -934,8 +1000,11 @@ int ps_read_process (int pid, procstat_t *ps, char *state)
 
   cpu_user_counter = atoll (fields[11]);
   cpu_system_counter = atoll (fields[12]);
-  cpu_child_user_counter = atoll (fields[13]);
-  cpu_child_system_counter = atoll (fields[14]);
+  cpu_child_user_counter = 0;
+  cpu_child_system_counter = 0;
+
+  //cpu_child_user_counter = atoll (fields[13]);
+  //cpu_child_system_counter = atoll (fields[14]);
 
   vmem_size = atoll (fields[20]);
   vmem_rss = atoll (fields[21]);
@@ -949,9 +1018,7 @@ int ps_read_process (int pid, procstat_t *ps, char *state)
     unsigned long long stack_start = atoll (fields[25]);
     unsigned long long stack_ptr = atoll (fields[26]);
 
-    stack_size = (stack_start > stack_ptr)
-        ? stack_start - stack_ptr
-            : stack_ptr - stack_start;
+    stack_size = (stack_start > stack_ptr) ? stack_start - stack_ptr : stack_ptr - stack_start;
   }
 
   /* Convert clockticks to seconds */
@@ -977,17 +1044,15 @@ int ps_read_process (int pid, procstat_t *ps, char *state)
     DEBUG("ps_read_process: not get io data for pid %i",pid);
   }
 
-  if ( report_ctx_switch )
+  if ( (ps_read_tasks_status(pid, ps)) == NULL)
   {
-    if ( (ps_read_tasks_status(pid, ps)) == NULL)
-    {
-      ps->cswitch_vol = -1;
-      ps->cswitch_invol = -1;
+    ps->cswitch_vol = -1;
+    ps->cswitch_invol = -1;
 
-      DEBUG("ps_read_tasks_status: not get context "
-          "switch data for pid %i",pid);
-    }
+    DEBUG("ps_read_tasks_status: not get context "
+        "switch data for pid %i",pid);
   }
+
 
   /* success */
   return (0);
@@ -1012,9 +1077,9 @@ static void ps_find_cpu_delta(procstat_t *ps, unsigned long *out_userd, unsigned
   }
 
   if (ps_ptr) {
-    INFO ("Current cpu user counter %"PRIi64" , previous counter %"PRIi64" ",ps->cpu_user_counter, ps_ptr->cpu_user_counter);
+    INFO ("Current cpu user counter %"PRIi64" , previous counter %"PRIi64" for pid %lu for process %s",ps->cpu_user_counter, ps_ptr->cpu_user_counter,ps->pid, ps->name);
     *out_userd = ps->cpu_user_counter - ps_ptr->cpu_user_counter;
-    INFO ("Current cpu system counter %"PRIi64" , previous counter %"PRIi64" ",ps->cpu_system_counter, ps_ptr->cpu_system_counter);
+    INFO ("Current cpu system counter %"PRIi64" , previous counter %"PRIi64" for pid %lu for process %s",ps->cpu_system_counter, ps_ptr->cpu_system_counter,ps->pid, ps->name);
     *out_sysd = ps->cpu_system_counter - ps_ptr->cpu_system_counter;
   }
   else {
@@ -1037,15 +1102,28 @@ static void ps_calc_runtime(sysstat_t *ss, procstat_t *ps)
 static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *ps)
 {
   if (ss && prev_ss) {
-    INFO("Previous system stats for cpu percent: %ld, %ld",prev_ss->sys_cpu_system_counter, prev_ss->sys_cpu_tot_time_counter);
-    INFO("Current system stats for cpu percent: %ld, %ld",ss->sys_cpu_system_counter, ss->sys_cpu_tot_time_counter);
+    INFO("Previous system stats for cpu percent for pid %lu for process %s : %ld, %ld",ps->pid, ps->name,prev_ss->sys_cpu_system_counter, prev_ss->sys_cpu_tot_time_counter);
+    INFO("Current system stats for cpu percent for pid %lu for process %s : %ld, %ld",ps->pid, ps->name,ss->sys_cpu_system_counter, ss->sys_cpu_tot_time_counter);
     unsigned long ps_cpu_user_delta, ps_cpu_system_delta;
     unsigned long ss_cpu_tot_time_delta;
+    static struct timeval oldtimev;
+    struct timeval timev;
+    struct timezone timez;
+    float et;
+
+    gettimeofday(&timev, &timez);
+    et = (timev.tv_sec - oldtimev.tv_sec)
+                 + (float)(timev.tv_usec - oldtimev.tv_usec) / 1000000.0;
+    oldtimev.tv_sec = timev.tv_sec;
+    oldtimev.tv_usec = timev.tv_usec;
+
     //unsigned long ss_cpu_boot_time_delta;
     double cpu_percent;
     ps_find_cpu_delta(ps, &ps_cpu_user_delta, &ps_cpu_system_delta);
     ss_cpu_tot_time_delta = ss->sys_cpu_tot_time_counter - prev_ss->sys_cpu_tot_time_counter;
-    cpu_percent = (ps_cpu_system_delta + ps_cpu_user_delta) * 100.0 / ss_cpu_tot_time_delta;
+    //cpu_percent = (ps_cpu_system_delta + ps_cpu_user_delta) * 100.0 / ss_cpu_tot_time_delta;
+    cpu_percent = (ps_cpu_system_delta + ps_cpu_user_delta) * 100.0 / et ;
+
     INFO ("%s proc with %lu pid delta: u: %lu, s: %lu, tot: %lu, percent: %f\n", ps->name, ps->pid,ps_cpu_user_delta, ps_cpu_system_delta, ss_cpu_tot_time_delta,cpu_percent);
     ps->cpu_percent = cpu_percent;
   }
@@ -1064,14 +1142,12 @@ static int ps_read(void) {
   /*
    * Read /proc file and get the number of processes and
    */
-  numOfProcesses = getProcesses();
+  //numOfProcesses = getProcesses();
 
   /*
    * Make the process tree
    */
-  MakeTree();
-
-  // TODO -- Get the latest PIDs and Aggregate by parent PID
+  //MakeTree();
 
   /*
    * Check if the PIDs changed
@@ -1089,7 +1165,6 @@ static int ps_read(void) {
       DEBUG ("ps_read_process failed: %i", status);
       continue;
     }
-    INFO ("Collecting stats for process %s with pid %lu: ",ps_ptr->name, ps_ptr->pid);
     ps_calc_runtime(ss, &ps);
     ps_calc_mem_percent(ss, &ps);
     ps_calc_cpu_percent(ss, prev_ss, &ps);
