@@ -1115,8 +1115,8 @@ static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *p
     double cpu_percent;
     ps_find_cpu_delta(ps, &ps_cpu_user_delta, &ps_cpu_system_delta);
     ss_cpu_tot_time_delta = ss->sys_cpu_tot_time_counter - prev_ss->sys_cpu_tot_time_counter;
-    cpu_percent = (ps_cpu_system_delta + ps_cpu_user_delta) * 100.0 * numCores / ss_cpu_tot_time_delta;
-    //cpu_percent = (ps_cpu_system_delta + ps_cpu_user_delta) * 100.0 / et ;
+    //cpu_percent = (ps_cpu_system_delta + ps_cpu_user_delta) * 100.0 * numCores / ss_cpu_tot_time_delta;
+    cpu_percent = (ps_cpu_system_delta + ps_cpu_user_delta) * 100.0 / et * clockTicks;
 
     INFO ("%s proc with %lu pid delta: u: %f, s: %f, tot: %f, percent: %f\n", ps->name, ps->pid,ps_cpu_user_delta, ps_cpu_system_delta, ss_cpu_tot_time_delta,cpu_percent);
     ps->cpu_percent = cpu_percent;
