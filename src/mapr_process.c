@@ -698,8 +698,6 @@ static procstat_t *ps_read_tasks_status (int pid, procstat_t *ps)
   ps->cswitch_invol = cswitch_invol;
 
   // Convert clock ticks to seconds
-  cpu_user_counter = cpu_user_counter/clockTicks;
-  cpu_system_counter = cpu_system_counter/clockTicks;
   INFO ("mapr_process plugin: Before cpu user counter %"PRIi64" for pid %lu for process %s", ps->cpu_user_counter,ps->pid, ps->name);
   ps->cpu_user_counter = ps->cpu_user_counter + cpu_user_counter;
   INFO ("mapr_process plugin: After cpu user counter %"PRIi64" for pid %lu for process %s",ps->cpu_user_counter,ps->pid, ps->name);
@@ -879,7 +877,6 @@ static sysstat_t *ps_read_sys_stat(void)
   ss->sys_cpu_tot_time_counter = sys_cpu_user_counter +
       sys_cpu_user_nice_counter + sys_cpu_system_counter +
       sys_cpu_idle_counter + sys_cpu_iowait_counter + sys_cpu_irq_counter + sys_cpu_softirq_counter + sys_cpu_steal_counter + sys_cpu_guest_counter;
-  ss->sys_cpu_tot_time_counter = ss->sys_cpu_tot_time_counter / clockTicks;
   ss->sys_boot_time_secs = si.uptime;
   ss->sys_tot_phys_mem = sys_tot_phys_mem;
   ss->sys_boot_time_secs = time(NULL) - ss->sys_boot_time_secs;
@@ -1021,9 +1018,8 @@ int ps_read_process (int pid, procstat_t *ps, char *state)
     stack_size = (stack_start > stack_ptr) ? stack_start - stack_ptr : stack_ptr - stack_start;
   }
 
-  /* Convert clockticks to seconds */
-  cpu_user_counter = (cpu_user_counter + cpu_child_user_counter) / clockTicks;
-  cpu_system_counter = (cpu_system_counter + cpu_child_system_counter)   / clockTicks;
+  cpu_user_counter = cpu_user_counter + cpu_child_user_counter;
+  cpu_system_counter = cpu_system_counter + cpu_child_system_counter;
   vmem_rss = vmem_rss * pagesize_g;
 
   ps->cpu_user_counter = cpu_user_counter;
@@ -1032,7 +1028,6 @@ int ps_read_process (int pid, procstat_t *ps, char *state)
   ps->vmem_rss = (unsigned long) vmem_rss;
   ps->stack_size = (unsigned long) stack_size;
 
-  INFO("cpu_user_counter %ld, cpu_system_counter %ld, cpu_child_user_counter %ld, cpu_child_system_counter %ld, pid %ld", ps->cpu_user_counter, ps->cpu_system_counter, ps->cpu_child_user_counter, ps->cpu_child_system_counter, ps->pid);
   if ( (ps_read_io (pid, ps)) == NULL)
   {
     /* no io data */
@@ -1068,7 +1063,7 @@ static _Bool config_threshold_exceeded(procstat_t *ps)
   return 0;
 }
 
-static void ps_find_cpu_delta(procstat_t *ps, unsigned long *out_userd, unsigned long *out_sysd)
+static void ps_find_cpu_delta(procstat_t *ps, unsigned double *out_userd, unsigned double *out_sysd)
 {
   procstat_t *ps_ptr;
   for (ps_ptr=prev_proc_list_head_g; ps_ptr!=NULL; ps_ptr=ps_ptr->next) {
@@ -1104,8 +1099,8 @@ static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *p
   if (ss && prev_ss) {
     INFO("Previous system stats for cpu percent for pid %lu for process %s : %ld, %ld",ps->pid, ps->name,prev_ss->sys_cpu_system_counter, prev_ss->sys_cpu_tot_time_counter);
     INFO("Current system stats for cpu percent for pid %lu for process %s : %ld, %ld",ps->pid, ps->name,ss->sys_cpu_system_counter, ss->sys_cpu_tot_time_counter);
-    unsigned long ps_cpu_user_delta, ps_cpu_system_delta;
-    unsigned long ss_cpu_tot_time_delta;
+    unsigned double ps_cpu_user_delta, ps_cpu_system_delta;
+    unsigned double ss_cpu_tot_time_delta;
     static struct timeval oldtimev;
     struct timeval timev;
     struct timezone timez;
