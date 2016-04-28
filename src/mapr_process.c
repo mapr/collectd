@@ -1063,7 +1063,7 @@ static _Bool config_threshold_exceeded(procstat_t *ps)
   return 0;
 }
 
-static void ps_find_cpu_delta(procstat_t *ps, unsigned double *out_userd, unsigned double *out_sysd)
+static void ps_find_cpu_delta(procstat_t *ps,  double *out_userd,  double *out_sysd)
 {
   procstat_t *ps_ptr;
   for (ps_ptr=prev_proc_list_head_g; ps_ptr!=NULL; ps_ptr=ps_ptr->next) {
@@ -1099,8 +1099,8 @@ static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *p
   if (ss && prev_ss) {
     INFO("Previous system stats for cpu percent for pid %lu for process %s : %ld, %ld",ps->pid, ps->name,prev_ss->sys_cpu_system_counter, prev_ss->sys_cpu_tot_time_counter);
     INFO("Current system stats for cpu percent for pid %lu for process %s : %ld, %ld",ps->pid, ps->name,ss->sys_cpu_system_counter, ss->sys_cpu_tot_time_counter);
-    unsigned double ps_cpu_user_delta, ps_cpu_system_delta;
-    unsigned double ss_cpu_tot_time_delta;
+    double ps_cpu_user_delta, ps_cpu_system_delta;
+    double ss_cpu_tot_time_delta;
     static struct timeval oldtimev;
     struct timeval timev;
     struct timezone timez;
@@ -1118,7 +1118,7 @@ static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *p
     cpu_percent = (ps_cpu_system_delta + ps_cpu_user_delta) * 100.0 * numCores / ss_cpu_tot_time_delta;
     //cpu_percent = (ps_cpu_system_delta + ps_cpu_user_delta) * 100.0 / et ;
 
-    INFO ("%s proc with %lu pid delta: u: %lu, s: %lu, tot: %lu, percent: %f\n", ps->name, ps->pid,ps_cpu_user_delta, ps_cpu_system_delta, ss_cpu_tot_time_delta,cpu_percent);
+    INFO ("%s proc with %lu pid delta: u: %f, s: %f, tot: %f, percent: %f\n", ps->name, ps->pid,ps_cpu_user_delta, ps_cpu_system_delta, ss_cpu_tot_time_delta,cpu_percent);
     ps->cpu_percent = cpu_percent;
   }
 }
