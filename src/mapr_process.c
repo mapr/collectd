@@ -1073,10 +1073,10 @@ static void ps_find_cpu_delta(procstat_t *ps,  double *out_userd,  double *out_s
 
   if (ps_ptr) {
     INFO ("Current cpu user counter %"PRIi64" , previous counter %"PRIi64" for pid %lu for process %s",ps->cpu_user_counter, ps_ptr->cpu_user_counter,ps->pid, ps->name);
-    *out_userd = (ps->cpu_user_counter - ps_ptr->cpu_user_counter)/clockTicks;
+    *out_userd = ps->cpu_user_counter - ps_ptr->cpu_user_counter;
 
     INFO ("Current cpu system counter %"PRIi64" , previous counter %"PRIi64" for pid %lu for process %s",ps->cpu_system_counter, ps_ptr->cpu_system_counter,ps->pid, ps->name);
-    *out_sysd = (ps->cpu_system_counter - ps_ptr->cpu_system_counter)/clockTicks;
+    *out_sysd = ps->cpu_system_counter - ps_ptr->cpu_system_counter;
   }
   else {
     *out_userd = *out_sysd  = 0ULL;
@@ -1106,8 +1106,8 @@ static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *p
     //unsigned long ss_cpu_boot_time_delta;
     double cpu_percent;
     ps_find_cpu_delta(ps, &ps_cpu_user_delta, &ps_cpu_system_delta);
-    ss_cpu_tot_time_delta = (ss->sys_cpu_tot_time_counter - prev_ss->sys_cpu_tot_time_counter)/clockTicks;
-    cpu_percent = (ps_cpu_system_delta + ps_cpu_user_delta) * 100.0 * numCores / ss_cpu_tot_time_delta;
+    ss_cpu_tot_time_delta = ss->sys_cpu_tot_time_counter - prev_ss->sys_cpu_tot_time_counter;
+    cpu_percent = ((ps_cpu_system_delta + ps_cpu_user_delta) / ss_cpu_tot_time_delta) * 100.0 * numCores ;
     //cpu_percent = (ps_cpu_system_delta + ps_cpu_user_delta) * 100.0 / et * clockTicks;
 
     INFO ("%s proc with %lu pid delta: u: %f, s: %f, tot: %f, percent: %f\n", ps->name, ps->pid,ps_cpu_user_delta, ps_cpu_system_delta, ss_cpu_tot_time_delta,cpu_percent);
