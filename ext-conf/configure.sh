@@ -482,7 +482,7 @@ function waitForCLDB() {
 # uses global CLDB_RUNNING
 #############################################################################
 function configureClusterId() {
-    if [ $CLDB_RUNNING -eq 1 ]; then
+    if [ $CLDB_RUNNING -eq 1 -o -f "$CLUSTER_ID_FILE" ]; then
         CLUSTER_ID=$(cat "$CLUSTER_ID_FILE")
         sed -i 's/\"clusterid=.*/\"clusterid='$CLUSTER_ID'\"/g' ${NEW_CD_CONF_FILE}
         return 0
