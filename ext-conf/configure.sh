@@ -587,7 +587,7 @@ configurejavajmxplugin
 createFastJMXLink
 configureHadoopJMX
 if [ $CD_CONF_ASSUME_RUNNING_CORE -eq 1 ]; then
-    if ! [ -f "$CLUSTER_ID_FILE" ]; then
+    if ! [ -s "$CLUSTER_ID_FILE" ]; then
         waitForCLDB
     fi
     # we are not going to restart automatically
