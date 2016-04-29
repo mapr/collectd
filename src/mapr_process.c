@@ -699,10 +699,10 @@ static procstat_t *ps_read_tasks_status (int pid, procstat_t *ps)
 
   // Convert clock ticks to seconds
   INFO ("mapr_process plugin: Before cpu user counter %"PRIi64" for pid %lu for process %s", ps->cpu_user_counter,ps->pid, ps->name);
-  ps->cpu_user_counter = ps->cpu_user_counter + cpu_user_counter;
+  //ps->cpu_user_counter = ps->cpu_user_counter + cpu_user_counter;
   INFO ("mapr_process plugin: After cpu user counter %"PRIi64" for pid %lu for process %s",ps->cpu_user_counter,ps->pid, ps->name);
   INFO ("mapr_process plugin: Before cpu system counter %"PRIi64" for pid %lu for process %s",ps->cpu_system_counter,ps->pid, ps->name);
-  ps->cpu_system_counter = ps->cpu_system_counter + cpu_system_counter;
+  //ps->cpu_system_counter = ps->cpu_system_counter + cpu_system_counter;
   INFO ("mapr_process plugin: After cpu system counter %"PRIi64" for pid %lu for process %s",ps->cpu_system_counter,ps->pid, ps->name);
 
   return (ps);
