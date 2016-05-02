@@ -373,6 +373,50 @@ snapshot_used value:COUNTER:U:U
 total_used value:COUNTER:U:U
 quota value:COUNTER:U:U
 
+# HBase
+region_servers value:COUNTER:U:U
+dead_region_servers     value:COUNTER:U:U
+containers_unusable     value:COUNTER:U:U
+regions_in_transition value:COUNTER:U:U
+regions_in_transition_over_threshold value:COUNTER:U:U
+regions_in_transition_oldest_age value:COUNTER:U:U
+region_count value:COUNTER:U:U
+store_file_count value:COUNTER:U:U
+store_file_size value:COUNTER:U:U
+hlog_file_count value:COUNTER:U:U
+total_requests value:COUNTER:U:U
+read_requests value:COUNTER:U:U
+write_requests    value:COUNTER:U:U
+open_connections   value:COUNTER:U:U
+active_rpc_handlers value:COUNTER:U:U
+calls_general_queue   value:COUNTER:U:U
+calls_replication_queue    value:COUNTER:U:U
+calls_priority_queue value:COUNTER:U:U
+flush_queue_length     value:COUNTER:U:U
+updates_blocked_time     value:COUNTER:U:U
+compaction_queue_length value:COUNTER:U:U
+block_cache_hits value:COUNTER:U:U
+block_cache_misses value:COUNTER:U:U
+block_cache_express_hits_percent value:COUNTER:U:U
+local_files_percent value:COUNTER:U:U
+appends value:COUNTER:U:U
+deletes value:COUNTER:U:U
+flush_time value:COUNTER:U:U
+gets value:COUNTER:U:U
+increments    value:COUNTER:U:U
+mutates   value:COUNTER:U:U
+replays value:COUNTER:U:U
+scan_nexts   value:COUNTER:U:U
+split_time    value:COUNTER:U:U
+slow_appends value:COUNTER:U:U
+slow_deletes value:COUNTER:U:U
+slow_gets value:COUNTER:U:U
+slow_increments value:COUNTER:U:U
+slow_puts value:COUNTER:U:U
+authentication_successes    value:COUNTER:U:U
+authenticaiton_failures   value:COUNTER:U:U
+writes_without_wal value:COUNTER:U:U
+
 
 ########## END MAPR TYPES ################
 #
