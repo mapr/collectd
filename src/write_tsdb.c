@@ -877,6 +877,7 @@ static int wt_config_tsd(oconfig_item_t *ci)
     struct wt_callback *cb;
     user_data_t user_data;
     char callback_name[DATA_MAX_NAME_LEN];
+    char *nodeName;
     int i;
 
     cb = malloc(sizeof(*cb));
@@ -914,8 +915,7 @@ static int wt_config_tsd(oconfig_item_t *ci)
                   "option: %s.", child->key);
         }
     }
-
-    char *nodeName;
+    INFO("Host name %s",cb->node);
     nodeName = strtok(cb->node, ",");
     strcpy(tsdbNodes[tsdbNodesCount++],nodeName);
     INFO ("Node Name %s",nodeName);
