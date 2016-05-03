@@ -917,16 +917,17 @@ static int wt_config_tsd(oconfig_item_t *ci)
     }
     INFO("Host name %s",cb->node);
     nodeName = strtok(cb->node, ",");
-    INFO ("Node Name %s",nodeName);
+    INFO ("Node Name outside %s",nodeName);
     tsdbNodes[tsdbNodesCount] = malloc(sizeof(nodeName)+1);
     strcpy(tsdbNodes[tsdbNodesCount++],nodeName);
-    while( nodeName != NULL )
+    while ( nodeName != NULL )
     {
       nodeName = strtok(NULL, ",");
-      INFO ("Node Name %s",nodeName);
+      INFO ("Node Name inside %s",nodeName);
       tsdbNodes[tsdbNodesCount] = malloc(sizeof(nodeName)+1);
       strcpy(tsdbNodes[tsdbNodesCount++],nodeName);
     }
+
     INFO ("Total tsdb nodes %d", tsdbNodesCount);
     ssnprintf(callback_name, sizeof(callback_name), "write_tsdb/%s/%s",
               cb->node != NULL ? cb->node : WT_DEFAULT_NODE,
