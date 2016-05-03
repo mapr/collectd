@@ -273,13 +273,15 @@ static int wt_callback_init(struct wt_callback *cb)
     **/
     if(nextTsdbNodeIndex == -1)
     {
+      INFO ("write_tsdb plugin: previous index %d picking random index", nextTsdbNodeIndex);
       nextTsdbNodeIndex = rand()%tsdbNodesCount;
     } else {
+      INFO ("write_tsdb plugin: previous index %d picking next index", nextTsdbNodeIndex);
       nextTsdbNodeIndex = (nextTsdbNodeIndex + 1) % tsdbNodesCount;
     }
     strcpy(cb->node,tsdbNodes[nextTsdbNodeIndex]);
-    INFO ("Picked index %d", nextTsdbNodeIndex);
-    INFO ("Picked node %s", cb->node);
+    INFO ("write_tsdb plugin: Picked index %d", nextTsdbNodeIndex);
+    INFO ("write_tsdb plugin: Picked node %s", cb->node);
     const char *node = cb->node ? cb->node : WT_DEFAULT_NODE;
     const char *service = cb->service ? cb->service : WT_DEFAULT_SERVICE;
 
@@ -915,23 +917,18 @@ static int wt_config_tsd(oconfig_item_t *ci)
                   "option: %s.", child->key);
         }
     }
-    INFO("Host name %s",cb->node);
     nodeName = strtok(cb->node, ",");
-    INFO ("Node Name outside %s",nodeName);
     tsdbNodes[tsdbNodesCount] = malloc(sizeof(nodeName)+1);
     strcpy(tsdbNodes[tsdbNodesCount++],nodeName);
     while ( nodeName != NULL )
     {
-      INFO ("Node Name before %s",nodeName);
       nodeName = strtok(NULL, ",");
-      INFO ("Node Name after %s",nodeName);
       if (nodeName != NULL) {
         tsdbNodes[tsdbNodesCount] = malloc(sizeof(nodeName)+1);
         strcpy(tsdbNodes[tsdbNodesCount++],nodeName);
       }
     }
 
-    INFO ("Total tsdb nodes %d", tsdbNodesCount);
     ssnprintf(callback_name, sizeof(callback_name), "write_tsdb/%s/%s",
               cb->node != NULL ? cb->node : WT_DEFAULT_NODE,
               cb->service != NULL ? cb->service : WT_DEFAULT_SERVICE);
