@@ -148,7 +148,7 @@
 #endif
 
 #ifndef WT_MAX_TSDB_WRITES
-# define WT_MAX_TSDB_WRITES 100
+# define WT_MAX_TSDB_WRITES 10000
 #endif
 
 #ifndef WT_DEFAULT_ESCAPE
@@ -751,7 +751,7 @@ static int wt_send_message (const char* key, const char* value,
      * Change the tsdb node after X number of writes to distribute the load
      **/
     if (writesCount > WT_MAX_TSDB_WRITES) {
-      INFO ("Maximum number of writes reached on this node %s, moving to next node",cb->node);
+      INFO ("write_tsdb plugin: Maximum number of writes reached on this node %s, moving to next node",cb->node);
       close (cb->sock_fd);
       cb->sock_fd = -1;
       writesCount = 0;
