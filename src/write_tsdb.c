@@ -917,8 +917,8 @@ static int wt_config_tsd(oconfig_item_t *ci)
     }
     INFO("Host name %s",cb->node);
     nodeName = strtok(cb->node, ",");
-    strcpy(tsdbNodes[tsdbNodesCount++],nodeName);
     INFO ("Node Name %s",nodeName);
+    strcpy(tsdbNodes[tsdbNodesCount++],nodeName);
     while( nodeName != NULL )
     {
       nodeName = strtok(NULL, ",");
