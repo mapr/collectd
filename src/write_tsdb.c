@@ -381,13 +381,14 @@ static int wt_flush(cdtime_t timeout,
 
     if (cb->sock_fd < 0)
     {
-      int i;
-      for (i=0;i<tsdbNodesCount;i++) {
+      int i=0;
+      do {
         status = wt_callback_init(cb);
         if(status == 0) { // Could connect to a node
           break;
         }
-      }
+        i++;
+      }while(i<tsdbNodesCount);
       if (status != 0) // All tsdb nodes have been tried
       {
         ERROR("write_tsdb plugin: wt_callback_init failed.");
