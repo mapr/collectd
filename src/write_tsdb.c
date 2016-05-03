@@ -147,6 +147,10 @@
 # define WT_DEFAULT_TSDB_NODES_LIMIT 1024
 #endif
 
+#ifndef WT_MAX_TSDB_WRITES
+# define WT_MAX_TSDB_WRITES 100
+#endif
+
 #ifndef WT_DEFAULT_ESCAPE
 # define WT_DEFAULT_ESCAPE '.'
 #endif
@@ -194,6 +198,7 @@ struct wt_callback
 
 static int tsdbNodesCount;
 static int nextTsdbNodeIndex;
+static int writesCount;
 static char *tsdbNodes[WT_DEFAULT_TSDB_NODES_LIMIT];
 
 /*
@@ -273,6 +278,8 @@ static int wt_callback_init(struct wt_callback *cb)
     **/
     if(nextTsdbNodeIndex == -1)
     {
+      time_t t;
+      srand((unsigned) time(&t));
       int i = rand();
       INFO ("write_tsdb plugin: previous index %d picking random index %d from %d tsdbNodes", nextTsdbNodeIndex, i , tsdbNodesCount);
       nextTsdbNodeIndex = i%tsdbNodesCount;
@@ -740,6 +747,16 @@ static int wt_send_message (const char* key, const char* value,
         return -1;
     }
 
+    /**
+     * Change the tsdb node after X number of writes to distribute the load
+     **/
+    if (writesCount > WT_MAX_TSDB_WRITES) {
+      close (cb->sock_fd);
+      cb->sock_fd = -1;
+      writesCount = 0;
+      nextTsdbNodeIndex = -1;
+    }
+
     pthread_mutex_lock(&cb->send_lock);
 
     if (cb->sock_fd < 0)
@@ -788,6 +805,8 @@ static int wt_send_message (const char* key, const char* value,
           ((double) sizeof(cb->send_buf)),
           message);
 
+    // Update the number of writes
+    writesCount++;
     pthread_mutex_unlock(&cb->send_lock);
 
     return 0;
@@ -969,6 +988,7 @@ void module_register(void)
 {
     tsdbNodesCount = 0;
     nextTsdbNodeIndex = -1;
+    writesCount = 0;
     plugin_register_complex_config("write_tsdb", wt_config);
 }
 
