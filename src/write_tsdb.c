@@ -194,7 +194,7 @@ struct wt_callback
 
 static int tsdbNodesCount;
 static int nextTsdbNodeIndex;
-static char *tsdbNodes[WT_DEFAULT_TSDB_NODES_LIMIT]="";
+static char *tsdbNodes[WT_DEFAULT_TSDB_NODES_LIMIT];
 
 /*
  * Functions
