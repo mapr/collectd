@@ -273,8 +273,9 @@ static int wt_callback_init(struct wt_callback *cb)
     **/
     if(nextTsdbNodeIndex == -1)
     {
-      INFO ("write_tsdb plugin: previous index %d picking random index", nextTsdbNodeIndex);
-      nextTsdbNodeIndex = rand()%tsdbNodesCount;
+      int i = rand();
+      INFO ("write_tsdb plugin: previous index %d picking random index %d from %d tsdbNodes", nextTsdbNodeIndex, i , tsdbNodesCount);
+      nextTsdbNodeIndex = i%tsdbNodesCount;
     } else {
       INFO ("write_tsdb plugin: previous index %d picking next index", nextTsdbNodeIndex);
       nextTsdbNodeIndex = (nextTsdbNodeIndex + 1) % tsdbNodesCount;
