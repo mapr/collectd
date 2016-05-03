@@ -925,8 +925,10 @@ static int wt_config_tsd(oconfig_item_t *ci)
       INFO ("Node Name before %s",nodeName);
       nodeName = strtok(NULL, ",");
       INFO ("Node Name after %s",nodeName);
-      tsdbNodes[tsdbNodesCount] = malloc(sizeof(nodeName)+1);
-      strcpy(tsdbNodes[tsdbNodesCount++],nodeName);
+      if (nodeName != NULL) {
+        tsdbNodes[tsdbNodesCount] = malloc(sizeof(nodeName)+1);
+        strcpy(tsdbNodes[tsdbNodesCount++],nodeName);
+      }
     }
 
     INFO ("Total tsdb nodes %d", tsdbNodesCount);
