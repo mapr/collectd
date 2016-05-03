@@ -755,7 +755,6 @@ static int wt_send_message (const char* key, const char* value,
       close (cb->sock_fd);
       cb->sock_fd = -1;
       writesCount = 0;
-      nextTsdbNodeIndex = -1;
     }
 
     pthread_mutex_lock(&cb->send_lock);
