@@ -918,11 +918,13 @@ static int wt_config_tsd(oconfig_item_t *ci)
     INFO("Host name %s",cb->node);
     nodeName = strtok(cb->node, ",");
     INFO ("Node Name %s",nodeName);
+    tsdbNodes[tsdbNodesCount] = malloc(sizeof(nodeName)+1);
     strcpy(tsdbNodes[tsdbNodesCount++],nodeName);
     while( nodeName != NULL )
     {
       nodeName = strtok(NULL, ",");
       INFO ("Node Name %s",nodeName);
+      tsdbNodes[tsdbNodesCount] = malloc(sizeof(nodeName)+1);
       strcpy(tsdbNodes[tsdbNodesCount++],nodeName);
     }
     INFO ("Total tsdb nodes %d", tsdbNodesCount);
