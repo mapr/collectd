@@ -194,7 +194,7 @@ struct wt_callback
 
 static int tsdbNodesCount;
 static int nextTsdbNodeIndex;
-static char tsdbNodes[WT_DEFAULT_TSDB_NODES_LIMIT]="";
+static char *tsdbNodes[WT_DEFAULT_TSDB_NODES_LIMIT]="";
 
 /*
  * Functions
@@ -277,7 +277,7 @@ static int wt_callback_init(struct wt_callback *cb)
     } else {
       nextTsdbNodeIndex = (nextTsdbNodeIndex + 1) % tsdbNodesCount;
     }
-    cb->node = tsdbNodes[nextTsdbNodeIndex];
+    strcpy(cb->node,tsdbNodes[nextTsdbNodeIndex]);
     INFO ("Picked index %d", nextTsdbNodeIndex);
     INFO ("Picked node %s", cb->node);
     const char *node = cb->node ? cb->node : WT_DEFAULT_NODE;
@@ -381,7 +381,8 @@ static int wt_flush(cdtime_t timeout,
 
     if (cb->sock_fd < 0)
     {
-      for (int i=0;i<tsdbNodesCount;i++) {
+      int i;
+      for (i=0;i<tsdbNodesCount;i++) {
         status = wt_callback_init(cb);
         if(status == 0) { // Could connect to a node
           break;
@@ -739,7 +740,8 @@ static int wt_send_message (const char* key, const char* value,
 
     if (cb->sock_fd < 0)
     {
-      for (int i=0;i<tsdbNodesCount;i++) {
+      int i;
+      for (i=0;i<tsdbNodesCount;i++) {
         status = wt_callback_init(cb);
         if(status == 0) { // Could connect to a node
           break;
@@ -911,10 +913,13 @@ static int wt_config_tsd(oconfig_item_t *ci)
         }
     }
 
-    tsdbNodes[tsdbNodesCount++]=strtok(cb->node, ",");
-    while( nodeNames != NULL )
+    char *nodeName;
+    nodeName = strtok(cb->node, ",");
+    strcpy(tsdbNodes[tsdbNodesCount++],nodeName);
+    while( nodeName != NULL )
     {
-      tsdbNodes[tsdbNodesCount++]=strtok(NULL, ",");
+      nodeName = strtok(NULL, ",");
+      strcpy(tsdbNodes[tsdbNodesCount++],nodeName);
     }
     INFO ("Total tsdb nodes %d", tsdbNodesCount);
     ssnprintf(callback_name, sizeof(callback_name), "write_tsdb/%s/%s",
