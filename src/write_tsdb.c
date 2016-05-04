@@ -197,7 +197,7 @@ struct wt_callback
 };
 
 static int tsdbNodesCount;
-static int nextTsdbNodeIndex;
+static int nextTsdbNodeIndex=-1;
 static int writesCount;
 static char *tsdbNodes[WT_DEFAULT_TSDB_NODES_LIMIT];
 
@@ -281,14 +281,11 @@ static int wt_callback_init(struct wt_callback *cb)
       time_t t;
       srand((unsigned) time(&t));
       int i = rand();
-      INFO ("write_tsdb plugin: previous index %d picking random index %d from %d tsdbNodes", nextTsdbNodeIndex, i , tsdbNodesCount);
       nextTsdbNodeIndex = i%tsdbNodesCount;
     } else {
-      INFO ("write_tsdb plugin: previous index %d picking next index", nextTsdbNodeIndex);
       nextTsdbNodeIndex = (nextTsdbNodeIndex + 1) % tsdbNodesCount;
     }
     strcpy(cb->node,tsdbNodes[nextTsdbNodeIndex]);
-    INFO ("write_tsdb plugin: Picked index %d", nextTsdbNodeIndex);
     INFO ("write_tsdb plugin: Picked node %s", cb->node);
     const char *node = cb->node ? cb->node : WT_DEFAULT_NODE;
     const char *service = cb->service ? cb->service : WT_DEFAULT_SERVICE;
@@ -750,7 +747,7 @@ static int wt_send_message (const char* key, const char* value,
     /**
      * Change the tsdb node after X number of writes to distribute the load
      **/
-    if (writesCount > WT_MAX_TSDB_WRITES) {
+    if (writesCount > WT_MAX_TSDB_WRITES && tsdbNodesCount > 1) {
       INFO ("write_tsdb plugin: Maximum number of writes reached on this node %s, moving to next node",cb->node);
       close (cb->sock_fd);
       cb->sock_fd = -1;
@@ -938,14 +935,14 @@ static int wt_config_tsd(oconfig_item_t *ci)
         }
     }
     nodeName = strtok(cb->node, ",");
-    tsdbNodes[tsdbNodesCount] = malloc(sizeof(nodeName)+1);
-    strcpy(tsdbNodes[tsdbNodesCount++],nodeName);
+    tsdbNodes[tsdbNodesCount] = malloc(sizeof(nodeName) + 1);
+    strcpy(tsdbNodes[tsdbNodesCount++], nodeName);
     while ( nodeName != NULL )
     {
       nodeName = strtok(NULL, ",");
       if (nodeName != NULL) {
-        tsdbNodes[tsdbNodesCount] = malloc(sizeof(nodeName)+1);
-        strcpy(tsdbNodes[tsdbNodesCount++],nodeName);
+        tsdbNodes[tsdbNodesCount] = malloc(sizeof(nodeName) +  1);
+        strcpy(tsdbNodes[tsdbNodesCount++], nodeName);
       }
     }
 
@@ -986,9 +983,6 @@ static int wt_config(oconfig_item_t *ci)
 
 void module_register(void)
 {
-    tsdbNodesCount = 0;
-    nextTsdbNodeIndex = -1;
-    writesCount = 0;
     plugin_register_complex_config("write_tsdb", wt_config);
 }
 
