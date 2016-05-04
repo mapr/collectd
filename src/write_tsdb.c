@@ -143,6 +143,14 @@
 # define WT_DEFAULT_SERVICE "4242"
 #endif
 
+#ifndef WT_DEFAULT_TSDB_NODES_LIMIT
+# define WT_DEFAULT_TSDB_NODES_LIMIT 1024
+#endif
+
+#ifndef WT_MAX_TSDB_WRITES
+# define WT_MAX_TSDB_WRITES 10000
+#endif
+
 #ifndef WT_DEFAULT_ESCAPE
 # define WT_DEFAULT_ESCAPE '.'
 #endif
@@ -188,6 +196,10 @@ struct wt_callback
     pthread_mutex_t send_lock;
 };
 
+static int tsdbNodesCount;
+static int nextTsdbNodeIndex=-1;
+static int writesCount;
+static char *tsdbNodes[WT_DEFAULT_TSDB_NODES_LIMIT];
 
 /*
  * Functions
@@ -259,6 +271,22 @@ static int wt_callback_init(struct wt_callback *cb)
     struct addrinfo *ai_ptr;
     int status;
 
+    /** Make Plugin HA
+         * - Pick one node randomly from the list to which the connection can be established when running for the first time
+         * - Pick a node in round robin fashion from next time
+         * - Blacklist a node for duration X if the connection cannot be established -- FUTURE
+    **/
+    if(nextTsdbNodeIndex == -1)
+    {
+      time_t t;
+      srand((unsigned) time(&t));
+      int i = rand();
+      nextTsdbNodeIndex = i%tsdbNodesCount;
+    } else {
+      nextTsdbNodeIndex = (nextTsdbNodeIndex + 1) % tsdbNodesCount;
+    }
+    strcpy(cb->node,tsdbNodes[nextTsdbNodeIndex]);
+    INFO ("write_tsdb plugin: Picked node %s", cb->node);
     const char *node = cb->node ? cb->node : WT_DEFAULT_NODE;
     const char *service = cb->service ? cb->service : WT_DEFAULT_SERVICE;
 
@@ -273,6 +301,7 @@ static int wt_callback_init(struct wt_callback *cb)
     ai_hints.ai_socktype = SOCK_STREAM;
 
     ai_list = NULL;
+
 
     status = getaddrinfo(node, service, &ai_hints, &ai_list);
     if (status != 0)
@@ -309,6 +338,7 @@ static int wt_callback_init(struct wt_callback *cb)
         ERROR("write_tsdb plugin: Connecting to %s:%s failed. "
               "The last error was: %s", node, service,
               sstrerror (errno, errbuf, sizeof(errbuf)));
+
         return -1;
     }
 
@@ -358,13 +388,20 @@ static int wt_flush(cdtime_t timeout,
 
     if (cb->sock_fd < 0)
     {
+      int i=0;
+      do {
         status = wt_callback_init(cb);
-        if (status != 0)
-        {
-            ERROR("write_tsdb plugin: wt_callback_init failed.");
-            pthread_mutex_unlock(&cb->send_lock);
-            return -1;
+        if (status == 0) { // Could connect to a node
+          break;
         }
+        i++;
+      } while(i<tsdbNodesCount);
+      if (status != 0) // All tsdb nodes have been tried
+      {
+        ERROR("write_tsdb plugin: wt_callback_init failed.");
+        pthread_mutex_unlock(&cb->send_lock);
+        return -1;
+      }
     }
 
     status = wt_flush_nolock(timeout, cb);
@@ -524,7 +561,7 @@ static int wt_format_tags(char *ret, int ret_len,
                     ptr[0] = '\0';
                 } else {
                     char *ptr2 = ptr+1;
-                    while(NULL != (ptr2 = strchr(ptr2, ' '))) ptr2[0] = '_'; 
+                    while(NULL != (ptr2 = strchr(ptr2, ' '))) ptr2[0] = '_';
                     ptr += n;
                     remaining_len -= n;
                 }
@@ -707,17 +744,34 @@ static int wt_send_message (const char* key, const char* value,
         return -1;
     }
 
+    /**
+     * Change the tsdb node after X number of writes to distribute the load
+     **/
+    if (writesCount > WT_MAX_TSDB_WRITES && tsdbNodesCount > 1) {
+      INFO ("write_tsdb plugin: Maximum number of writes reached on this node %s, moving to next node",cb->node);
+      close (cb->sock_fd);
+      cb->sock_fd = -1;
+      writesCount = 0;
+    }
+
     pthread_mutex_lock(&cb->send_lock);
 
     if (cb->sock_fd < 0)
     {
+      int i=0;
+      do {
         status = wt_callback_init(cb);
-        if (status != 0)
-        {
-            ERROR("write_tsdb plugin: wt_callback_init failed.");
-            pthread_mutex_unlock(&cb->send_lock);
-            return -1;
+        if (status == 0) { // Could connect to a node
+          break;
         }
+        i++;
+      } while(i<tsdbNodesCount);
+      if (status != 0) // All tsdb nodes have been tried
+      {
+        ERROR("write_tsdb plugin: wt_callback_init failed.");
+        pthread_mutex_unlock(&cb->send_lock);
+        return -1;
+      }
     }
 
     if (message_len >= cb->send_buf_free)
@@ -748,6 +802,8 @@ static int wt_send_message (const char* key, const char* value,
           ((double) sizeof(cb->send_buf)),
           message);
 
+    // Update the number of writes
+    writesCount++;
     pthread_mutex_unlock(&cb->send_lock);
 
     return 0;
@@ -804,7 +860,7 @@ static int wt_write_messages(const data_set_t *ds, const value_list_t *vl,
             ERROR("write_tsdb plugin: error with format_tags");
             return status;
         }
-        
+
 
         /* Send the message to tsdb */
         status = wt_send_message(key, values, tags, vl->time, cb, vl);
@@ -840,6 +896,7 @@ static int wt_config_tsd(oconfig_item_t *ci)
     struct wt_callback *cb;
     user_data_t user_data;
     char callback_name[DATA_MAX_NAME_LEN];
+    char *nodeName;
     int i;
 
     cb = malloc(sizeof(*cb));
@@ -876,6 +933,17 @@ static int wt_config_tsd(oconfig_item_t *ci)
             ERROR("write_tsdb plugin: Invalid configuration "
                   "option: %s.", child->key);
         }
+    }
+    nodeName = strtok(cb->node, ",");
+    tsdbNodes[tsdbNodesCount] = malloc(sizeof(nodeName) + 1);
+    strcpy(tsdbNodes[tsdbNodesCount++], nodeName);
+    while ( nodeName != NULL )
+    {
+      nodeName = strtok(NULL, ",");
+      if (nodeName != NULL) {
+        tsdbNodes[tsdbNodesCount] = malloc(sizeof(nodeName) +  1);
+        strcpy(tsdbNodes[tsdbNodesCount++], nodeName);
+      }
     }
 
     ssnprintf(callback_name, sizeof(callback_name), "write_tsdb/%s/%s",
