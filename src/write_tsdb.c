@@ -395,7 +395,7 @@ static int wt_flush(cdtime_t timeout,
             break;
           }
           i++;
-        } while(i<tsdbNodesCount);
+        } while (i<tsdbNodesCount);
         if (status != 0) // All tsdb nodes have been tried
         {
           ERROR("write_tsdb plugin: wt_callback_init failed.");
@@ -765,7 +765,7 @@ static int wt_send_message (const char* key, const char* value,
                 break;
             }
             i++;
-        } while(i<tsdbNodesCount);
+        } while (i<tsdbNodesCount);
         if (status != 0) // All tsdb nodes have been tried
         {
             ERROR("write_tsdb plugin: wt_callback_init failed.");
