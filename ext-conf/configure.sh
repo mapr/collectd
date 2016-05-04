@@ -294,11 +294,15 @@ function configureopentsdbplugin()
     #     </Node>
     # </Plugin>
     local tsdbhost
-    # pick the first one
-    tsdbhost=${nodelist%%,*}
-    tsdbhost=${tsdbhost%%:*}
+    local nodesList=""
+    for i in $(echo $nodelist | sed "s/,/ /g")
+    do
+      tsdbhost=${i%%:*}
+      nodesList=$nodesList","$tsdbhost
+    done
+    nodesList=${nodesList:1}
     enableSection MAPR_CONF_OT_TAG
-    awk -v hostname=$tsdbhost -v port=$nodeport -v plugin=write_tsdb \
+    awk -v hostname=$nodesList -v port=$nodeport -v plugin=write_tsdb \
         -f ${AWKLIBPATH}/configurePlugin.awk ${NEW_CD_CONF_FILE} > ${NEW_CD_CONF_FILE}.tmp
     if [[ $? -eq 0 ]]; then
         mv ${NEW_CD_CONF_FILE}.tmp ${NEW_CD_CONF_FILE}
