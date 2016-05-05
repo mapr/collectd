@@ -584,7 +584,7 @@ adjustOwnership
 getRoles
 configureopentsdbplugin  # this ucomments everything between the MAPR_CONF_TAGs
 configurejavajmxplugin
-createFastJMXLink
+#createFastJMXLink
 configureHadoopJMX
 if [ $CD_CONF_ASSUME_RUNNING_CORE -eq 1 ]; then
     if ! [ -s "$CLUSTER_ID_FILE" ]; then
