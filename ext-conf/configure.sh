@@ -40,6 +40,8 @@ RM_REST_PORT=8088
 RM_JMX_PORT=8025
 NM_JMX_PORT=8027
 CLDB_JMX_PORT=7220
+HBASE_MASTER_JMX_PORT=10101
+HBASE_REGION_SERVER_JMX_PORT=10102
 JMX_INSERT='#Enable JMX for MaprMonitoring\nJMX_OPTS=\"-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.port\"'
 YARN_JMX_RM_OPT_STR='$JMX_OPTS='${RM_JMX_PORT}
 YARN_JMX_NM_OPT_STR='$JMX_OPTS='${NM_JMX_PORT}
@@ -50,10 +52,14 @@ MAPR_CONF_DIR="${MAPR_HOME}/conf/conf.d"
 CLUSTER_ID_FILE="${MAPR_HOME}/conf/clusterid"
 HADOOP_VER=$(cat "$MAPR_HOME/hadoop/hadoopversion")
 YARN_BIN="${MAPR_HOME}/hadoop/hadoop-${HADOOP_VER}/bin/yarn"
+HBASE_VER=$(cat "$MAPR_HOME/hbase/hbaseversion")
+HBASE_ENV="${MAPR_HOME}/hbase/hbase-${HBASE_VER}/conf/hbase-env.sh"
 CD_CONF_ASSUME_RUNNING_CORE=${isOnlyRoles:-0}
 CD_NM_ROLE=0
 CD_CLDB_ROLE=0
 CD_RM_ROLE=0
+CD_HBASE_REGION_SERVER_ROLE=0
+CD_HBASE_MASTER_ROLE=0
 CLDB_RUNNING=0
 CLDB_RETRIES=12
 CLDB_RETRY_DLY=5
@@ -202,6 +208,8 @@ function getRoles() {
     [ -f ${MAPR_HOME}/roles/resourcemanager ] && CD_RM_ROLE=1
     [ -f ${MAPR_HOME}/roles/nodemanager ] && CD_NM_ROLE=1
     [ -f ${MAPR_HOME}/roles/cldb ] && CD_CLDB_ROLE=1
+    [ -f ${MAPR_HOME}/roles/hbregionserver ] && CD_HBASE_REGION_SERVER_ROLE=1
+    [ -f ${MAPR_HOME}/roles/hbmaster ] && CD_HBASE_MASTER_ROLE=1
 }
 
 #############################################################################
@@ -295,10 +303,9 @@ function configureopentsdbplugin()
     # </Plugin>
     local tsdbhost
     local nodesList=""
-    for i in $(echo $nodelist | sed "s/,/ /g")
-    do
-      tsdbhost=${i%%:*}
-      nodesList=$nodesList","$tsdbhost
+    for i in $(echo $nodelist | sed "s/,/ /g"); do
+        tsdbhost=${i%%:*}
+        nodesList=$nodesList","$tsdbhost
     done
     nodesList=${nodesList:1}
     enableSection MAPR_CONF_OT_TAG
@@ -354,7 +361,8 @@ function configurejavajmxplugin()
 
     # XXX potential problem with multi-nic nodes
     host_name=$(hostname)
-    if [ ${CD_RM_ROLE} -eq 1  -o ${CD_NM_ROLE} -eq 1  -o ${CD_CLDB_ROLE} -eq 1 ]; then
+    if [ ${CD_RM_ROLE} -eq 1  -o ${CD_NM_ROLE} -eq 1  -o ${CD_CLDB_ROLE} -eq 1 -o\
+         ${CD_HBASE_MASTER_ROLE} -eq 1 -o ${CD_HBASE_REGION_SERVER_ROLE} -eq 1 ]; then
         enableSection MAPR_CONF_JMX_TAG
         sed -i 's@${fastjmx_prefix}@'$COLLECTD_HOME'@g' ${NEW_CD_CONF_FILE}
         if [ ${CD_RM_ROLE} -eq 1 ]; then
@@ -397,6 +405,14 @@ function configureConnections() {
     if [ ${CD_RM_ROLE} -eq 1 ]; then
         enableSection MAPR_CONN_CONF_RM_TAG
         configureServiceURL MAPR_CONN_CONF_RM_TAG $host_name jmx $secureCluster $RM_JMX_PORT
+    fi
+    if [ ${CD_HBASE_MASTER_ROLE} -eq 1 ]; then
+        enableSection MAPR_CONN_CONF_HBASE_MASTER_TAG
+        configureServiceURL MAPR_CONN_CONF_HBASE_MASTER_TAG $host_name jmx $secureCluster $HBASE_MASTER_JMX_PORT
+    fi
+    if [ ${CD_HBASE_REGION_SERVER_ROLE} -eq 1 ]; then
+        enableSection MAPR_CONN_CONF_HBASE_REGION_SERVER_TAG
+        configureServiceURL MAPR_CONN_CONF_HBASE_REGION_SERVER_TAG $host_name jmx $secureCluster $HBASE_REGION_SERVER_JMX_PORT
     fi
 }
 
@@ -450,6 +466,34 @@ function configureHadoopJMX() {
                 >&2 echo "WARNING: Failed to enable jmx for NM/RM - see ${YARN_BIN}.tmp.tmp"
             fi
             rm -f ${YARN_BIN}.tmp
+        fi
+    fi
+}
+
+#############################################################################
+# Function to configure HBase JMX
+#
+# uses global CLDB_RUNNING, CD_HBASE_MASTER_ROLE, CD_HBASE_REGION_SERVER_ROLE
+#############################################################################
+function configureHbaseJMX() {
+    local rc1
+    local rc2
+    # Enable JMX for HBase Master and HBase Region server only if they are installed
+    if [ ${CD_HBASE_MASTER_ROLE} -eq 1 -o ${CD_HBASE_REGION_SERVER_ROLE} -eq 1 ]; then
+        # only change the script once
+        if ! grep "^#Enable JMX for MaprMonitoring" ${HBASE_ENV} > /dev/null 2>&1; then
+            cp -p ${HBASE_ENV} ${HBASE_ENV}.prejmx
+    
+            awk -v jmx_uncomment_start='# export HBASE_JMX_BASE=' \
+                -v jmx_uncomment_end='# export HBASE_REST_OPTS=' \
+                -f ${AWKLIBPATH}/configureHbaseJmx.awk ${HBASE_ENV} > ${HBASE_ENV}.tmp
+            rc1=$?
+            if [ $rc1 -eq 0 ]; then
+                mv ${HBASE_ENV}.tmp ${HBASE_ENV}
+                chmod a+x ${HBASE_ENV}
+            else
+                >&2 echo "WARNING: Failed to enable jmx for HBasse Maser/Region Server - see ${HBASE_ENV}.tmp"
+            fi
         fi
     fi
 }
@@ -603,6 +647,7 @@ configurejavajmxplugin
 #createFastJMXLink
 configureVolumePlugin
 configureHadoopJMX
+configureHbaseJMX
 if [ $CD_CONF_ASSUME_RUNNING_CORE -eq 1 ]; then
     if ! [ -s "$CLUSTER_ID_FILE" ]; then
         waitForCLDB
