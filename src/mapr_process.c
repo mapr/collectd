@@ -457,7 +457,7 @@ static int ps_init(void) {
   pagesize_g = sysconf(_SC_PAGESIZE);
   clockTicks = sysconf(_SC_CLK_TCK);
   numCores = (uint)sysconf(_SC_NPROCESSORS_ONLN);
-  INFO ("pagesize_g = %li; clockTicks = %li; numCores = %d;",
+  DEBUG ("pagesize_g = %li; clockTicks = %li; numCores = %d;",
       pagesize_g, clockTicks, numCores);
   return (0);
 } /* int ps_init */
@@ -571,19 +571,19 @@ static procstat_t *ps_read_tasks_status (int pid, procstat_t *ps)
   struct dirent *ent;
   derive_t cswitch_vol = 0;
   derive_t cswitch_invol = 0;
-  derive_t cpu_user_counter = 0;
-  derive_t cpu_system_counter = 0;
+  //derive_t cpu_user_counter = 0;
+  //derive_t cpu_system_counter = 0;
   char buffer[1024];
   char *fields[8];
   int numfields;
-  ssize_t status;
-  size_t buffer_len;
-  char *buffer_ptr;
-  size_t name_start_pos;
-  size_t name_end_pos;
-  char *statFields[64];
-  char fields_len;
-  char statBuffer[1024];
+  // ssize_t status;
+  //size_t buffer_len;
+  //char *buffer_ptr;
+  //size_t name_start_pos;
+  //size_t name_end_pos;
+  //char *statFields[64];
+  //char fields_len;
+  //char statBuffer[1024];
 
 
   ssnprintf (dirname, sizeof (dirname), "/proc/%i/task", pid);
@@ -647,63 +647,62 @@ static procstat_t *ps_read_tasks_status (int pid, procstat_t *ps)
       WARNING ("mapr_process plugin: fclose: %s", sstrerror (errno, errbuf, sizeof (errbuf)));
     }
 
-    // Read /proc/pid/task/taskid/stat file
-    ssnprintf (filename, sizeof (filename), "/proc/%i/task/%s/stat", pid, tpid);
-    INFO ("mapr_process plugin: Reading task %s file for process %s", tpid, ps->name);
-    status = read_file_contents (filename, statBuffer, sizeof(statBuffer) - 1);
-    if (status <= 0)
-      return (NULL);
-    buffer_len = (size_t) status;
-    statBuffer[buffer_len] = 0;
-    name_start_pos = 0;
-    while ((statBuffer[name_start_pos] != '(')
-        && (name_start_pos < buffer_len))
-      name_start_pos++;
-
-    name_end_pos = buffer_len;
-    while ((statBuffer[name_end_pos] != ')')
-        && (name_end_pos > 0))
-      name_end_pos--;
-
-    /* Either '(' or ')' is not found or they are in the wrong order.
-     * Anyway, something weird that shouldn't happen ever. */
-    if (name_start_pos >= name_end_pos)
-    {
-      ERROR ("mapr_process plugin: name_start_pos = %zu >= name_end_pos = %zu",
-          name_start_pos, name_end_pos);
-      return (NULL);
-    }
-
-    if ((buffer_len - name_end_pos) < 2)
-      return (NULL);
-    buffer_ptr = &statBuffer[name_end_pos + 2];
-
-    // Split the fields
-    fields_len = strsplit (buffer_ptr, statFields, STATIC_ARRAY_SIZE (statFields));
-    if (fields_len < 22)
-    {
-      DEBUG ("mapr_process plugin: ps_read_task (pid = %i): for task %s"
-          " `%s' has only %i fields..",
-          (int) pid, tpid,filename, fields_len);
-      return (NULL);
-    }
-
-    // Aggregate it for all tasks
-    cpu_user_counter = cpu_user_counter + atoll (statFields[11]);
-    cpu_system_counter = cpu_system_counter + atoll (statFields[12]);
+//    // Read /proc/pid/task/taskid/stat file
+//    ssnprintf (filename, sizeof (filename), "/proc/%i/task/%s/stat", pid, tpid);
+//    INFO ("mapr_process plugin: Reading task %s file for process %s", tpid, ps->name);
+//    status = read_file_contents (filename, statBuffer, sizeof(statBuffer) - 1);
+//    if (status <= 0)
+//      return (NULL);
+//    buffer_len = (size_t) status;
+//    statBuffer[buffer_len] = 0;
+//    name_start_pos = 0;
+//    while ((statBuffer[name_start_pos] != '(')
+//        && (name_start_pos < buffer_len))
+//      name_start_pos++;
+//
+//    name_end_pos = buffer_len;
+//    while ((statBuffer[name_end_pos] != ')')
+//        && (name_end_pos > 0))
+//      name_end_pos--;
+//
+//    /* Either '(' or ')' is not found or they are in the wrong order.
+//     * Anyway, something weird that shouldn't happen ever. */
+//    if (name_start_pos >= name_end_pos)
+//    {
+//      ERROR ("mapr_process plugin: name_start_pos = %zu >= name_end_pos = %zu",
+//          name_start_pos, name_end_pos);
+//      return (NULL);
+//    }
+//
+//    if ((buffer_len - name_end_pos) < 2)
+//      return (NULL);
+//    buffer_ptr = &statBuffer[name_end_pos + 2];
+//
+//    // Split the fields
+//    fields_len = strsplit (buffer_ptr, statFields, STATIC_ARRAY_SIZE (statFields));
+//    if (fields_len < 22)
+//    {
+//      DEBUG ("mapr_process plugin: ps_read_task (pid = %i): for task %s"
+//          " `%s' has only %i fields..",
+//          (int) pid, tpid,filename, fields_len);
+//      return (NULL);
+//    }
+//
+//    // Aggregate it for all tasks
+//    cpu_user_counter = cpu_user_counter + atoll (statFields[11]);
+//    cpu_system_counter = cpu_system_counter + atoll (statFields[12]);
   }
   closedir (dh);
 
   ps->cswitch_vol = cswitch_vol;
   ps->cswitch_invol = cswitch_invol;
 
-  // Convert clock ticks to seconds
-  INFO ("mapr_process plugin: Before cpu user counter %"PRIi64" for pid %lu for process %s", ps->cpu_user_counter,ps->pid, ps->name);
+
   //ps->cpu_user_counter = ps->cpu_user_counter + cpu_user_counter;
-  INFO ("mapr_process plugin: After cpu user counter %"PRIi64" for pid %lu for process %s",ps->cpu_user_counter,ps->pid, ps->name);
-  INFO ("mapr_process plugin: Before cpu system counter %"PRIi64" for pid %lu for process %s",ps->cpu_system_counter,ps->pid, ps->name);
+
+
   //ps->cpu_system_counter = ps->cpu_system_counter + cpu_system_counter;
-  INFO ("mapr_process plugin: After cpu system counter %"PRIi64" for pid %lu for process %s",ps->cpu_system_counter,ps->pid, ps->name);
+
 
   return (ps);
 } /* int *ps_read_tasks_status */
@@ -880,7 +879,7 @@ static sysstat_t *ps_read_sys_stat(void)
   ss->sys_boot_time_secs = si.uptime;
   ss->sys_tot_phys_mem = sys_tot_phys_mem;
   ss->sys_boot_time_secs = time(NULL) - ss->sys_boot_time_secs;
-  INFO ("%s sys u:%llu n:%llu s:%llu i:%llu physmem: %llu\n",
+  DEBUG ("%s sys u:%llu n:%llu s:%llu i:%llu physmem: %llu\n",
       name, sys_cpu_user_counter, sys_cpu_user_nice_counter,
       sys_cpu_system_counter, sys_cpu_idle_counter, sys_tot_phys_mem);
   return ss;
@@ -1072,10 +1071,10 @@ static void ps_find_cpu_delta(procstat_t *ps,  double *out_userd,  double *out_s
   }
 
   if (ps_ptr) {
-    INFO ("Current cpu user counter %"PRIi64" , previous counter %"PRIi64" for pid %lu for process %s",ps->cpu_user_counter, ps_ptr->cpu_user_counter,ps->pid, ps->name);
+    DEBUG ("Current cpu user counter %"PRIi64" , previous counter %"PRIi64" for pid %lu for process %s",ps->cpu_user_counter, ps_ptr->cpu_user_counter,ps->pid, ps->name);
     *out_userd = ps->cpu_user_counter - ps_ptr->cpu_user_counter;
 
-    INFO ("Current cpu system counter %"PRIi64" , previous counter %"PRIi64" for pid %lu for process %s",ps->cpu_system_counter, ps_ptr->cpu_system_counter,ps->pid, ps->name);
+    DEBUG ("Current cpu system counter %"PRIi64" , previous counter %"PRIi64" for pid %lu for process %s",ps->cpu_system_counter, ps_ptr->cpu_system_counter,ps->pid, ps->name);
     *out_sysd = ps->cpu_system_counter - ps_ptr->cpu_system_counter;
   }
   else {
@@ -1098,8 +1097,8 @@ static void ps_calc_runtime(sysstat_t *ss, procstat_t *ps)
 static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *ps)
 {
   if (ss && prev_ss) {
-    INFO("Previous system stats for cpu percent for pid %lu for process %s : %ld, %ld",ps->pid, ps->name,prev_ss->sys_cpu_system_counter, prev_ss->sys_cpu_tot_time_counter);
-    INFO("Current system stats for cpu percent for pid %lu for process %s : %ld, %ld",ps->pid, ps->name,ss->sys_cpu_system_counter, ss->sys_cpu_tot_time_counter);
+    DEBUG("Previous system stats for cpu percent for pid %lu for process %s : %ld, %ld",ps->pid, ps->name,prev_ss->sys_cpu_system_counter, prev_ss->sys_cpu_tot_time_counter);
+    DEBUG("Current system stats for cpu percent for pid %lu for process %s : %ld, %ld",ps->pid, ps->name,ss->sys_cpu_system_counter, ss->sys_cpu_tot_time_counter);
     double ps_cpu_user_delta, ps_cpu_system_delta;
     double ss_cpu_tot_time_delta;
 
@@ -1110,7 +1109,7 @@ static void ps_calc_cpu_percent(sysstat_t *ss, sysstat_t *prev_ss, procstat_t *p
     cpu_percent = ((ps_cpu_system_delta + ps_cpu_user_delta) / ss_cpu_tot_time_delta) * 100.0 * numCores ;
     //cpu_percent = (ps_cpu_system_delta + ps_cpu_user_delta) * 100.0 / et * clockTicks;
 
-    INFO ("%s proc with %lu pid delta: u: %f, s: %f, tot: %f, percent: %f\n", ps->name, ps->pid,ps_cpu_user_delta, ps_cpu_system_delta, ss_cpu_tot_time_delta,cpu_percent);
+    DEBUG ("%s proc with %lu pid delta: u: %f, s: %f, tot: %f, percent: %f\n", ps->name, ps->pid,ps_cpu_user_delta, ps_cpu_system_delta, ss_cpu_tot_time_delta,cpu_percent);
     ps->cpu_percent = cpu_percent;
   }
 }
@@ -1169,7 +1168,7 @@ static int ps_read(void) {
   if (prev_ss)
     free(prev_ss);
   prev_ss = ss;
-  INFO("Current system stats: %ld, %ld",prev_ss->sys_cpu_system_counter, prev_ss->sys_cpu_tot_time_counter);
+  DEBUG("Current system stats: %ld, %ld",prev_ss->sys_cpu_system_counter, prev_ss->sys_cpu_tot_time_counter);
   proc_list_head_g = NULL;
 
   free(P);
