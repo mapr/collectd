@@ -320,6 +320,9 @@ max_vcores value:COUNTER:U:U
 active_nodes value:COUNTER:U:U
 total_nodes value:COUNTER:U:U
 unhealthy_nodes value:COUNTER:U:U
+pending_disks value:GAUGE:U:U
+available_disks value:GAUGE:U:U
+reserved_disks value:GAUGE:U:U
 # Per user metrics
 user_used_memory value:COUNTER:U:U
 user_used_disks value:GAUGE:U:U
