@@ -1,6 +1,6 @@
 #!/bin/bash
 HOSTNAME="${COLLECTD_HOSTNAME:-`hostname -f`}"
-INTERVAL="30"
+INTERVAL="10"
 while sleep "$INTERVAL"
 do
   VALUE=`/opt/mapr/bin/spyglass`
