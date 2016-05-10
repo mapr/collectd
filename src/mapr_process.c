@@ -571,19 +571,19 @@ static procstat_t *ps_read_tasks_status (int pid, procstat_t *ps)
   struct dirent *ent;
   derive_t cswitch_vol = 0;
   derive_t cswitch_invol = 0;
-  derive_t cpu_user_counter = 0;
-  derive_t cpu_system_counter = 0;
+  //derive_t cpu_user_counter = 0;
+  //derive_t cpu_system_counter = 0;
   char buffer[1024];
   char *fields[8];
   int numfields;
-  ssize_t status;
-  size_t buffer_len;
-  char *buffer_ptr;
-  size_t name_start_pos;
-  size_t name_end_pos;
-  char *statFields[64];
-  char fields_len;
-  char statBuffer[1024];
+  // ssize_t status;
+  //size_t buffer_len;
+  //char *buffer_ptr;
+  //size_t name_start_pos;
+  //size_t name_end_pos;
+  //char *statFields[64];
+  //char fields_len;
+  //char statBuffer[1024];
 
 
   ssnprintf (dirname, sizeof (dirname), "/proc/%i/task", pid);
