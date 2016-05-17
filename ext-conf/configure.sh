@@ -52,8 +52,6 @@ MAPR_CONF_DIR="${MAPR_HOME}/conf/conf.d"
 CLUSTER_ID_FILE="${MAPR_HOME}/conf/clusterid"
 HADOOP_VER=$(cat "$MAPR_HOME/hadoop/hadoopversion")
 YARN_BIN="${MAPR_HOME}/hadoop/hadoop-${HADOOP_VER}/bin/yarn"
-HBASE_VER=$(cat "$MAPR_HOME/hbase/hbaseversion")
-HBASE_ENV="${MAPR_HOME}/hbase/hbase-${HBASE_VER}/conf/hbase-env.sh"
 CD_CONF_ASSUME_RUNNING_CORE=${isOnlyRoles:-0}
 CD_NM_ROLE=0
 CD_CLDB_ROLE=0
@@ -477,10 +475,14 @@ function configureHadoopJMX() {
 #############################################################################
 function configureHbaseJMX() {
     local rc1
-    local rc2
+    local HBASE_VER
+    local HBASE_ENV
+
     # Enable JMX for HBase Master and HBase Region server only if they are installed
     if [ ${CD_HBASE_MASTER_ROLE} -eq 1 -o ${CD_HBASE_REGION_SERVER_ROLE} -eq 1 ]; then
         # only change the script once
+        HBASE_VER=$(cat "$MAPR_HOME/hbase/hbaseversion")
+        HBASE_ENV="${MAPR_HOME}/hbase/hbase-${HBASE_VER}/conf/hbase-env.sh"
         if ! grep "^#Enable JMX for MaprMonitoring" ${HBASE_ENV} > /dev/null 2>&1; then
             cp -p ${HBASE_ENV} ${HBASE_ENV}.prejmx
     
