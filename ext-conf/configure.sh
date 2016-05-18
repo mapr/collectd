@@ -37,6 +37,7 @@ CD_CONF_FILE_SAVE_AGE="30"
 AWKLIBPATH=${AWKLIBPATH:-$COLLECTD_HOME/lib/awk}
 CD_NOW=`date "+%Y%m%d_%H%M%S"`
 RM_REST_PORT=8088
+RM_SECURE_REST_PORT=8090
 RM_JMX_PORT=8025
 NM_JMX_PORT=8027
 CLDB_JMX_PORT=7220
@@ -365,7 +366,11 @@ function configurejavajmxplugin()
         sed -i 's@${fastjmx_prefix}@'$COLLECTD_HOME'@g' ${NEW_CD_CONF_FILE}
         if [ ${CD_RM_ROLE} -eq 1 ]; then
             enableSection MAPR_CONF_RM_REST_TAG
-            configureServiceURL MAPR_CONF_RM_REST_TAG $host_name http $secureCluster $RM_REST_PORT
+            if [ $secureCluster -eq 1 ]; then
+                configureServiceURL MAPR_CONF_RM_REST_TAG $host_name http $secureCluster $RM_SECURE_REST_PORT
+            else
+                configureServiceURL MAPR_CONF_RM_REST_TAG $host_name http $secureCluster $RM_REST_PORT
+            fi
         fi
         configureConnections
     fi
