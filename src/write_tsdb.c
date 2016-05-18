@@ -934,13 +934,13 @@ static int wt_config_tsd(oconfig_item_t *ci)
         }
     }
     nodeName = strtok(cb->node, ",");
-    tsdbNodes[tsdbNodesCount] = malloc(sizeof(nodeName) + 1);
+    tsdbNodes[tsdbNodesCount] = malloc(strlen(nodeName) + 1);
     strcpy(tsdbNodes[tsdbNodesCount++], nodeName);
     while ( nodeName != NULL )
     {
         nodeName = strtok(NULL, ",");
         if (nodeName != NULL) {
-          tsdbNodes[tsdbNodesCount] = malloc(sizeof(nodeName) +  1);
+          tsdbNodes[tsdbNodesCount] = malloc(strlen(nodeName) +  1);
           strcpy(tsdbNodes[tsdbNodesCount++], nodeName);
         }
     }
