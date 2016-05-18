@@ -420,6 +420,23 @@ authentication_successes    value:COUNTER:U:U
 authenticaiton_failures   value:COUNTER:U:U
 writes_without_wal value:COUNTER:U:U
 
+# Drill
+allocator_root_used value:COUNTER:U:U
+queries_enqueued     value:COUNTER:U:U
+queries_running     value:COUNTER:U:U
+queries_completed value:COUNTER:U:U
+fragments_running value:COUNTER:U:U
+allocator_root_peak value:COUNTER:U:U
+heap_used value:COUNTER:U:U
+non_heap_used value:COUNTER:U:U
+count     value:COUNTER:U:U
+fd_usage     value:COUNTER:U:U
+direct_used value:COUNTER:U:U
+runnable_count value:COUNTER:U:U
+waiting_count value:COUNTER:U:U
+blocked_count value:COUNTER:U:U
+
+
 
 ########## END MAPR TYPES ################
 #
