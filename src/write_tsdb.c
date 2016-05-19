@@ -326,7 +326,7 @@ static int wt_callback_init(struct wt_callback *cb)
             cb->sock_fd = -1;
             continue;
         }
-
+        INFO("write_tsdb plugin: Connected to %s:%s ",node,service);
         break;
     }
 
@@ -744,6 +744,7 @@ static int wt_send_message (const char* key, const char* value,
         return -1;
     }
 
+    pthread_mutex_lock(&cb->send_lock);
     /**
      * Change the tsdb node after X number of writes to distribute the load
      **/
@@ -753,8 +754,6 @@ static int wt_send_message (const char* key, const char* value,
         cb->sock_fd = -1;
         writesCount = 0;
     }
-
-    pthread_mutex_lock(&cb->send_lock);
 
     if (cb->sock_fd < 0)
     {
@@ -935,13 +934,13 @@ static int wt_config_tsd(oconfig_item_t *ci)
         }
     }
     nodeName = strtok(cb->node, ",");
-    tsdbNodes[tsdbNodesCount] = malloc(sizeof(nodeName) + 1);
+    tsdbNodes[tsdbNodesCount] = malloc(strlen(nodeName) + 1);
     strcpy(tsdbNodes[tsdbNodesCount++], nodeName);
     while ( nodeName != NULL )
     {
         nodeName = strtok(NULL, ",");
         if (nodeName != NULL) {
-          tsdbNodes[tsdbNodesCount] = malloc(sizeof(nodeName) +  1);
+          tsdbNodes[tsdbNodesCount] = malloc(strlen(nodeName) +  1);
           strcpy(tsdbNodes[tsdbNodesCount++], nodeName);
         }
     }
