@@ -501,7 +501,7 @@ function configureHbaseJMX() {
                 mv ${HBASE_ENV}.tmp ${HBASE_ENV}
                 chmod a+x ${HBASE_ENV}
             else
-                >&2 echo "WARNING: Failed to enable jmx for HBasse Maser/Region Server - see ${HBASE_ENV}.tmp"
+                >&2 echo "WARNING: Failed to enable jmx for HBase Maser/Region Server - see ${HBASE_ENV}.tmp"
             fi
         fi
     fi
@@ -532,7 +532,7 @@ function configureDrillBitsJMX() {
                 mv ${DRILL_ENV}.tmp ${DRILL_ENV}
                 chmod a+x ${DRILL_ENV}
             else
-                >&2 echo "WARNING: Failed to enable jmx for HBasse Maser/Region Server - see ${DRILL_ENV}.tmp"
+                >&2 echo "WARNING: Failed to enable jmx for Drill Server - see ${DRILL_ENV}.tmp"
             fi
         fi
     fi
