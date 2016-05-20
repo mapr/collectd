@@ -523,6 +523,8 @@ function configureDrillBitsJMX() {
     local DRILL_ENV
 
     # Enable JMX for Drill server only if they are installed
+    # DRILL_JMX_OPTS="-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.port=6090"
+    # DRILL_JAVA_OPTS="$DRILL_JAVA_OPTS $DRILL_JMX_OPTS"
     if [ ${CD_DRILLBITS_ROLE} -eq 1 ]; then
         # only change the script once
         DRILL_VER=$(cat "$MAPR_HOME/drill/drillversion")
@@ -530,7 +532,7 @@ function configureDrillBitsJMX() {
         if ! grep "^#Enable JMX for MaprMonitoring" ${DRILL_ENV} > /dev/null 2>&1; then
             cp -p ${DRILL_ENV} ${DRILL_ENV}.prejmx
     
-            awk -v jmx_uncomment='# DRILL_JMX_OPTS=' \
+            awk -v jmx_insert_after='SERVER_GC_OPTS=' \
                 -f ${AWKLIBPATH}/configureDrillJmx.awk ${DRILL_ENV} > ${DRILL_ENV}.tmp
             rc1=$?
             if [ $rc1 -eq 0 ]; then
