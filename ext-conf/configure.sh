@@ -422,7 +422,7 @@ function configureConnections() {
     fi
     if [ ${CD_DRILLBITS_ROLE} -eq 1 ]; then
         enableSection MAPR_CONN_CONF_DRILLBITS_TAG
-        configureServiceURL MAPR_CONN_CONF_DRILLBITS_TAG $host_name jmx $secureCluster $HBASE_DRILLBITS_JMX_PORT
+        configureServiceURL MAPR_CONN_CONF_DRILLBITS_TAG $host_name jmx $secureCluster $DRILLBITS_JMX_PORT
     fi
 }
 
