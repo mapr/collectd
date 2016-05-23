@@ -71,6 +71,21 @@ nodeport=4242
 secureCluster=0
 
 #############################################################################
+# Function to log messages
+#
+# if $logFile is set the message gets logged there too
+#
+#############################################################################
+function logMsg() {
+    local msg
+    msg="$(date): $1"
+    echo $msg
+    if [ -n "$logFile" ] ; then
+        echo $msg >> $logFile
+    fi
+}
+
+#############################################################################
 # function to adjust ownership
 #############################################################################
 function adjustOwnership() {
@@ -473,7 +488,7 @@ function configureHadoopJMX() {
                 mv ${YARN_BIN}.tmp.tmp ${YARN_BIN}
                 chmod a+x ${YARN_BIN}
             else
-                >&2 echo "WARNING: Failed to enable jmx for NM/RM - see ${YARN_BIN}.tmp.tmp"
+                logMsg "WARNING: Failed to enable jmx for NM/RM - see ${YARN_BIN}.tmp.tmp"
             fi
             rm -f ${YARN_BIN}.tmp
         fi
@@ -506,7 +521,7 @@ function configureHbaseJMX() {
                 mv ${HBASE_ENV}.tmp ${HBASE_ENV}
                 chmod a+x ${HBASE_ENV}
             else
-                >&2 echo "WARNING: Failed to enable jmx for HBase Maser/Region Server - see ${HBASE_ENV}.tmp"
+                logMsg "WARNING: Failed to enable jmx for HBase Maser/Region Server - see ${HBASE_ENV}.tmp"
             fi
         fi
     fi
@@ -539,7 +554,7 @@ function configureDrillBitsJMX() {
                 mv ${DRILL_ENV}.tmp ${DRILL_ENV}
                 chmod a+x ${DRILL_ENV}
             else
-                >&2 echo "WARNING: Failed to enable jmx for Drill Server - see ${DRILL_ENV}.tmp"
+                logMsg "WARNING: Failed to enable jmx for Drill Server - see ${DRILL_ENV}.tmp"
             fi
         fi
     fi
