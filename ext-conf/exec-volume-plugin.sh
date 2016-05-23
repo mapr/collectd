@@ -21,25 +21,25 @@ do
         entity=""
        # Run the maprcli volume info
         maprcli volume info -name  $volumename -json | while read output; do
-          if [[ ( $output == \"logicalUsed* )  ]];
+          if [[ ( "$output" == \"logicalUsed* )  ]];
           then
             logicalUsed=`echo $output | sed 's/.*://' | sed 's/[,"]//g'`
-          elif [[ ( $output == \"used* )  ]];
+          elif [[ ( "$output" == \"used* )  ]];
           then
             used=`echo $output | sed 's/.*://' | sed 's/[,"]//g'`
-          elif [[ ( $output == \"snapshotused* )  ]];
+          elif [[ ( "$output" == \"snapshotused* )  ]];
           then
             snapshotused=`echo $output | sed 's/.*://' | sed 's/[,"]//g'`
-          elif [[ ( $output == \"totalused* )  ]];
+          elif [[ ( "$output" == \"totalused* )  ]];
           then
             totalused=`echo $output | sed 's/.*://' | sed 's/[,"]//g'`
-          elif [[ ( $output == \"quota* )  ]];
+          elif [[ ( "$output" == \"quota* )  ]];
           then
             quota=`echo $output | sed 's/.*://' | sed 's/[,"]//g'`
-          elif [[ ( $output == \"rackpath* ) ]];
+          elif [[ ( "$output" == \"rackpath* ) ]];
           then
             topology=`echo $output | sed 's/.*://' | sed 's/[,"]//g' | sed 's/\//./g'`
-          elif [[ ( $output == \"aename* ) ]];
+          elif [[ ( "$output" == \"aename* ) ]];
           then
             entity=`echo $output | sed 's/.*://' | sed 's/[,"]//g'`
           fi
