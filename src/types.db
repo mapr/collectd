@@ -368,6 +368,7 @@ storage_pools_offline   value:COUNTER:U:U
 volumes value:COUNTER:U:U
 nodes_offline   value:COUNTER:U:U
 disk_space_available    value:COUNTER:U:U
+alarm_raised    value:COUNTER:U:U
 
 # Volume
 logical_used value:COUNTER:U:U
