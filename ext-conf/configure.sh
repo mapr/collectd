@@ -94,7 +94,9 @@ function adjustOwnership() {
             sed -i -e 's/create 640 mapr mapr/create 640 '"$MAPR_USER $MAPR_GROUP/" /etc/logrotate.d/collectd
         fi
     fi
-}
+    # set correct user/group on Exec plugins
+    sed -i -e 's/\(#* *Exec *\)"[a-Z0-9]*:[a-Z0-9]*"/\1 "'"$MAPR_USER:$MAPR_GROUP\"/" ${NEW_CD_CONF_FILE}
+ }
 
 #############################################################################
 # Function to uncomment a section
