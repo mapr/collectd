@@ -437,6 +437,13 @@ runnable_count value:COUNTER:U:U
 waiting_count value:COUNTER:U:U
 blocked_count value:COUNTER:U:U
 
+# Oozie
+running_jobs value:COUNTER:U:U
+succeeded_jobs   value:COUNTER:U:U
+failed_jobs     value:COUNTER:U:U
+suspended_jobs value:COUNTER:U:U
+killed_jobs value:COUNTER:U:U
+prep_jobs value:COUNTER:U:U
 
 
 ########## END MAPR TYPES ################
