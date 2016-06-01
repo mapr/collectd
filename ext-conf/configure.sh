@@ -38,6 +38,8 @@ AWKLIBPATH=${AWKLIBPATH:-$COLLECTD_HOME/lib/awk}
 CD_NOW=`date "+%Y%m%d_%H%M%S"`
 RM_REST_PORT=8088
 RM_SECURE_REST_PORT=8090
+OOZIE_REST_PORT=11000
+OOZIE_SECURE_REST_PORT=11000
 RM_JMX_PORT=8025
 NM_JMX_PORT=8027
 CLDB_JMX_PORT=7220
@@ -58,6 +60,7 @@ CD_CONF_ASSUME_RUNNING_CORE=${isOnlyRoles:-0}
 CD_NM_ROLE=0
 CD_CLDB_ROLE=0
 CD_RM_ROLE=0
+CD_OOZIE_ROLE=0
 CD_HBASE_REGION_SERVER_ROLE=0
 CD_HBASE_MASTER_ROLE=0
 CD_DRILLBITS_ROLE=0
@@ -211,6 +214,9 @@ function configureHostname() {
     # #Hostname    "localhost"
     local host_name
     host_name=$(hostname -fqdn)
+    if [ -z "$host_name" ]; then
+        host_name=$(hostname) # some aws machine reports an empty string with hostname -f
+    fi
     sed -i -e 's/#Hostname.*$/Hostname' ${host_name}/ ${NEW_CD_CONF_FILE}
 }
 
@@ -221,6 +227,10 @@ function configureHostname() {
 # CD_NM_ROLE
 # CD_CLDB_ROLE
 # CD_RM_ROLE
+# CD_HBASE_REGION_SERVER_ROLE
+# CD_HBASE_MASTER_ROLE
+# CD_DRILLBITS_ROLE
+# CD_OOZIE_ROLE
 #############################################################################
 function getRoles() {
     [ -f ${MAPR_HOME}/roles/resourcemanager ] && CD_RM_ROLE=1
@@ -229,6 +239,7 @@ function getRoles() {
     [ -f ${MAPR_HOME}/roles/hbregionserver ] && CD_HBASE_REGION_SERVER_ROLE=1
     [ -f ${MAPR_HOME}/roles/hbmaster ] && CD_HBASE_MASTER_ROLE=1
     [ -f ${MAPR_HOME}/roles/drill-bits ] && CD_DRILLBITS_ROLE=1
+    [ -f ${MAPR_HOME}/roles/oozie ] && CD_OOZIE_ROLE=1
 }
 
 #############################################################################
@@ -384,13 +395,25 @@ function configurejavajmxplugin()
          ${CD_HBASE_MASTER_ROLE} -eq 1 -o ${CD_HBASE_REGION_SERVER_ROLE} -eq 1 -o ${CD_DRILLBITS_ROLE} -eq 1 ]; then
         enableSection MAPR_CONF_JMX_TAG
         sed -i 's@${fastjmx_prefix}@'$COLLECTD_HOME'@g' ${NEW_CD_CONF_FILE}
-        if [ ${CD_RM_ROLE} -eq 1 ]; then
-            enableSection MAPR_CONF_RM_REST_TAG
-            if [ $secureCluster -eq 1 ]; then
-                configureServiceURL MAPR_CONF_RM_REST_TAG $host_name http $secureCluster $RM_SECURE_REST_PORT
-            else
-                configureServiceURL MAPR_CONF_RM_REST_TAG $host_name http $secureCluster $RM_REST_PORT
+        if [ ${CD_RM_ROLE} -eq 1 -o ${CD_OOZIE_ROLE} -eq 1 ]; then
+            enableSection MAPR_CONF_REST_TAG
+            if [ ${CD_RM_ROLE} -eq 1 ]; then
+                enableSection MAPR_CONF_RM_REST_TAG
+                if [ $secureCluster -eq 1 ]; then
+                    configureServiceURL MAPR_CONF_RM_REST_TAG $host_name http $secureCluster $RM_SECURE_REST_PORT
+                else
+                    configureServiceURL MAPR_CONF_RM_REST_TAG $host_name http $secureCluster $RM_REST_PORT
+                fi
             fi
+            if [ ${CD_OOZIE_ROLE} -eq 1 ]; then
+                enableSection MAPR_CONF_OOZIE_REST_TAG
+                if [ $secureCluster -eq 1 ]; then
+                    configureServiceURL MAPR_CONF_OOZIE_REST_TAG $host_name http $secureCluster $OOZIE_SECURE_REST_PORT
+                else
+                    configureServiceURL MAPR_CONF_OOZIE_REST_TAG $host_name http $secureCluster $OOZIE_REST_PORT
+                fi
+            fi
+            
         fi
         configureConnections
     fi
