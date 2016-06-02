@@ -213,7 +213,7 @@ function configureHostname() {
     # Changes this global
     # #Hostname    "localhost"
     local host_name
-    host_name=$(hostname -fqdn)
+    host_name=$(hostname -f)
     if [ -z "$host_name" ]; then
         host_name=$(hostname) # some aws machine reports an empty string with hostname -f
     fi
@@ -390,7 +390,10 @@ function configurejavajmxplugin()
     #
 
     # XXX potential problem with multi-nic nodes
-    host_name=$(hostname)
+    host_name=$(hostname -f)
+    if [ -z "$host_name" ]; then
+        host_name=$(hostname) # some aws machine reports an empty string with hostname -f
+    fi
     if [ ${CD_RM_ROLE} -eq 1  -o ${CD_NM_ROLE} -eq 1  -o ${CD_CLDB_ROLE} -eq 1 -o\
          ${CD_HBASE_MASTER_ROLE} -eq 1 -o ${CD_HBASE_REGION_SERVER_ROLE} -eq 1 -o ${CD_DRILLBITS_ROLE} -eq 1 ]; then
         enableSection MAPR_CONF_JMX_TAG
@@ -439,7 +442,10 @@ function configureVolumePlugin() {
 function configureConnections() {
     local host_name
     # XXX potential problem with multi-nic nodes
-    host_name=$(hostname)
+    host_name=$(hostname -f)
+    if [ -z "$host_name" ]; then
+        host_name=$(hostname) # some aws machine reports an empty string with hostname -f
+    fi
     if [ ${CD_CLDB_ROLE} -eq 1 ]; then
         enableSection MAPR_CONN_CONF_CLDB_TAG
         enableSection MAPR_CONF_CLDB_ALARMS_TAG
@@ -595,7 +601,10 @@ function restartNM_RM_service() {
     if [ $CLDB_RUNNING -eq 1 ]; then
         # Enable JMX for RM and NM only if they are installed
         if [ ${CD_RM_ROLE} -eq 1 -o ${CD_NM_ROLE} -eq 1 ]; then
-            MyNM_ip=`hostname -i`
+            MyNM_ip=$(hostname -f)
+            if [ -z "$MyNM_ip" ]; then
+                MyNM_ip=$(hostname) # some aws machine reports an empty string with hostname -f
+            fi
             if [ ${CD_RM_ROLE} -eq 1 ]; then
                 maprcli node services -nodes ${MyNM_ip} -name resourcemanager \
                     -action restart
