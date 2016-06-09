@@ -754,7 +754,11 @@ if [ $CD_CONF_ASSUME_RUNNING_CORE -eq 1 ]; then
     # documented that jmx stats will not be available until next warden/nm/rm restart
     #restartNM_RM_service
     configureClusterId
-    [ $? -eq 0 ] && CD_ENABLE_SERVICE=1
+    if [ $? -eq 0 ]; then
+        CD_ENABLE_SERVICE=1
+    else
+        logMsg "ERROR: collectd service not enabled - missing clusterid"
+    fi
 fi
 
 cp -p ${CD_CONF_FILE} ${CD_CONF_FILE}.${CD_NOW}
