@@ -16,7 +16,7 @@ $0 ~ jmx_insert_after         { if (jmx_end_found == 0) {
 				}
                              }
 		             if (drill_jmx_opts_added == 0) {
-			       print "export DRILLBIT_JAVA_OPTS=\"$DRILLBIT_JAVA_OPTS $DRILL_JMX_OPTS"
+			       print "export DRILLBIT_JAVA_OPTS=\"$DRILLBIT_JAVA_OPTS $DRILL_JMX_OPTS\""
                              }		
                              print
                            }
