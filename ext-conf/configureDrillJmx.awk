@@ -8,7 +8,8 @@ $0 ~ jmx_insert_after         { if (jmx_end_found == 0) {
                            }
                            { 
                              if (jmx_start_found == 1 && drill_opts_subst == 0) {
-                                if (match ($0,/^export DRILLBIT_JAVA_OPTS=\"\$DRILLBIT_JAVA_OPTS/)) {
+                               // TODO - Fix this 
+			       if (match ($0,/^export DRILLBIT_JAVA_OPTS=\"\$DRILLBIT_JAVA_OPTS/)) {
                                     sub(/export DRILLBIT_JAVA_OPTS=\"\$DRILLBIT_JAVA_OPTS/,"export DRILLBIT_JAVA_OPTS=\"$DRILLBIT_JAVA_OPTS $DRILL_JMX_OPTS")
                                     drill_opts_subst=1
                                 }
