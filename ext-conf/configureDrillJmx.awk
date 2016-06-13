@@ -15,7 +15,6 @@ $0 ~ jmx_insert_after         { if (jmx_end_found == 0) {
                              }
                              print
                            }
-
 END                        {
                             if (jmx_start_found == 1 && drill_opts_subst == 0) {
                                 print "export DRILLBIT_JAVA_OPTS=\"$DRILLBIT_JAVA_OPTS $DRILL_JMX_OPTS\""
