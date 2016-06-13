@@ -422,17 +422,6 @@ function configurejavajmxplugin()
     fi
 }
 
-#############################################################################
-# Function to configure volume plugin
-#
-# uses global CLDB_ROLE
-#############################################################################
-function configureVolumePlugin() {
-    if [ ${CD_CLDB_ROLE} -eq 1 ]; then
-        enableSection MAPR_CLDB_VOLUME_TAG
-    fi
-}
-
 
 #############################################################################
 # Function to configure connections
@@ -449,6 +438,7 @@ function configureConnections() {
     if [ ${CD_CLDB_ROLE} -eq 1 ]; then
         enableSection MAPR_CONN_CONF_CLDB_TAG
         enableSection MAPR_CONF_CLDB_ALARMS_TAG
+        enableSection MAPR_CONF_VOLUMES_TAG
         configureServiceURL MAPR_CONN_CONF_CLDB_TAG $host_name jmx $secureCluster $CLDB_JMX_PORT
     fi
     if [ ${CD_NM_ROLE} -eq 1 ]; then
@@ -742,7 +732,6 @@ getRoles
 configureopentsdbplugin  # this ucomments everything between the MAPR_CONF_TAGs
 configurejavajmxplugin
 #createFastJMXLink
-configureVolumePlugin
 configureHadoopJMX
 configureHbaseJMX
 configureDrillBitsJMX
