@@ -2013,7 +2013,7 @@ static int cjni_create_jvm (void) /* {{{ */
 
   for (i = 0; i < jvm_argc; i++)
   {
-    INFO ("java plugin: cjni_create_jvm: jvm_argv[%zu] = %s",
+    DEBUG ("java plugin: cjni_create_jvm: jvm_argv[%zu] = %s",
         i, jvm_argv[i]);
     vm_args.options[i].optionString = jvm_argv[i];
   }
