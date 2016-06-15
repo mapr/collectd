@@ -61,6 +61,7 @@ CD_NM_ROLE=0
 CD_CLDB_ROLE=0
 CD_RM_ROLE=0
 CD_OOZIE_ROLE=0
+CD_OT_ROLE=0
 CD_HBASE_REGION_SERVER_ROLE=0
 CD_HBASE_MASTER_ROLE=0
 CD_DRILLBITS_ROLE=0
@@ -231,6 +232,7 @@ function configureHostname() {
 # CD_HBASE_MASTER_ROLE
 # CD_DRILLBITS_ROLE
 # CD_OOZIE_ROLE
+# CD_OT_ROLE
 #############################################################################
 function getRoles() {
     [ -f ${MAPR_HOME}/roles/resourcemanager ] && CD_RM_ROLE=1
@@ -240,6 +242,7 @@ function getRoles() {
     [ -f ${MAPR_HOME}/roles/hbmaster ] && CD_HBASE_MASTER_ROLE=1
     [ -f ${MAPR_HOME}/roles/drill-bits ] && CD_DRILLBITS_ROLE=1
     [ -f ${MAPR_HOME}/roles/oozie ] && CD_OOZIE_ROLE=1
+    [ -f ${MAPR_HOME}/roles/opentsdb ] && CD_OT_ROLE=1
 }
 
 #############################################################################
@@ -398,7 +401,7 @@ function configurejavajmxplugin()
          ${CD_HBASE_MASTER_ROLE} -eq 1 -o ${CD_HBASE_REGION_SERVER_ROLE} -eq 1 -o ${CD_DRILLBITS_ROLE} -eq 1 ]; then
         enableSection MAPR_CONF_JMX_TAG
         sed -i 's@${fastjmx_prefix}@'$COLLECTD_HOME'@g' ${NEW_CD_CONF_FILE}
-        if [ ${CD_RM_ROLE} -eq 1 -o ${CD_OOZIE_ROLE} -eq 1 ]; then
+        if [ ${CD_RM_ROLE} -eq 1 -o ${CD_OOZIE_ROLE} -eq 1 -o ${CD_OT_ROLE} -eq 1 ]; then
             enableSection MAPR_CONF_REST_TAG
             if [ ${CD_RM_ROLE} -eq 1 ]; then
                 enableSection MAPR_CONF_RM_REST_TAG
@@ -416,7 +419,15 @@ function configurejavajmxplugin()
                     configureServiceURL MAPR_CONF_OOZIE_REST_TAG $host_name http $secureCluster $OOZIE_REST_PORT
                 fi
             fi
-            
+            ## TODO - Don't enable this by default - Determine later if these metrics are needed 
+            #if [ ${CD_OT_ROLE} -eq 1 ]; then
+            #    enableSection MAPR_CONF_OPENTSDB_REST_TAG
+            #    if [ $secureCluster -eq 1 ]; then
+            #        configureServiceURL MAPR_CONF_OPENTSDB_REST_TAG $host_name http $secureCluster $nodeport
+            #    else
+            #        configureServiceURL MAPR_CONF_OPENTSDB_REST_TAG $host_name http $secureCluster $nodeport
+            #    fi
+            #fi
         fi
         configureConnections
     fi
@@ -697,7 +708,7 @@ if [ ${#} -gt 1 ]; then
                 nodeport="$2";
                 shift 2;;
             --secureCluster)
-                sescureCluster=1;
+                secureCluster=1;
                 shift 1;;
             -h)
                 echo ${usage}
