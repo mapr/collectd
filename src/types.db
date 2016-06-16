@@ -445,6 +445,35 @@ suspended_jobs value:COUNTER:U:U
 killed_jobs value:COUNTER:U:U
 prep_jobs value:COUNTER:U:U
 
+# OpenTSDB
+tsd.connectionmgr.connections value:COUNTER:U:U
+tsd.connectionmgr.exceptions   value:COUNTER:U:U
+tsd.rpc.received     value:COUNTER:U:U
+tsd.http.latency_50pct value:COUNTER:U:U
+tsd.http.latency_75pct value:COUNTER:U:U
+tsd.http.latency_90pct value:COUNTER:U:U
+tsd.http.latency_95pct value:COUNTER:U:U
+tsd.http.graph.requests value:COUNTER:U:U
+tsd.connectionmgr.connections value:COUNTER:U:U
+tsd.connectionmgr.exceptions   value:COUNTER:U:U
+tsd.rpc.errors    value:COUNTER:U:U
+tsd.http.query.invalid_requests value:COUNTER:U:U
+tsd.http.query.exceptions value:COUNTER:U:U
+tsd.http.query.success value:COUNTER:U:U
+tsd.uid.cache-hit value:COUNTER:U:U
+tsd.uid.cache-miss value:COUNTER:U:U
+tsd.uid.cache-size value:COUNTER:U:U
+tsd.uid.random-collisions value:COUNTER:U:U
+tsd.uid.ids-used value:COUNTER:U:U
+tsd.uid.ids-available value:COUNTER:U:U
+tsd.jvm.ramfree value:COUNTER:U:U
+tsd.jvm.ramused value:COUNTER:U:U
+tsd.compaction.count value:COUNTER:U:U
+tsd.compaction.duplicates value:COUNTER:U:U
+tsd.compaction.queue.size value:COUNTER:U:U
+tsd.compaction.errors value:COUNTER:U:U
+tsd.compaction.writes value:COUNTER:U:U
+tsd.compaction.deletes value:COUNTER:U:U
 
 ########## END MAPR TYPES ################
 #
