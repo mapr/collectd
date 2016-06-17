@@ -73,6 +73,12 @@ nodecount=0
 nodelist=""
 nodeport=4242
 secureCluster=0
+# isSecure is set in server/configure.sh
+if [ -n "$isSecure" ]; then
+    if [ "$isSecure" == "true" ]; then
+        secureCluster=1
+    fi
+fi
 
 #############################################################################
 # Function to log messages
