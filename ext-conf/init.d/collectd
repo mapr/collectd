@@ -169,12 +169,6 @@ esac
 # need this to find the java jvm library
 export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${JAVA_HOME}/jre/lib/${J_ARCH}/server
 
-# set ENV variable if this is a secure cluster
-SECURE_CLUSTER=`awk '{print $2}' /opt/mapr/conf/mapr-clusters.conf | awk -F "=" '{print $2}'`
-if [ "$SECURE_CLUSTER" == "true" ]; then
-  echo "In Secure cluster"
-  export MAPR_TICKETFILE_LOCATION="/opt/mapr/conf/mapruserticket"
-fi
 
 # CHOOSE BEHAVOR: Set to fit app
 if [ $APP_REQUIRE_JAVA -eq 1 -a $APP_STARTS_WITH_JAVA -eq 1 ]; then
