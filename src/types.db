@@ -282,6 +282,20 @@ bytes_sent         value:GAUGE:0:U
 #percent_system         value:GAUGE:0:100.1
 #percent_nice       value:GAUGE:0:100.1
 #percent_user         value:GAUGE:0:100.1
+lookups_inode       value:COUNTER:U:U
+misses_inode        value:COUNTER:U:U
+lookups_smallfile       value:COUNTER:U:U
+misses_smallfile        value:COUNTER:U:U
+lookups_largefile       value:COUNTER:U:U
+misses_largefile       value:COUNTER:U:U
+lookups_meta       value:COUNTER:U:U
+misses_meta        value:COUNTER:U:U
+lookups_dir       value:COUNTER:U:U
+misses_dir        value:COUNTER:U:U
+lookups_table       value:COUNTER:U:U
+misses_table        value:COUNTER:U:U
+lookups_data       value:COUNTER:U:U
+misses_data        value:COUNTER:U:U
 
 # ResourceManager
 apps_running        value:COUNTER:U:U
