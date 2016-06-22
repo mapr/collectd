@@ -1,4 +1,4 @@
-__INSTALL__/var/log/collectd/collectd.log {
+__INSTALL__/var/log/collectd/collectd_daemon.log {
   daily
   rotate 30
   compress
