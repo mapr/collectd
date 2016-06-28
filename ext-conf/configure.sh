@@ -105,7 +105,7 @@ function adjustOwnership() {
         fi
     fi
     # set correct user/group on Exec plugins
-    sed -i -e 's/\(#* *Exec *\)"[a-Z0-9]*:[a-Z0-9]*"/\1 "'"$MAPR_USER:$MAPR_GROUP\"/" ${NEW_CD_CONF_FILE}
+    sed -i -e 's/\(#* *Exec *\)"[a-zA-Z0-9]*:[a-zA-Z0-9]*"/\1 "'"$MAPR_USER:$MAPR_GROUP\"/" ${NEW_CD_CONF_FILE}
  }
 
 #############################################################################
