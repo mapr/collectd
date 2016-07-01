@@ -600,25 +600,31 @@ function configureDrillBitsJMX() {
 }
 
 #############################################################################
-# Function to restart nodemanager and resourcemananger services
+# Function to restart services after JMX is enabled
 #
 # uses global CLDB_RUNNING, CD_RM_ROLE, CD_NM_ROLE
 #############################################################################
-function restartNM_RM_service() {
+function restart_Services() {
     if [ $CLDB_RUNNING -eq 1 ]; then
-        # Enable JMX for RM and NM only if they are installed
-        if [ ${CD_RM_ROLE} -eq 1 -o ${CD_NM_ROLE} -eq 1 ]; then
-            MyNM_ip=$(hostname -f)
-            if [ -z "$MyNM_ip" ]; then
-                MyNM_ip=$(hostname) # some aws machine reports an empty string with hostname -f
-            fi
-            if [ ${CD_RM_ROLE} -eq 1 ]; then
-                maprcli node services -nodes ${MyNM_ip} -name resourcemanager \
-                    -action restart
-            fi
-            if [ ${CD_NM_ROLE} -eq 1 ]; then
-                maprcli node services -nodes ${MyNM_ip} -name nodemanager -action restart
-            fi
+        MyHname=$(hostname -f)
+        if [ -z "$MyHname" ]; then
+            MyHname=$(hostname) # some aws machine reports an empty string with hostname -f
+        fi
+        if [ ${CD_RM_ROLE} -eq 1 ]; then
+            maprcli node services -nodes ${MyHname} -name resourcemanager \
+                -action restart
+        fi
+        if [ ${CD_NM_ROLE} -eq 1 ]; then
+            maprcli node services -nodes ${MyHname} -name nodemanager -action restart
+        fi
+        if [ ${CD_HBASE_REGION_SERVER_ROLE} -eq 1 ]; then
+            maprcli node services -nodes ${MyHname} -name hbregionserver -action restart
+        fi
+        if [ ${CD_HBASE_MASTER_ROLE} -eq 1 ]; then
+            maprcli node services -nodes ${MyHname} -name hbmaster -action restart
+        fi
+        if [ ${CD_DRILLBITS_ROLE} -eq 1 ]; then
+            maprcli node services -nodes ${MyHname} -name drill-bits -action restart
         fi
     fi
 }
@@ -756,9 +762,7 @@ if [ $CD_CONF_ASSUME_RUNNING_CORE -eq 1 ]; then
     if ! [ -s "$CLUSTER_ID_FILE" ]; then
         waitForCLDB
     fi
-    # we are not going to restart automatically
-    # documented that jmx stats will not be available until next warden/nm/rm restart
-    #restartNM_RM_service
+    restart_services
     configureClusterId
     if [ $? -eq 0 ]; then
         CD_ENABLE_SERVICE=1
