@@ -11,7 +11,7 @@
 # TODO: add support to tweak other collection facilities, like disk, fs, network
 # TODO: Need to add support to clean up old copies
 #
-# __INSTALL_ (two _ at the end) gets expanded to __INSTALL__ during pakcaging
+# __INSTALL_ (two _ at the end) gets expanded to /opt/mapr/collectd/collectd-5.5.1 during pakcaging
 # set COLLECTD_HOME explicitly if running this in a source built env.
 #
 # This script is sourced by the master configure.sh to setup collectd during
@@ -30,11 +30,11 @@
 #  MAPR_USER    - user name for the MAPR user
 #############################################################################
 
-COLLECTD_HOME=${COLLECTD_HOME:-__INSTALL__}
-CD_CONF_FILE=${CD_CONF_FILE:-${COLLECTD_HOME}/etc/collectd.conf}
-NEW_CD_CONF_FILE=${NEW_CD_CONF_FILE:-${COLLECTD_HOME}/etc/collectd.conf.progress}
+COLLECTD_HOME="${COLLECTD_HOME:-__INSTALL__}"
+CD_CONF_FILE="${CD_CONF_FILE:-${COLLECTD_HOME}/etc/collectd.conf}"
+NEW_CD_CONF_FILE="${NEW_CD_CONF_FILE:-${COLLECTD_HOME}/etc/collectd.conf.progress}"
 CD_CONF_FILE_SAVE_AGE="30"
-AWKLIBPATH=${AWKLIBPATH:-$COLLECTD_HOME/lib/awk}
+AWKLIBPATH="${AWKLIBPATH:-$COLLECTD_HOME/lib/awk}"
 CD_NOW=`date "+%Y%m%d_%H%M%S"`
 RM_REST_PORT=8088
 RM_SECURE_REST_PORT=8090
@@ -604,7 +604,7 @@ function configureDrillBitsJMX() {
 #
 # uses global CLDB_RUNNING, CD_RM_ROLE, CD_NM_ROLE
 #############################################################################
-function restart_Services() {
+function restartServices() {
     if [ $CLDB_RUNNING -eq 1 ]; then
         MyHname=$(hostname -f)
         if [ -z "$MyHname" ]; then
@@ -697,11 +697,11 @@ function cleanupOldConfFiles
 # is not the active one, we will be getting 0s for the stats.
 #
 
-usage="usage: $0 [-nodeCount <cnt>] [-nodePort <port>] [-secureCluster]  -OT \"ip:port,ip1:port,\" "
+usage="usage: $0 [-nodeCount <cnt>] [-nodePort <port>] [-secureCluster] [-R] -OT \"ip:port,ip1:port,\" "
 if [ ${#} -gt 1 ]; then
     # we have arguments - run as as standalone - need to get params and
     # XXX why do we need the -o to make this work?
-    OPTS=`getopt -a -o h -l nodeCount: -l nodePort: -l OT: -l secureCluster -- "$@"`
+    OPTS=`getopt -a -o h -l nodeCount: -l nodePort: -l OT: -l secureCluster -l R -- "$@"`
     if [ $? != 0 ]; then
         echo ${usage}
         return 2 2>/dev/null || exit 2
@@ -722,12 +722,15 @@ if [ ${#} -gt 1 ]; then
             --secureCluster)
                 secureCluster=1;
                 shift 1;;
+            --R)
+                CD_CONF_ASSUME_RUNNING_CORE=1
+                shift 1;;
             -h)
                 echo ${usage}
                 return 2 2>/dev/null || exit 2
-            ;;
+                ;;
             --)
-            shift;;
+                shift;;
         esac
     done
 
@@ -759,10 +762,8 @@ configureHadoopJMX
 configureHbaseJMX
 configureDrillBitsJMX
 if [ $CD_CONF_ASSUME_RUNNING_CORE -eq 1 ]; then
-    if ! [ -s "$CLUSTER_ID_FILE" ]; then
-        waitForCLDB
-    fi
-    restart_services
+    waitForCLDB
+    restartServices
     configureClusterId
     if [ $? -eq 0 ]; then
         CD_ENABLE_SERVICE=1
