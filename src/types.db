@@ -299,6 +299,7 @@ misses_data        value:GUAGE:U:U
 
 # ResourceManager
 apps_running        value:GUAGE:U:U
+apps_killed        value:GUAGE:U:U
 active_applications     value:GUAGE:U:U
 active_users        value:GUAGE:U:U
 aggregate_containers_allocated      value:GUAGE:U:U
