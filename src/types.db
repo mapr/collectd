@@ -299,6 +299,7 @@ misses_data        value:COUNTER:U:U
 
 # ResourceManager
 apps_running        value:COUNTER:U:U
+apps_killed        value:COUNTER:U:U
 active_applications     value:COUNTER:U:U
 active_users        value:COUNTER:U:U
 aggregate_containers_allocated      value:COUNTER:U:U
