@@ -663,7 +663,7 @@ function isMaprServiceRunning() {
 #############################################################################
 # Function to restart services after JMX is enabled
 #
-# uses global CD_RESTART_SVC_LIST
+# uses globals CLDB_RUNNING, CD_RESTART_SVC_LIST
 #############################################################################
 function restartServices() {
     local MyHname
