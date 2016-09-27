@@ -69,6 +69,7 @@ CLDB_RUNNING=0
 CLDB_RETRIES=12
 CLDB_RETRY_DLY=5
 CD_ENABLE_SERVICE=0
+CD_RESTART_SVC_LIST=""
 nodecount=0
 nodelist=""
 nodeport=4242
@@ -500,7 +501,7 @@ function createFastJMXLink() {
 
 
 #############################################################################
-# Function to configure JMX
+# Function to configure Hadoop JMX
 #
 # uses global CLDB_RUNNING, CD_RM_ROLE, CD_NM_ROLE
 #############################################################################
@@ -526,6 +527,12 @@ function configureHadoopJMX() {
             if [ $rc1 -eq 0 -a $rc2 -eq 0 ]; then
                 mv ${YARN_BIN}.tmp.tmp ${YARN_BIN}
                 chmod a+x ${YARN_BIN}
+                if [ ${CD_RM_ROLE} -eq 1 ]; then
+                    CD_RESTART_SVC_LIST="$CD_RESTART_SVC_LIST resourcemanager"
+                fi
+                if [ ${CD_NM_ROLE} -eq 1 ]; then
+                    CD_RESTART_SVC_LIST="$CD_RESTART_SVC_LIST nodemanager"
+                fi
             else
                 logMsg "WARNING: Failed to enable jmx for NM/RM - see ${YARN_BIN}.tmp.tmp"
             fi
@@ -559,6 +566,12 @@ function configureHbaseJMX() {
             if [ $rc1 -eq 0 ]; then
                 mv ${HBASE_ENV}.tmp ${HBASE_ENV}
                 chmod a+x ${HBASE_ENV}
+                if [ ${CD_HBASE_MASTER_ROLE} -eq 1 ]; then
+                    CD_RESTART_SVC_LIST="$CD_RESTART_SVC_LIST hbmaster"
+                fi
+                if [ ${CD_HBASE_REGION_SERVER_ROLE} -eq 1 ]; then
+                    CD_RESTART_SVC_LIST="$CD_RESTART_SVC_LIST hbregionserver"
+                fi
             else
                 logMsg "WARNING: Failed to enable jmx for HBase Maser/Region Server - see ${HBASE_ENV}.tmp"
             fi
@@ -592,6 +605,7 @@ function configureDrillBitsJMX() {
             if [ $rc1 -eq 0 ]; then
                 mv ${DRILL_ENV}.tmp ${DRILL_ENV}
                 chmod a+x ${DRILL_ENV}
+                CD_RESTART_SVC_LIST="$CD_RESTART_SVC_LIST drill-bits"
             else
                 logMsg "WARNING: Failed to enable jmx for Drill Server - see ${DRILL_ENV}.tmp"
             fi
@@ -600,32 +614,74 @@ function configureDrillBitsJMX() {
 }
 
 #############################################################################
+# Function to configure Oozie JMX
+#
+# uses global CD_OOZIE_ROLE
+#############################################################################
+function configureOozieJMX() {
+
+    if [ ${CD_OOZIE_ROLE} -eq 1 ]; then
+        OOZIE_VER=$( cat $MAPR_HOME/oozie/oozieversion )
+        OOZIE_HOME="$MAPR_HOME/oozie/oozie-$OOZIE_VER"
+        if ! fgrep org.apache.oozie.service.MetricsInstrumentationService \
+            $OOZIE_HOME/conf/oozie-site.xml  > /dev/null 2>&1 ; then
+
+            cp $OOZIE_HOME/conf/oozie-site.xml $OOZIE_HOME/conf/oozie-site.xml.$CD_NOW
+            sed -i -e 's/<\/configuration>/    <property>\n        <name>oozie.services.ext<\/name>\n        <value>\n            org.apache.oozie.service.MetricsInstrumentationService\n        <\/value>\n    <\/property>\n\n<\/configuration>/' \
+                $OOZIE_HOME/conf/oozie-site.xml
+            CD_RESTART_SVC_LIST="$CD_RESTART_SVC_LIST oozie"
+       fi
+    fi
+}
+
+#############################################################################
+# Function to check to see if a service is running
+#
+# $1 is the node name/ip
+# $2 is the service name
+#############################################################################
+function isMaprServiceRunning() {
+   local myHname
+   local serviceNameToCheck
+   local serviceStatus
+   
+   myHname=$1
+   serviceNameToCheck=$2
+ 
+
+   # using $NF with awk instead of $5 because memallocated column doesn't always
+   # contain data
+   serviceStatus=$( maprcli service list -node $myHname | fgrep $serviceNameToCheck | awk '{ print $NF }' )
+   if [ "$serviceStatus" == "2" ]; then
+       return 0
+   else
+       return 1
+   fi
+
+}
+
+#############################################################################
 # Function to restart services after JMX is enabled
 #
-# uses global CLDB_RUNNING, CD_RM_ROLE, CD_NM_ROLE
+# uses globals CLDB_RUNNING, CD_RESTART_SVC_LIST
 #############################################################################
 function restartServices() {
+    local MyHname
+
     if [ $CLDB_RUNNING -eq 1 ]; then
         MyHname=$(hostname -f)
         if [ -z "$MyHname" ]; then
-            MyHname=$(hostname) # some aws machine reports an empty string with hostname -f
+            # some aws machine reports an empty string with hostname -f
+            MyHname=$(hostname) 
         fi
-        if [ ${CD_RM_ROLE} -eq 1 ]; then
-            maprcli node services -nodes ${MyHname} -name resourcemanager \
-                -action restart
-        fi
-        if [ ${CD_NM_ROLE} -eq 1 ]; then
-            maprcli node services -nodes ${MyHname} -name nodemanager -action restart
-        fi
-        if [ ${CD_HBASE_REGION_SERVER_ROLE} -eq 1 ]; then
-            maprcli node services -nodes ${MyHname} -name hbregionserver -action restart
-        fi
-        if [ ${CD_HBASE_MASTER_ROLE} -eq 1 ]; then
-            maprcli node services -nodes ${MyHname} -name hbmaster -action restart
-        fi
-        if [ ${CD_DRILLBITS_ROLE} -eq 1 ]; then
-            maprcli node services -nodes ${MyHname} -name drill-bits -action restart
-        fi
+
+        # restart services that we changed configuration files for
+        # but only if they are currently running
+        for svc in $CD_RESTART_SVC_LIST ; do
+            if isMaprServiceRunning $MyHname $svc ; then
+                maprcli node services -nodes ${MyHname} -name $svc -action restart
+            fi
+        done
     fi
 }
 
@@ -761,6 +817,7 @@ configurejavajmxplugin
 configureHadoopJMX
 configureHbaseJMX
 configureDrillBitsJMX
+configureOozieJMX
 if [ $CD_CONF_ASSUME_RUNNING_CORE -eq 1 ]; then
     waitForCLDB
     restartServices
