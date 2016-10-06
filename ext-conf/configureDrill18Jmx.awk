@@ -1,4 +1,4 @@
-$0 ~ jmx_insert_after         { if (jmx_end_found == 0) {
+$0 ~ jmx_insert_after      { if (jmx_start_found == 0) {
                                 jmx_start_found=1
                                 print
                                 print "#Enable JMX for MaprMonitoring"
@@ -8,18 +8,15 @@ $0 ~ jmx_insert_after         { if (jmx_end_found == 0) {
                            }
                            {  
                               if (jmx_start_found == 1 && drill_opts_subst == 0) {
-			        if (match ($0,/^export DRILLBIT_JAVA_OPTS=\"\$DRILLBIT_JAVA_OPTS/)) {
-                                  sub(/export DRILLBIT_JAVA_OPTS=\"\$DRILLBIT_JAVA_OPTS/,"export DRILLBIT_JAVA_OPTS=\"$DRILLBIT_JAVA_OPTS $DRILL_JMX_OPTS")
+			        if (match ($0,/^export DRILL_JAVA_OPTS=\"\${DRILL_JAVA_OPTS}/)) {
+                                  sub(/export DRILL_JAVA_OPTS=\"\${DRILL_JAVA_OPTS}/,"export DRILL_JAVA_OPTS=\"${DRILL_JAVA_OPTS} ${DRILL_JMX_OPTS}")
                                   drill_opts_subst=1
-			      }
-                           }
+			        }
+                             }
                              print
                            }
 END                        {
-                              if (jmx_start_found == 1 && drill_opts_subst == 0) {
-                                print "export DRILLBIT_JAVA_OPTS=\"$DRILLBIT_JAVA_OPTS $DRILL_JMX_OPTS\""
+                              if (drill_opts_subst == 0) {
+                                exit(1)
                               }
-                              if (jmx_start_found == 0) {
-                                 exit(1)
-                              }
-                            }
+                           }
