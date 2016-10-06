@@ -595,12 +595,26 @@ function configureDrillBitsJMX() {
     if [ ${CD_DRILLBITS_ROLE} -eq 1 ]; then
         # only change the script once
         DRILL_VER=$(cat "$MAPR_HOME/drill/drillversion")
-        DRILL_ENV="${MAPR_HOME}/drill/drill-${DRILL_VER}/conf/drill-env.sh"
+        DRILL_MAJ_VER=$(echo $DRILL_VER | cut -d . -f 1)
+        DRILL_MIN_VER=$(echo $DRILL_VER | cut -d . -f 2)
+        if [ -z "$DRILL_MAJ_VER" -o -z "$DRILL_MIN_VER" ]; then
+            logMsg "WARNING: Failed to enable jmx for Drill - couldn't determine version"
+            return
+        fi
+        if [ $DRILL_MAJ_VER -le 1 -a $DRILL_MIN_VER -le 6 ]; then
+            DRILL_ENV="${MAPR_HOME}/drill/drill-${DRILL_VER}/conf/drill-env.sh"
+            DRILL_TAG="SERVER_GC_OPTS="
+            DRILL_AWK_SCRIPT=configureDrillJmx.awk
+        else
+            DRILL_ENV="${MAPR_HOME}/drill/drill-${DRILL_VER}/conf/distrib-env.sh"
+            DRILL_TAG="HADOOP_HOME="
+            DRILL_AWK_SCRIPT=configureDrill18Jmx.awk
+        fi
         if ! grep "^#Enable JMX for MaprMonitoring" ${DRILL_ENV} > /dev/null 2>&1; then
             cp -p ${DRILL_ENV} ${DRILL_ENV}.prejmx
     
-            awk -v jmx_insert_after='SERVER_GC_OPTS=' \
-                -f ${AWKLIBPATH}/configureDrillJmx.awk ${DRILL_ENV} > ${DRILL_ENV}.tmp
+            awk -v jmx_insert_after="$DRILL_TAG" \
+                -f ${AWKLIBPATH}/${DRILL_AWK_SCRIPT} ${DRILL_ENV} > ${DRILL_ENV}.tmp
             rc1=$?
             if [ $rc1 -eq 0 ]; then
                 mv ${DRILL_ENV}.tmp ${DRILL_ENV}
