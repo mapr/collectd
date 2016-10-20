@@ -8,6 +8,10 @@ do
   arrLen=${#arr[@]}
   for (( i=0; i<${arrLen}; i++ )); do
     IFS=':' read -ra metrics <<< "${arr[$i]}"
-    echo "PUTVAL \"$HOSTNAME/mapr.${metrics[0]}/${metrics[1]}\" interval=$INTERVAL N:${metrics[2]}"
+    val=${metrics[2]}
+    if (( "$val" < 0 )); then 
+      val=0
+    fi 
+    echo "PUTVAL \"$HOSTNAME/mapr.${metrics[0]}/${metrics[1]}\" interval=$INTERVAL N:$val"
   done
 done
