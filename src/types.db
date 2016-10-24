@@ -296,6 +296,14 @@ lookups_table       value:COUNTER:U:U
 misses_table        value:COUNTER:U:U
 lookups_data       value:COUNTER:U:U
 misses_data        value:COUNTER:U:U
+produce_rpcs       value:GAUGE:0:U
+produce_msgs      value:GAUGE:0:U
+produce_bytes       value:GAUGE:0:U
+listen_rpcs      value:GAUGE:0:U
+listen_msgs       value:GAUGE:0:U
+listen_currpcs       value:GAUGE:0:U
+listen_bytes       value:GAUGE:0:U
+
 
 # ResourceManager
 apps_running        value:COUNTER:U:U
