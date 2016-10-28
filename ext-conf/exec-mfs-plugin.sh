@@ -9,9 +9,9 @@ do
   for (( i=0; i<${arrLen}; i++ )); do
     IFS=':' read -ra metrics <<< "${arr[$i]}"
     val=${metrics[2]}
-    if (( "$val" < 0 )); then 
+    if (( $(echo "${val} < 0.0" | bc -l) )); then
       val=0
-    fi 
+    fi
     echo "PUTVAL \"$HOSTNAME/mapr.${metrics[0]}/${metrics[1]}\" interval=$INTERVAL N:$val"
   done
 done
