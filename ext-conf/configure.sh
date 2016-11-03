@@ -5,8 +5,8 @@
 #
 # Configure script for collectd
 #
-# configures the opentsdb and jmx facilities
-# enables/disables the opentsdb and jmx facilities
+# configures the mapr streams, opentsdb and jmx facilities
+# enables/disables the mapr streams, opentsdb and jmx facilities
 #
 # TODO: add support to tweak other collection facilities, like disk, fs, network
 # TODO: Need to add support to clean up old copies
@@ -312,6 +312,24 @@ function configureZookeeperConfig() {
 #############################################################################
 function pluginEnable() {
     sed -i -e "s/#LoadPlugin $1/LoadPlugin $1/;" ${NEW_CD_CONF_FILE}
+}
+
+#############################################################################
+# Function to configure mapr streams plugin
+#############################################################################
+function configuremaprstreamsplugin()
+{ 
+    # first enable the plugin   
+    pluginEnable write_maprstreams
+
+    # configure maprstreams
+    # <plugin write_maprstreams>
+    #     <node>
+    # 		Stream "/var/mapr/mapr.monitoring/spyglass"	
+    #     </Node>
+    # </Plugin>
+    enableSection MAPR_CONF_STREAMS_TAG
+    return 0
 }
 
 #############################################################################
@@ -741,6 +759,7 @@ cp ${CD_CONF_FILE} ${NEW_CD_CONF_FILE}
 adjustOwnership
 getRoles
 configureopentsdbplugin  # this ucomments everything between the MAPR_CONF_TAGs
+configuremaprstreamsplugin  # this ucomments everything between the MAPR_CONF_TAGs
 configurejavajmxplugin
 #createFastJMXLink
 configureHadoopJMX

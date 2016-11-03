@@ -5734,6 +5734,7 @@ AC_PLUGIN([write_redis], [$with_libhiredis],    [Redis output plugin])
 AC_PLUGIN([write_riemann], [$have_protoc_c],   [Riemann output plugin])
 AC_PLUGIN([write_sensu], [yes],                [Sensu output plugin])
 AC_PLUGIN([write_tsdb],  [yes],                [TSDB output plugin])
+AC_PLUGIN([write_maprstreams],  [$with_librdkafka],                [MapR Streams output plugin])
 AC_PLUGIN([xmms],        [$with_libxmms],      [XMMS statistics])
 AC_PLUGIN([zfs_arc],     [$plugin_zfs_arc],    [ZFS ARC statistics])
 AC_PLUGIN([zookeeper],   [yes],  	       [Zookeeper statistics])
@@ -6113,6 +6114,7 @@ Configuration:
     write_riemann . . . . $enable_write_riemann
     write_sensu . . . . . $enable_write_sensu
     write_tsdb  . . . . . $enable_write_tsdb
+    write_maprstreams  . . . . . $enable_write_maprstreams
     xmms  . . . . . . . . $enable_xmms
     zfs_arc . . . . . . . $enable_zfs_arc
     zookeeper . . . . . . $enable_zookeeper
