@@ -158,6 +158,7 @@ struct wt_kafka_topic_context {
     char                         escape_char;
     char                        *topic_name;
     char                        *host_tags;
+    char                        *clusterId;
     char                        *stream;
     pthread_mutex_t              lock;
 };
@@ -185,7 +186,8 @@ static void wt_kafka_topic_context_free(void *p) /* {{{ */
   INFO("mapr_writemaprstreams plugin: inside context free");
   if (ctx == NULL)
     return;
-
+  if (ctx->clusterId != NULL)
+    sfree(ctx->clusterId);
   if (ctx->topic_name != NULL)
     sfree(ctx->topic_name);
   if (ctx->stream != NULL)
@@ -220,35 +222,10 @@ static int32_t wt_kafka_partition(const rd_kafka_topic_t *rkt,
 
 static int wt_kafka_handle(struct wt_kafka_topic_context *ctx) /* {{{ */
 {
-    char                         errbuf[1024];
-    rd_kafka_conf_t             *conf;
     rd_kafka_topic_conf_t       *topic_conf;
 
     if (ctx->kafka != NULL && ctx->topic != NULL)
         return(0);
-
-    if (ctx->kafka == NULL) {
-        if ((conf = rd_kafka_conf_dup(ctx->kafka_conf)) == NULL) {
-            ERROR("write_maprstreams plugin: cannot duplicate kafka config");
-            return(1);
-        }
-
-        if ((ctx->kafka = rd_kafka_new(RD_KAFKA_PRODUCER, conf,
-                                    errbuf, sizeof(errbuf))) == NULL) {
-          ERROR("write_maprstreams plugin: cannot create kafka handle.");
-          return 1;
-        }
-
-      #ifdef HAVE_LIBRDKAFKA_LOGGER
-          rd_kafka_conf_set_log_cb(ctx->kafka_conf, wt_kafka_log);
-      #endif
-
-      rd_kafka_conf_destroy(ctx->kafka_conf);
-      ctx->kafka_conf = NULL;
-
-      INFO ("write_maprstreams plugin: created KAFKA handle : %s", rd_kafka_name(ctx->kafka));
-
-    }
 
     if (ctx->topic == NULL ) {
       if ((topic_conf = rd_kafka_topic_conf_dup(ctx->conf)) == NULL) {
@@ -265,6 +242,7 @@ static int wt_kafka_handle(struct wt_kafka_topic_context *ctx) /* {{{ */
 
       rd_kafka_topic_conf_destroy(ctx->conf);
       ctx->conf = NULL;
+
 
       INFO ("write_maprstreams plugin: handle created for topic : %s", rd_kafka_topic_name(ctx->topic));
     }
@@ -573,8 +551,27 @@ static int wt_send_message (const char* key, const char* value,
     uint32_t  partition_key;
 
     pthread_mutex_lock (&ctx->lock);
+    // Allocate enough space for the topic name -- "<streamname>:<fqdn>_<metric name>"
+    //char *temp_topic_name = (char *) malloc( strlen(ctx->clusterId) + strlen(ctx->stream) + strlen(host) + strlen(key) + 4 );
+    char *temp_topic_name = (char *) malloc( strlen(ctx->stream) + strlen(host) + strlen(key) + 3 );
+    strcpy(temp_topic_name,ctx->stream);
+    strcat(temp_topic_name,":");
+    //strcat(temp_topic_name,ctx->clusterId);
+    //strcat(temp_topic_name,"_");
+    strcat(temp_topic_name,host);
+    strcat(temp_topic_name,"_");
+    strcat(temp_topic_name, key);
+    strcpy(ctx->topic_name,temp_topic_name);
     INFO("write_maprstreams plugin for key %s stream name %s ",key,ctx->stream);
     INFO("write_maprstreams plugin: topic name %s ",ctx->topic_name);
+    // Create conf because it gets set to NULL in wt_kafka_handle call below
+    if ((ctx->conf = rd_kafka_topic_conf_new()) == NULL) {
+      rd_kafka_conf_destroy(ctx->kafka_conf);
+      sfree(ctx);
+      ERROR ("write_maprstream plugin: cannot create topic configuration.");
+      return -1;
+    }
+    // Get a handle to kafka topics and kafka conf
     status = wt_kafka_handle(ctx);
     pthread_mutex_unlock (&ctx->lock);
     if( status != 0 )
@@ -621,11 +618,18 @@ static int wt_send_message (const char* key, const char* value,
     pthread_mutex_lock(&ctx->lock);
 
     partition_key = rand();
-
+    // Send the message to topic
     rd_kafka_produce(ctx->topic, RD_KAFKA_PARTITION_UA,
         RD_KAFKA_MSG_F_COPY, message, sizeof(message),
         &partition_key, sizeof(partition_key), NULL);
 
+    // Free the space allocated for temp topic name
+    free(temp_topic_name);
+    // Set topic name and topic to null so a new topic conf is created for each messages based on the metric key
+    ctx->topic_name = NULL;
+    if (ctx->topic != NULL)
+      rd_kafka_topic_destroy(ctx->topic);
+    ctx->topic = NULL;
     pthread_mutex_unlock(&ctx->lock);
 
     return 0;
@@ -727,6 +731,7 @@ static int wt_config_stream(oconfig_item_t *ci)
     rd_kafka_conf_t *conf;
     struct wt_kafka_topic_context  *tctx;
     int status;
+    char                         errbuf[1024];
 
     int i;
     if ((conf = rd_kafka_conf_new()) == NULL) {
@@ -744,6 +749,7 @@ static int wt_config_stream(oconfig_item_t *ci)
     tctx->stream = NULL;
     tctx->host_tags = NULL;
     tctx->topic_name = NULL;
+    tctx->clusterId = NULL;
 
     if ((tctx->kafka_conf = rd_kafka_conf_dup(conf)) == NULL) {
       sfree(tctx);
@@ -762,6 +768,30 @@ static int wt_config_stream(oconfig_item_t *ci)
       return -1;
     }
 
+    if (tctx->kafka == NULL) {
+      if ((conf = rd_kafka_conf_dup(tctx->kafka_conf)) == NULL) {
+        ERROR("write_maprstreams plugin: cannot duplicate kafka config");
+        return(1);
+      }
+
+      if ((tctx->kafka = rd_kafka_new(RD_KAFKA_PRODUCER, conf,
+          errbuf, sizeof(errbuf))) == NULL) {
+        ERROR("write_maprstreams plugin: cannot create kafka handle.");
+        return 1;
+      }
+
+#ifdef HAVE_LIBRDKAFKA_LOGGER
+      rd_kafka_conf_set_log_cb(tctx->kafka_conf, wt_kafka_log);
+#endif
+
+      rd_kafka_conf_destroy(tctx->kafka_conf);
+      tctx->kafka_conf = NULL;
+
+      INFO ("write_maprstreams plugin: created KAFKA handle : %s", rd_kafka_name(tctx->kafka));
+
+    }
+
+
     for (i = 0; i < ci->children_num; i++)
     {
         oconfig_item_t *child = ci->children + i;
@@ -770,8 +800,6 @@ static int wt_config_stream(oconfig_item_t *ci)
             cf_util_get_string(child, &tctx->stream);
         else if (strcasecmp("HostTags", child->key) == 0)
             cf_util_get_string(child, &tctx->host_tags);
-        else if (strcasecmp("Topic", child->key) == 0)
-             cf_util_get_string(child, &tctx->topic_name);
         else
         {
             ERROR("write_maprstreams plugin: Invalid configuration "
@@ -781,8 +809,8 @@ static int wt_config_stream(oconfig_item_t *ci)
         }
     }
 
-    if (tctx->stream == NULL || tctx->topic_name == NULL) {
-      ERROR("write_maprstreams plugin: Required parameters Stream/Topic missing in configuration");
+    if (tctx->stream == NULL) {
+      ERROR("write_maprstreams plugin: Required parameters Stream is missing in configuration");
       clearContext(tctx);
 
     }
@@ -795,18 +823,21 @@ static int wt_config_stream(oconfig_item_t *ci)
 
     INFO ("write_maprstreams plugin: stream name %s",tctx->stream);
     INFO ("write_maprstreams plugin: host tags name %s",tctx->host_tags);
-    char *temp_topic_name = (char *) malloc(sizeof(tctx->topic_name));
-    strcpy(temp_topic_name,tctx->stream);
-    strcat(temp_topic_name,":");
-    strcat(temp_topic_name, tctx->topic_name);
-    strcpy(tctx->topic_name,temp_topic_name);
-    INFO ("write_maprstreams plugin: topic name %s",tctx->topic_name);
-
+    // Get the clusterId from host_tags
+    char *clusterIdStr = (char *) malloc (strlen(tctx->host_tags) + 1);
+    strcpy(clusterIdStr, tctx->host_tags);
+    char *clusterId;
+    clusterId = strtok(clusterIdStr, "=");
+    if ( clusterId != NULL ) {
+      clusterId = strtok(NULL, "=");
+    }
+    tctx->clusterId = (char *) malloc (strlen(clusterId) + 1);
+    strcpy(tctx->clusterId,clusterId);
+    INFO ("write_maprstreams plugin: Found clusterId %s", tctx->clusterId);
     memset(&user_data, 0, sizeof(user_data));
     user_data.data = tctx;
     user_data.free_func = wt_kafka_topic_context_free;
     status = plugin_register_write(callback_name, wt_write, &user_data);
-    free(temp_topic_name);
     if (status != 0) {
       ERROR ("write_maprstreams plugin: plugin_register_write (\"%s\") "
           "failed with status %i.",
@@ -814,6 +845,8 @@ static int wt_config_stream(oconfig_item_t *ci)
       clearContext(tctx);
 
     }
+    free(clusterIdStr);
+    clusterId = NULL;
 
     pthread_mutex_init (&tctx->lock, /* attr = */ NULL);
     return 0;
