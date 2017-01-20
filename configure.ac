@@ -5945,6 +5945,7 @@ plugin_numa="no"
 plugin_perl="no"
 plugin_pinba="no"
 plugin_processes="no"
+plugin_mapr_process="no"
 plugin_protocols="no"
 plugin_python="no"
 plugin_serial="no"
@@ -5991,6 +5992,7 @@ then
 	plugin_nfs="yes"
 	plugin_numa="yes"
 	plugin_processes="yes"
+	plugin_mapr_process="yes"
 	plugin_protocols="yes"
 	plugin_serial="yes"
 	plugin_swap="yes"
@@ -6359,6 +6361,7 @@ AC_ARG_ENABLE([all-plugins],
 
 m4_divert_once([HELP_ENABLE], [])
 
+<<<<<<< HEAD
 AC_PLUGIN([aggregation],         [yes],                     [Aggregation plugin])
 AC_PLUGIN([amqp],                [$with_librabbitmq],       [AMQP output plugin])
 AC_PLUGIN([apache],              [$with_libcurl],           [Apache httpd statistics])
@@ -6414,6 +6417,7 @@ AC_PLUGIN([lpar],                [$with_perfstat],          [AIX logical partiti
 AC_PLUGIN([lua],                 [$with_liblua],            [Lua plugin])
 AC_PLUGIN([lvm],                 [$with_liblvm2app],        [LVM statistics])
 AC_PLUGIN([madwifi],             [$have_linux_wireless_h],  [Madwifi wireless statistics])
+AC_PLUGIN([mapr_process],        [$plugin_mapr_process],    [MapR Process statistics])
 AC_PLUGIN([match_empty_counter], [yes],                     [The empty counter match])
 AC_PLUGIN([match_hashed],        [yes],                     [The hashed match])
 AC_PLUGIN([match_regex],         [yes],                     [The regex match])
@@ -6851,6 +6855,7 @@ AC_MSG_RESULT([    lpar  . . . . . . . . $enable_lpar])
 AC_MSG_RESULT([    lua . . . . . . . . . $enable_lua])
 AC_MSG_RESULT([    lvm . . . . . . . . . $enable_lvm])
 AC_MSG_RESULT([    madwifi . . . . . . . $enable_madwifi])
+AC_MSG_RESULT([    mapr_process  . . . . $enable_mapr_process
 AC_MSG_RESULT([    match_empty_counter . $enable_match_empty_counter])
 AC_MSG_RESULT([    match_hashed  . . . . $enable_match_hashed])
 AC_MSG_RESULT([    match_regex . . . . . $enable_match_regex])

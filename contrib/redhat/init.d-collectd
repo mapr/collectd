@@ -10,16 +10,19 @@
 # pidfile: /var/run/collectd.pid
 
 # Source function library.
-. /etc/init.d/functions
+if [ -f /etc/init.d/functions ]; then
+   . /etc/init.d/functions
+fi
 
 RETVAL=0
 ARGS=""
-prog="collectdmon"
+prog="collectd"
 service="collectd"
-CONFIG=/etc/collectd.conf
-COLLECTD=/usr/sbin/collectd
-COLLECTDMONPIDDIR="/var/run"
-COLLECTDMONPID="$COLLECTDMONPIDDIR/collectdmon.pid"
+COLLECTD_HOME="__INSTALL__"
+CONFIG="${COLLECTD_HOME}/etc/collectd.conf"
+COLLECTD="${COLLECTD_HOME}/sbin/collectd"
+COLLECTDPIDDIR="${COLLECTD_HOME}/var/run"
+COLLECTDPID="$COLLECTDPIDDIR/collectd.pid"
 
 MAXWAIT=30
 
@@ -27,9 +30,33 @@ if [ -r /etc/sysconfig/$service ]; then
 	. /etc/sysconfig/$service
 fi
 
-if [[ ! -d $COLLECTDMONPIDDIR ]]; then
-	mkdir -p $COLLECTDMONPIDDIR
-	[ -n "${RUNAS}" ] && chown "${RUNAS}:" "$COLLECTDMONPIDDIR"
+#
+# Load the mapr environment:
+#
+.  /opt/mapr/conf/env.sh
+
+#
+# Now add to LD_LIBRARY_PATH the path to libjvm.so
+#
+# XXX: Need to use a variable for /opt/mapr -- __xx__
+#
+ARCH=`uname -m`
+J_ARCH=""
+case "${ARCH}" in
+   "x86_64") J_ARCH="amd64" ;;
+   *) echo "Unknown architecture - exiting " ; exit 1 ;;
+esac
+
+# XXX: hack to workaround a bug in /opt/mapr/conf/env.sh
+
+if [ "${JAVA_HOME##*/}" = "jre" ] ; then
+	export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${JAVA_HOME}/lib/${J_ARCH}/server
+else
+	export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${JAVA_HOME}/jre/lib/${J_ARCH}/server
+fi
+
+if [[ ! -d $COLLECTDPIDDIR ]]; then
+	mkdir -p $COLLECTDPIDDIR
 fi
 
 check_config() {
@@ -51,19 +78,19 @@ start () {
 		echo $"not starting due to configuration error"
 		failure $"not starting $service due to configuration error"
 	else
-		daemon --user "${RUNAS:-root}" $prog -P $COLLECTDMONPID -c $COLLECTD -- -C "$CONFIG" $ARGS
+		daemon  $COLLECTD -P $COLLECTDPID -C "$CONFIG" $ARGS
 		RETVAL=$?
 		echo
-		[ $RETVAL -eq 0 ] && touch /var/lock/subsys/$service
+		[ $RETVAL -eq 0 ] && touch ${COLLECTD_HOME}/var/lock/$service
 	fi
 }
 
 stop () {
 	echo -n $"Stopping collectd: "
-	killproc -p $COLLECTDMONPID -d $MAXWAIT $prog
+	killproc -p $COLLECTDPID -d $MAXWAIT $prog
 	RETVAL=$?
 	echo
-	[ $RETVAL -eq 0 ] && rm -f /var/lock/subsys/$service
+	[ $RETVAL -eq 0 ] && rm -f ${COLLECTD_HOME}/var/lock/$service
 }
 
 restart () {
@@ -88,13 +115,13 @@ case "$1" in
 	stop
 	;;
   status)
-	status -p $COLLECTDMONPID $prog
+	status -p $COLLECTDPID $prog
 	;;
   restart|reload)
 	restart
 	;;
   condrestart)
-	[ -f /var/lock/subsys/$service ] && restart || :
+	[ -f ${COLLECTD_HOME}/var/lock/$service ] && restart || :
 	;;
   *)
 	echo $"Usage: $0 {start|stop|status|restart|reload|condrestart}"

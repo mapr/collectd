@@ -979,6 +979,13 @@ processes_la_LIBADD += -lkvm
 endif
 endif
 
+if BUILD_PLUGIN_MAPR_PROCESS
+pkglib_LTLIBRARIES += mapr_process.la
+mapr_process_la_SOURCES = mapr_process.c
+mapr_process_la_LDFLAGS = $(PLUGIN_LDFLAGS)
+mapr_process_la_LIBADD =
+endif
+
 if BUILD_PLUGIN_PROTOCOLS
 pkglib_LTLIBRARIES += protocols.la
 protocols_la_SOURCES = protocols.c
@@ -1489,6 +1496,21 @@ BUILT_SOURCES += prometheus.pb-c.c prometheus.pb-c.h
 prometheus.pb-c.c prometheus.pb-c.h: $(top_srcdir)/proto/prometheus.proto
 	$(AM_V_PROTOC_C)$(PROTOC_C) -I$(top_srcdir)/proto --c_out=$(builddir) $(top_srcdir)/proto/prometheus.proto
 endif
+
+# add a check to warn if collectd.conf changes so we can update the 
+# mapr template..
+all-local: check-conf-changes
+
+check-conf-changes: $(srcdir)/collectd.conf
+	if ! diff -q $(srcdir)/collectd.conf.in $(srcdir)/../ext-conf/collectd.conf.in.change_detect  ; \
+	then \
+		echo "Collectd.conf has changes - update the mapr version accordingly"; \
+		echo "and copy src/collectd.conf.in to ext-conf/collectd.conf.in.change_detect" ; \
+		echo "so we can detect the next time it changes" ; \
+		echo "Keep in mind that the plugins gets auto-enabled based on" ; \
+		echo "what is installed on the build machine" ; \
+		exit 1; \
+	fi; 
 
 install-exec-hook:
 	$(mkinstalldirs) $(DESTDIR)$(sysconfdir)
