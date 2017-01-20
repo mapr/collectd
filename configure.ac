@@ -6361,7 +6361,6 @@ AC_ARG_ENABLE([all-plugins],
 
 m4_divert_once([HELP_ENABLE], [])
 
-<<<<<<< HEAD
 AC_PLUGIN([aggregation],         [yes],                     [Aggregation plugin])
 AC_PLUGIN([amqp],                [$with_librabbitmq],       [AMQP output plugin])
 AC_PLUGIN([apache],              [$with_libcurl],           [Apache httpd statistics])
