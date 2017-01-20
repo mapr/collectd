@@ -6855,7 +6855,7 @@ AC_MSG_RESULT([    lpar  . . . . . . . . $enable_lpar])
 AC_MSG_RESULT([    lua . . . . . . . . . $enable_lua])
 AC_MSG_RESULT([    lvm . . . . . . . . . $enable_lvm])
 AC_MSG_RESULT([    madwifi . . . . . . . $enable_madwifi])
-AC_MSG_RESULT([    mapr_process  . . . . $enable_mapr_process
+AC_MSG_RESULT([    mapr_process  . . . . $enable_mapr_process])
 AC_MSG_RESULT([    match_empty_counter . $enable_match_empty_counter])
 AC_MSG_RESULT([    match_hashed  . . . . $enable_match_hashed])
 AC_MSG_RESULT([    match_regex . . . . . $enable_match_regex])
