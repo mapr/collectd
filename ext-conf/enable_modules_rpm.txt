@@ -62,7 +62,7 @@
 --enable-rrdtool
 --enable-sensors
 --enable-serial
---enable-smart
+--disable-smart
 --enable-statsd
 --enable-swap
 --enable-syslog
