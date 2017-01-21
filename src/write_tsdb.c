@@ -327,6 +327,7 @@ static int wt_callback_init(struct wt_callback *cb) {
       INFO("write_tsdb plugin: Connected to %s:%s ",node,service);
       break;
     }
+  }
 
   freeaddrinfo(ai_list);
 
@@ -863,6 +864,7 @@ static int wt_write(const data_set_t *ds, const value_list_t *vl,
 static int wt_config_tsd(oconfig_item_t *ci) {
   struct wt_callback *cb;
   char callback_name[DATA_MAX_NAME_LEN];
+  char *nodeName;
 
   cb = calloc(1, sizeof(*cb));
   if (cb == NULL) {
