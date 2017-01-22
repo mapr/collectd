@@ -16,6 +16,7 @@
 --enable-df
 --enable-disk
 --with-libudev=no
+--with-libyajl=no
 --enable-drbd
 --enable-email
 --enable-entropy
