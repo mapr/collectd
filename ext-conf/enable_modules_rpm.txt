@@ -11,7 +11,7 @@
 --enable-cpufreq
 --enable-csv
 --enable-curl
---enable-curl_json
+--disable-curl_json
 --enable-curl_xml
 --enable-df
 --enable-disk
@@ -33,7 +33,7 @@
 --enable-java
 --enable-load
 --enable-logfile
---enable-log_logstash
+--disable-log_logstash
 --enable-lvm
 --enable-madwifi
 --enable-match_empty_counter
