@@ -349,7 +349,15 @@ start() {
               ;;
            starting)
               echo "$APP is already starting"
-              false || return
+              MOD_TIME=$(stat -c%y $APP_LOCK_FILE)
+              EPOC_MOD_TIME=$(date +%s -d"$MOD_TIME")
+              NOW_EPOC=$(date +%s)
+              DIFF_SEC=$(expr $NOW_EPOC - $EPOC_MOD_TIME)
+              if [ $DIFF_SEC -gt 300 ]; then
+                  echo "found stale lock file ... it likely crashed - trying again"
+              else
+                  false || return
+              fi
               ;;
            stopping)
               echo "$APP is already stopping"
@@ -374,6 +382,7 @@ start() {
     # Verify config file
     if ! $APP_DAEMON -t -C "$APP_CONF_FILE" > $APP_LOG_DIR/$APP.config_verification 2>&1 ; then
         echo "not starting due to configuration error"
+        rm -f $APP_PID_FILE $MAPR_APP_PID_FILE $APP_LOCK_FILE
         exit 1
     fi
 
