@@ -167,8 +167,8 @@ struct wt_kafka_topic_context {
  * Functions
  */
 static int wt_kafka_handle(struct wt_kafka_topic_context *);
-static int32_t wt_kafka_partition(const rd_kafka_topic_t *, const void *, size_t,
-                               int32_t, void *, void *);
+//static int32_t wt_kafka_partition(const rd_kafka_topic_t *, const void *, size_t,
+//                               int32_t, void *, void *);
 
 #if defined HAVE_LIBRDKAFKA_LOGGER || defined HAVE_LIBRDKAFKA_LOG_CB
 static void wt_kafka_log(const rd_kafka_t *, int, const char *, const char *);
@@ -206,19 +206,19 @@ static void wt_kafka_topic_context_free(void *p) /* {{{ */
     sfree(ctx);
 } /* }}} void wt_kafka_topic_context_free */
 
-static int32_t wt_kafka_partition(const rd_kafka_topic_t *rkt,
-                               const void *keydata, size_t keylen,
-                               int32_t partition_cnt, void *p, void *m)
-{
-    uint32_t key = *((uint32_t *)keydata );
-    uint32_t target = key % partition_cnt;
-    int32_t   i = partition_cnt;
-
-    while (--i > 0 && !rd_kafka_topic_partition_available(rkt, target)) {
-        target = (target + 1) % partition_cnt;
-    }
-    return target;
-}
+//static int32_t wt_kafka_partition(const rd_kafka_topic_t *rkt,
+//                               const void *keydata, size_t keylen,
+//                               int32_t partition_cnt, void *p, void *m)
+//{
+//    uint32_t key = *((uint32_t *)keydata );
+//    uint32_t target = key % partition_cnt;
+//    int32_t   i = partition_cnt;
+//
+//    while (--i > 0 && !rd_kafka_topic_partition_available(rkt, target)) {
+//        target = (target + 1) % partition_cnt;
+//    }
+//    return target;
+//}
 
 static int wt_kafka_handle(struct wt_kafka_topic_context *ctx) /* {{{ */
 {
@@ -243,8 +243,7 @@ static int wt_kafka_handle(struct wt_kafka_topic_context *ctx) /* {{{ */
       rd_kafka_topic_conf_destroy(ctx->conf);
       ctx->conf = NULL;
 
-
-      INFO ("write_maprstreams plugin: handle created for topic : %s", rd_kafka_topic_name(ctx->topic));
+      INFO("write_maprstreams plugin: handle created for topic : %s", rd_kafka_topic_name(ctx->topic));
     }
 
     return(0);
@@ -561,9 +560,10 @@ static int wt_send_message (const char* key, const char* value,
     strcat(temp_topic_name,host);
     strcat(temp_topic_name,"_");
     strcat(temp_topic_name, key);
-    strcpy(ctx->topic_name,temp_topic_name);
-    INFO("write_maprstreams plugin for key %s stream name %s ",key,ctx->stream);
-    INFO("write_maprstreams plugin: topic name %s ",ctx->topic_name);
+    ctx->topic_name = temp_topic_name;
+    //strcpy(ctx->topic_name,temp_topic_name);
+    //INFO("write_maprstreams plugin for key %s stream name %s ",key,ctx->stream);
+    //INFO("write_maprstreams plugin: topic name %s ",ctx->topic_name);
     // Create conf because it gets set to NULL in wt_kafka_handle call below
     if ((ctx->conf = rd_kafka_topic_conf_new()) == NULL) {
       rd_kafka_conf_destroy(ctx->kafka_conf);
@@ -573,7 +573,7 @@ static int wt_send_message (const char* key, const char* value,
     }
     // Get a handle to kafka topics and kafka conf
     status = wt_kafka_handle(ctx);
-    pthread_mutex_unlock (&ctx->lock);
+    //pthread_mutex_unlock (&ctx->lock);
     if( status != 0 )
       return status;
     bzero(message, sizeof(message));
@@ -615,7 +615,7 @@ static int wt_send_message (const char* key, const char* value,
         return -1;
     }
 
-    pthread_mutex_lock(&ctx->lock);
+    //pthread_mutex_lock(&ctx->lock);
 
     partition_key = rand();
     // Send the message to topic
@@ -623,6 +623,7 @@ static int wt_send_message (const char* key, const char* value,
         RD_KAFKA_MSG_F_COPY, message, sizeof(message),
         &partition_key, sizeof(partition_key), NULL);
 
+    INFO("write_maprstreams plugin: PRINT message %s sent to topic %s ",message,ctx->topic_name);
     // Free the space allocated for temp topic name
     free(temp_topic_name);
     // Set topic name and topic to null so a new topic conf is created for each messages based on the metric key
@@ -705,9 +706,9 @@ static int wt_write(const data_set_t *ds, const value_list_t *vl,
                     user_data_t *user_data)
 {
     int       status;
-    INFO("write_maprstreams plugin: user_data %p", user_data->data);
+    //INFO("write_maprstreams plugin: user_data %p", user_data->data);
     struct wt_kafka_topic_context  *ctx = user_data->data;
-    INFO("write_maprstreams plugin: stream_name %s", ctx->stream);
+    //INFO("write_maprstreams plugin: stream_name %s", ctx->stream);
     if ((ds == NULL) || (vl == NULL) || (ctx == NULL))
       return EINVAL;
 
@@ -814,9 +815,9 @@ static int wt_config_stream(oconfig_item_t *ci)
       clearContext(tctx);
 
     }
-
-    rd_kafka_topic_conf_set_partitioner_cb(tctx->conf, wt_kafka_partition);
-    rd_kafka_topic_conf_set_opaque(tctx->conf, tctx);
+    // TODO - Remove this because it is optional
+    //rd_kafka_topic_conf_set_partitioner_cb(tctx->conf, wt_kafka_partition);
+    //rd_kafka_topic_conf_set_opaque(tctx->conf, tctx);
 
     ssnprintf(callback_name, sizeof(callback_name), "write_maprstreams/%s",
         tctx->stream != NULL ? tctx->stream : WT_DEFAULT_STREAM);
@@ -878,3 +879,4 @@ void module_register(void)
 }
 
 /* vim: set sw=4 ts=4 sts=4 tw=78 et : */
+
