@@ -1575,7 +1575,7 @@
 
 #<Plugin write_maprstreams>
 #       <Node>
-#               Stream "/var/mapr/mapr.monitoring/spyglass"
+#               Stream "/var/mapr/mapr.monitoring/$clusterId"
 #               Topic "metrics"
 #               HostTags "clusterId=$clusterId"
 #       </Node>
