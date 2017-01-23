@@ -6451,7 +6451,6 @@ AC_PLUGIN([oracle],              [$with_oracle],            [Oracle plugin])
 AC_PLUGIN([perl],                [$plugin_perl],            [Embed a Perl interpreter])
 AC_PLUGIN([pf],                  [$have_net_pfvar_h],       [BSD packet filter (PF) statistics])
 # FIXME: Check for libevent, too.
-<<<<<<< HEAD
 AC_PLUGIN([pinba],               [$plugin_pinba],           [Pinba statistics])
 AC_PLUGIN([ping],                [$with_liboping],          [Network latency statistics])
 AC_PLUGIN([postgresql],          [$with_libpq],             [PostgreSQL database statistics])
