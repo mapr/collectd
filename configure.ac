@@ -6451,6 +6451,7 @@ AC_PLUGIN([oracle],              [$with_oracle],            [Oracle plugin])
 AC_PLUGIN([perl],                [$plugin_perl],            [Embed a Perl interpreter])
 AC_PLUGIN([pf],                  [$have_net_pfvar_h],       [BSD packet filter (PF) statistics])
 # FIXME: Check for libevent, too.
+<<<<<<< HEAD
 AC_PLUGIN([pinba],               [$plugin_pinba],           [Pinba statistics])
 AC_PLUGIN([ping],                [$with_liboping],          [Network latency statistics])
 AC_PLUGIN([postgresql],          [$with_libpq],             [PostgreSQL database statistics])
@@ -6510,6 +6511,7 @@ AC_PLUGIN([xmms],                [$with_libxmms],           [XMMS statistics])
 AC_PLUGIN([zfs_arc],             [$plugin_zfs_arc],         [ZFS ARC statistics])
 AC_PLUGIN([zone],                [$plugin_zone],            [Solaris container statistics])
 AC_PLUGIN([zookeeper],           [yes],                     [Zookeeper statistics])
+AC_PLUGIN([write_maprstreams],   [$with_librdkafka],        [MapR Streams output plugin])
 
 dnl Default configuration file
 # Load either syslog or logfile
@@ -6942,6 +6944,7 @@ AC_MSG_RESULT([    write_redis . . . . . $enable_write_redis])
 AC_MSG_RESULT([    write_riemann . . . . $enable_write_riemann])
 AC_MSG_RESULT([    write_sensu . . . . . $enable_write_sensu])
 AC_MSG_RESULT([    write_tsdb  . . . . . $enable_write_tsdb])
+AC_MSG_RESULT([    write_maprstreams  . . . . . $enable_write_maprstreams])
 AC_MSG_RESULT([    xencpu  . . . . . . . $enable_xencpu])
 AC_MSG_RESULT([    xmms  . . . . . . . . $enable_xmms])
 AC_MSG_RESULT([    zfs_arc . . . . . . . $enable_zfs_arc])

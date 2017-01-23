@@ -153,6 +153,7 @@
 %define with_write_sensu 0%{!?_without_write_sensu:1}
 %define with_write_tsdb 0%{!?_without_write_tsdb:1}
 %define with_xmms 0%{!?_without_xmms:0%{?_has_xmms}}
+%define with_write_maprstreams 0%{!?_without_write_maprstreams:1}
 %define with_zfs_arc 0%{!?_without_zfs_arc:1}
 %define with_zookeeper 0%{!?_without_zookeeper:1}
 
@@ -1740,6 +1741,12 @@ Collectd utilities
 %define _with_xencpu --disable-xencpu
 %endif
 
+%if %{with_write_maprstreams}
+%define _with_write_maprstreams --enable-write_maprstreams
+%else
+%define _with_write_maprstreams --disable-write_maprstreams
+%endif
+
 %if %{with_xmms}
 %define _with_xmms --enable-xmms
 %else
@@ -1912,6 +1919,7 @@ Collectd utilities
 	%{?_with_write_riemann} \
 	%{?_with_write_sensu} \
 	%{?_with_write_tsdb} \
+	%{?_with_write_maprstreams} \
 	%{?_with_xencpu} \
 	%{?_with_xmms} \
 	%{?_with_zfs_arc} \
@@ -2247,6 +2255,9 @@ fi
 %endif
 %if %{with_write_tsdb}
 %{_libdir}/%{name}/write_tsdb.so
+%endif
+%if %{with_write_maprstreams}
+%{_libdir}/%{name}/write_maprstreams.so
 %endif
 %if %{with_zfs_arc}
 %{_libdir}/%{name}/zfs_arc.so
