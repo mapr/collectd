@@ -148,7 +148,6 @@
 %define with_write_graphite 0%{!?_without_write_graphite:1}
 %define with_write_http 0%{!?_without_write_http:1}
 %define with_write_log 0%{!?_without_write_log:1}
-%define with_write_maprstreams 0%{!?_without_write_maprstreams:1}
 %define with_write_prometheus 0%{!?_without_write_prometheus:1}
 %define with_write_redis 0%{!?_without_write_redis:1}
 %define with_write_sensu 0%{!?_without_write_sensu:1}
@@ -1741,12 +1740,6 @@ Collectd utilities
 %define _with_xencpu --disable-xencpu
 %endif
 
-%if %{with_write_maprstreams}
-%define _with_write_maprstreams --enable-write_maprstreams
-%else
-%define _with_write_maprstreams --disable-write_maprstreams
-%endif
-
 %if %{with_xmms}
 %define _with_xmms --enable-xmms
 %else
@@ -1919,7 +1912,6 @@ Collectd utilities
 	%{?_with_write_riemann} \
 	%{?_with_write_sensu} \
 	%{?_with_write_tsdb} \
-	%{?_with_write_maprstreams} \
 	%{?_with_xencpu} \
 	%{?_with_xmms} \
 	%{?_with_zfs_arc} \
@@ -2255,9 +2247,6 @@ fi
 %endif
 %if %{with_write_tsdb}
 %{_libdir}/%{name}/write_tsdb.so
-%endif
-%if %{with_write_maprstreams}
-%{_libdir}/%{name}/write_maprstreams.so
 %endif
 %if %{with_zfs_arc}
 %{_libdir}/%{name}/zfs_arc.so
