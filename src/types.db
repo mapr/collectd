@@ -429,6 +429,11 @@ nodes_offline   value:COUNTER:U:U
 disk_space_available    value:COUNTER:U:U
 alarm_raised    value:COUNTER:U:U
 
+# Topology
+disks_total_capacity value:COUNTER:U:U
+disks_used_capacity  value:COUNTER:U:U
+utilization          value:COUNTER:U:U
+
 # Volume
 logical_used value:COUNTER:U:U
 used        value:COUNTER:U:U

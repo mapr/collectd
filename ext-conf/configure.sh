@@ -475,6 +475,7 @@ function configureConnections() {
         enableSection MAPR_CONN_CONF_CLDB_TAG
         enableSection MAPR_CONF_CLDB_ALARMS_TAG
         enableSection MAPR_CONF_VOLUMES_TAG
+        enableSection MAPR_CONF_TOPOLOGIES_TAG
         configureServiceURL MAPR_CONN_CONF_CLDB_TAG $host_name jmx $secureCluster $CLDB_JMX_PORT
     fi
     if [ ${CD_NM_ROLE} -eq 1 ]; then
