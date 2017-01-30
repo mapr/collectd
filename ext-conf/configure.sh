@@ -5,8 +5,8 @@
 #
 # Configure script for collectd
 #
-# configures the opentsdb and jmx facilities
-# enables/disables the opentsdb and jmx facilities
+# configures the mapr streams, opentsdb and jmx facilities
+# enables/disables the mapr streams, opentsdb and jmx facilities
 #
 # TODO: add support to tweak other collection facilities, like disk, fs, network
 # TODO: Need to add support to clean up old copies
@@ -322,6 +322,24 @@ function pluginEnable() {
 }
 
 #############################################################################
+# Function to configure mapr streams plugin
+#############################################################################
+function configuremaprstreamsplugin()
+{ 
+    # first enable the plugin   
+    pluginEnable write_maprstreams
+
+    # configure maprstreams
+    # <plugin write_maprstreams>
+    #     <node>
+    # 		Stream "/var/mapr/mapr.monitoring/spyglass"	
+    #     </Node>
+    # </Plugin>
+    enableSection MAPR_CONF_STREAMS_TAG
+    return 0
+}
+
+#############################################################################
 # Function to configure opentsdb plugin
 #
 # uses nodeslist and nodeport arguments
@@ -457,6 +475,7 @@ function configureConnections() {
         enableSection MAPR_CONN_CONF_CLDB_TAG
         enableSection MAPR_CONF_CLDB_ALARMS_TAG
         enableSection MAPR_CONF_VOLUMES_TAG
+        enableSection MAPR_CONF_TOPOLOGIES_TAG
         configureServiceURL MAPR_CONN_CONF_CLDB_TAG $host_name jmx $secureCluster $CLDB_JMX_PORT
     fi
     if [ ${CD_NM_ROLE} -eq 1 ]; then
@@ -826,6 +845,7 @@ cp ${CD_CONF_FILE} ${NEW_CD_CONF_FILE}
 adjustOwnership
 getRoles
 configureopentsdbplugin  # this ucomments everything between the MAPR_CONF_TAGs
+configuremaprstreamsplugin  # this ucomments everything between the MAPR_CONF_TAGs
 configurejavajmxplugin
 #createFastJMXLink
 configureHadoopJMX

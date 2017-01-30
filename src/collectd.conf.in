@@ -1563,13 +1563,13 @@
 #</Plugin>
 
 #<Plugin write_tsdb>
-#	<Node>
-#		Host "localhost"
-#		Port "4242"
-#		HostTags "status=production"
-#		StoreRates false
-#		AlwaysAppendDS false
-#	</Node>
+#       <Node>
+#               Host "localhost"
+#               Port "4242"
+#               HostTags "status=production"
+#               StoreRates false
+#               AlwaysAppendDS false
+#       </Node>
 #</Plugin>
 
 #<Plugin zookeeper>

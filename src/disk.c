@@ -105,6 +105,12 @@ typedef struct diskstats {
 
   derive_t avg_read_time;
   derive_t avg_write_time;
+  derive_t io_time;
+  derive_t weighted_time;
+  gauge_t  disk_util;
+  gauge_t  disk_await;
+  gauge_t  disk_avg_rqSize;
+  gauge_t  disk_avg_quSize;
 
   _Bool has_merged;
   _Bool has_in_progress;
@@ -313,6 +319,26 @@ static void submit_in_progress(char const *disk_name, gauge_t in_progress) {
   sstrncpy(vl.type, "pending_operations", sizeof(vl.type));
 
   plugin_dispatch_values(&vl);
+}
+
+static void submit_disk_stats (char const *disk_name, const char *type, gauge_t disk_stats_value)
+{
+  value_t v;
+  value_list_t vl = VALUE_LIST_INIT;
+
+  if (ignorelist_match (ignorelist, disk_name) != 0)
+    return;
+
+  v.gauge = disk_stats_value;
+
+  vl.values = &v;
+  vl.values_len = 1;
+  sstrncpy (vl.host, hostname_g, sizeof (vl.host));
+  sstrncpy (vl.plugin, "disk", sizeof (vl.plugin));
+  sstrncpy (vl.plugin_instance, disk_name, sizeof (vl.plugin_instance));
+  sstrncpy (vl.type, type, sizeof (vl.type));
+
+  plugin_dispatch_values (&vl);
 }
 
 static counter_t disk_calc_time_incr(counter_t delta_time,
@@ -753,25 +779,25 @@ static int disk_read(void) {
       continue;
     }
 
-    {
-      derive_t diff_read_sectors;
-      derive_t diff_write_sectors;
 
-      /* If the counter wraps around, it's only 32 bits.. */
-      if (read_sectors < ds->read_sectors)
-        diff_read_sectors = 1 + read_sectors + (UINT_MAX - ds->read_sectors);
-      else
-        diff_read_sectors = read_sectors - ds->read_sectors;
-      if (write_sectors < ds->write_sectors)
-        diff_write_sectors = 1 + write_sectors + (UINT_MAX - ds->write_sectors);
-      else
-        diff_write_sectors = write_sectors - ds->write_sectors;
+    derive_t diff_read_sectors;
+    derive_t diff_write_sectors;
 
-      ds->read_bytes += 512 * diff_read_sectors;
-      ds->write_bytes += 512 * diff_write_sectors;
-      ds->read_sectors = read_sectors;
-      ds->write_sectors = write_sectors;
-    }
+    /* If the counter wraps around, it's only 32 bits.. */
+    if (read_sectors < ds->read_sectors)
+      diff_read_sectors = 1 + read_sectors + (UINT_MAX - ds->read_sectors);
+    else
+      diff_read_sectors = read_sectors - ds->read_sectors;
+    if (write_sectors < ds->write_sectors)
+      diff_write_sectors = 1 + write_sectors + (UINT_MAX - ds->write_sectors);
+    else
+      diff_write_sectors = write_sectors - ds->write_sectors;
+
+    ds->read_bytes += 512 * diff_read_sectors;
+    ds->write_bytes += 512 * diff_write_sectors;
+    ds->read_sectors = read_sectors;
+    ds->write_sectors = write_sectors;
+
 
     /* Calculate the average time an io-op needs to complete */
     if (is_disk) {
@@ -779,6 +805,10 @@ static int disk_read(void) {
       derive_t diff_write_ops;
       derive_t diff_read_time;
       derive_t diff_write_time;
+      gauge_t  disk_util;
+      gauge_t  disk_await;
+      gauge_t  disk_avg_rqSize;
+      gauge_t  disk_avg_quSize;
 
       if (read_ops < ds->read_ops)
         diff_read_ops = 1 + read_ops + (UINT_MAX - ds->read_ops);
@@ -809,10 +839,42 @@ static int disk_read(void) {
         ds->avg_write_time +=
             disk_calc_time_incr(diff_write_time, diff_write_ops);
 
+      if (io_time < ds->io_time)
+        disk_util = 1 + io_time
+        + (UINT_MAX - ds->io_time);
+      else
+        disk_util = io_time - ds->io_time;
+
+      if (diff_read_ops + diff_write_ops != 0)
+        disk_await = (diff_read_time + diff_write_time) / ((double) (diff_read_ops + diff_write_ops));
+      else
+        disk_await = 0.0;
+
+      if (diff_read_ops + diff_write_ops != 0)
+        disk_avg_rqSize = (diff_read_sectors + diff_write_sectors) / ((double) (diff_read_ops + diff_write_ops));
+      else
+        disk_avg_rqSize = 0.0;
+
+      if (weighted_time < ds->weighted_time)
+        disk_avg_quSize = 1 + weighted_time
+        + (UINT_MAX - ds->weighted_time);
+      else
+        disk_avg_quSize = weighted_time - ds->weighted_time;
+
+      double interval = CDTIME_T_TO_DOUBLE (plugin_get_interval());
+      disk_util = (((double) (disk_util)) / (interval * 10));
+      disk_avg_quSize = (((double) (disk_avg_quSize)) / (interval * 1000));
+
       ds->read_ops = read_ops;
       ds->read_time = read_time;
       ds->write_ops = write_ops;
       ds->write_time = write_time;
+      ds->io_time = io_time;
+      ds->weighted_time = weighted_time;
+      ds->disk_util = disk_util;
+      ds->disk_await = disk_await;
+      ds->disk_avg_rqSize = disk_avg_rqSize;
+      ds->disk_avg_quSize = disk_avg_quSize;
 
       if (read_merged || write_merged)
         ds->has_merged = 1;
@@ -842,6 +904,7 @@ static int disk_read(void) {
 
     output_name = disk_name;
 
+
 #if HAVE_LIBUDEV
     char *alt_name = NULL;
     if (conf_udev_name_attr != NULL) {
@@ -869,6 +932,19 @@ static int disk_read(void) {
     if ((ds->avg_read_time != 0) || (ds->avg_write_time != 0))
       disk_submit(output_name, "disk_time", ds->avg_read_time,
                   ds->avg_write_time);
+
+		if (is_disk)
+		{
+			disk_submit (output_name, "disk_merged",
+					read_merged, write_merged);
+			submit_in_progress (output_name, in_progress);
+			submit_io_time (output_name, io_time, weighted_time);
+			submit_disk_stats (output_name, "disk_utilization", ds->disk_util);
+			submit_disk_stats (output_name, "disk_await", ds->disk_await);
+			submit_disk_stats (output_name, "disk_avg_rqSize", ds->disk_avg_rqSize);
+			submit_disk_stats (output_name, "disk_avg_quSize", ds->disk_avg_quSize);
+		} /* if (is_disk) */
+
 
     if (is_disk) {
       if (ds->has_merged)

@@ -92,6 +92,7 @@
 --enable-write_log
 --enable-write_sensu
 --enable-write_tsdb
+--enable-write_maprstreams
 --enable-zfs_arc
 --enable-zookeeper
 --disable-amqp
