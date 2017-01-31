@@ -23,7 +23,7 @@ EOF
 
     checkerror "Failed to install MEP repo"
     yum clean all
-    yum install yum-plugin-downloadonly
+    yum -y install yum-plugin-downloadonly
     checkerror "Failed to install yum-plugin-download"
     yum --downloadonly --downloaddir=/tmp/cache mapr-librdkafka-*
     checkerror "Failed to download mapr-librdkafka"
@@ -35,7 +35,7 @@ deb $MEPREPO/ubuntu binary trusty
 EOR
     checkerror "Failed to install MEP repo"
     apt-get update
-    apt-get -y --nodeps install mapr-libkafka
+    apt-get -y -m install mapr-libkafka
     checkerror "Failed to install mapr-librdkafka"
 fi
 
