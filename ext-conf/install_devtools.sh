@@ -25,7 +25,7 @@ EOF
     yum clean all
     yum -y install yum-plugin-downloadonly
     checkerror "Failed to install yum-plugin-download"
-    yum --downloadonly --downloaddir=/tmp/cache mapr-librdkafka-*
+    yum -y install --downloadonly --downloaddir=/tmp/cache mapr-librdkafka-*
     checkerror "Failed to download mapr-librdkafka"
     rpm -i --nodeps /tmp/cache/mapr-librdkafka*
     checkerror "Failed to install mapr-librdkafka"
