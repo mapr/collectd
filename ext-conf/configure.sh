@@ -54,6 +54,7 @@ MAPR_USER=${MAPR_USER:-mapr}
 MAPR_GROUP=${MAPR_GROUP:-mapr}
 MAPR_CONF_DIR="${MAPR_HOME}/conf/conf.d"
 CLUSTER_ID_FILE="${MAPR_HOME}/conf/clusterid"
+CLUSTER_ID_FILE="${MAPR_HOME}/conf/mapr-clusters.conf"
 HADOOP_VER=$(cat "$MAPR_HOME/hadoop/hadoopversion")
 YARN_BIN="${MAPR_HOME}/hadoop/hadoop-${HADOOP_VER}/bin/yarn"
 CD_CONF_ASSUME_RUNNING_CORE=${isOnlyRoles:-0}
@@ -751,6 +752,23 @@ function configureClusterId() {
 }
 
 #############################################################################
+# Function to configure clusterName
+#
+# uses global CLDB_RUNNING
+#############################################################################
+function configureClusterName() {
+    if [ $CLDB_RUNNING -eq 1 -o -s "$CLUSTER_NAME_FILE" ]; then
+        line=$(head -n 1 "$CLUSTER_NAME_FILE")
+        IFS=' ' read -ra words <<< "${line}"
+        CLUSTER_NAME=${words[0]}
+        sed -i 's/\"clustername=.*/\"clustername='$CLUSTER_NAME'\"/g' ${NEW_CD_CONF_FILE}
+        return 0
+    else
+        return 1
+    fi
+}
+
+#############################################################################
 # Function to install warden config file in $MAPR_CONF_DIR
 #
 #############################################################################
@@ -856,6 +874,7 @@ if [ $CD_CONF_ASSUME_RUNNING_CORE -eq 1 ]; then
     waitForCLDB
     restartServices
     configureClusterId
+    configureClusterName
     if [ $? -eq 0 ]; then
         CD_ENABLE_SERVICE=1
     else
