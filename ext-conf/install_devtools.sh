@@ -1,5 +1,5 @@
 #!/bin/bash
-
+set -x 
 MEPVER={-:3.0.0}
 MEPREPO=http://artifactory.devops.lab/artifactory/prestage/releases-dev/MEP/MEP-${MEPVER}
 
@@ -38,3 +38,5 @@ EOF
     apt-get -y --nodeps install mapr-libkafka
     checkerror "Failed to install mapr-librdkafka"
 fi
+
+ls -l /opt/mapr/lib
