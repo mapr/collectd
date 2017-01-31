@@ -158,7 +158,6 @@ struct wt_kafka_topic_context {
     char                         escape_char;
     char                        *topic_name;
     char                        *host_tags;
-    char                        *clusterId;
     char                        *stream;
     pthread_mutex_t              lock;
 };
@@ -186,8 +185,6 @@ static void wt_kafka_topic_context_free(void *p) /* {{{ */
   INFO("mapr_writemaprstreams plugin: inside context free");
   if (ctx == NULL)
     return;
-  if (ctx->clusterId != NULL)
-    sfree(ctx->clusterId);
   if (ctx->topic_name != NULL)
     sfree(ctx->topic_name);
   if (ctx->stream != NULL)
@@ -750,7 +747,6 @@ static int wt_config_stream(oconfig_item_t *ci)
     tctx->stream = NULL;
     tctx->host_tags = NULL;
     tctx->topic_name = NULL;
-    tctx->clusterId = NULL;
 
     if ((tctx->kafka_conf = rd_kafka_conf_dup(conf)) == NULL) {
       sfree(tctx);
@@ -824,17 +820,6 @@ static int wt_config_stream(oconfig_item_t *ci)
 
     INFO ("write_maprstreams plugin: stream name %s",tctx->stream);
     INFO ("write_maprstreams plugin: host tags name %s",tctx->host_tags);
-    // Get the clusterId from host_tags
-    char *clusterIdStr = (char *) malloc (strlen(tctx->host_tags) + 1);
-    strcpy(clusterIdStr, tctx->host_tags);
-    char *clusterId;
-    clusterId = strtok(clusterIdStr, "=");
-    if ( clusterId != NULL ) {
-      clusterId = strtok(NULL, "=");
-    }
-    tctx->clusterId = (char *) malloc (strlen(clusterId) + 1);
-    strcpy(tctx->clusterId,clusterId);
-    INFO ("write_maprstreams plugin: Found clusterId %s", tctx->clusterId);
     memset(&user_data, 0, sizeof(user_data));
     user_data.data = tctx;
     user_data.free_func = wt_kafka_topic_context_free;
@@ -846,8 +831,6 @@ static int wt_config_stream(oconfig_item_t *ci)
       clearContext(tctx);
 
     }
-    free(clusterIdStr);
-    clusterId = NULL;
 
     pthread_mutex_init (&tctx->lock, /* attr = */ NULL);
     return 0;
