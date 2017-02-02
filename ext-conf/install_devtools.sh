@@ -1,6 +1,6 @@
 #!/bin/bash
 set -x 
-MEPVER=${MAPRVER:-3.0.0}
+MEPVER=${MEPVER:-3.0.0}
 MEPREPO=http://artifactory.devops.lab/artifactory/prestage/releases-dev/MEP/MEP-${MEPVER}
 
 function checkerror() {
