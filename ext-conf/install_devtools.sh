@@ -25,7 +25,7 @@ EOF
     checkerror "Failed to install MEP repo"
     cat /etc/yum.repos.d/mapr_mep.repo
     cat > /etc/yum.repos.d/mapr_core.repo <<EOFC
-[MapR_Core`]
+[MapR_Core]
 name = MapR Core Components
 baseurl = $COREREPO/redhat
 gpgcheck = 0
@@ -47,12 +47,12 @@ EOFC
     rpm -i --nodeps /tmp/cache/mapr-client*
     checkerror "Failed to install mapr-client"
 else
-    echo > /etc/apt/sources.list.d/mapr_mep.list <<EOR
+    cat > /etc/apt/sources.list.d/mapr_mep.list <<EOR
 deb $MEPREPO/ubuntu binary trusty
 EOR
     checkerror "Failed to install MEP repo"
     cat /etc/apt/sources.list.d/mapr_mep.list
-    echo > /etc/apt/sources.list.d/mapr_core.list <<EORC
+    cat > /etc/apt/sources.list.d/mapr_core.list <<EORC
 deb $COREREPO/ubuntu binary trusty
 EORC
     cat /etc/apt/sources.list.d/mapr_core.list
