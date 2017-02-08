@@ -37,7 +37,7 @@ EOFC
     cat /etc/yum.repos.d/mapr_core.repo
     yum clean all
     rpm -qa | fgrep mapr
-    yum remove mapr-*
+    yum -y remove mapr-*
     yum -y install yum-plugin-downloadonly
     checkerror "Failed to install yum-plugin-download"
     yum -y install --downloadonly --downloaddir=/tmp/cache mapr-librdkafka
@@ -59,7 +59,7 @@ deb $COREREPO/ubuntu binary trusty
 EORC
     cat /etc/apt/sources.list.d/mapr_core.list
     apt-get update
-    apt-get remove mapr-*
+    apt-get -y remove mapr-*
     dpkg -l | fgrep mapr
     apt-get -y -m install mapr-librdkafka
     checkerror "Failed to install mapr-librdkafka"
