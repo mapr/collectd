@@ -36,6 +36,7 @@ EOFC
     checkerror "Failed to install Core repo"
     cat /etc/yum.repos.d/mapr_core.repo
     yum clean all
+    rpm -qa | fgrep mapr
     yum -y install yum-plugin-downloadonly
     checkerror "Failed to install yum-plugin-download"
     yum -y install --downloadonly --downloaddir=/tmp/cache mapr-librdkafka
@@ -46,7 +47,6 @@ EOFC
     checkerror "Failed to download mapr-client"
     rpm -i --nodeps /tmp/cache/mapr-client*
     checkerror "Failed to install mapr-client"
-    rpm -qa | fgrep mapr
 else
     cat > /etc/apt/sources.list.d/mapr_mep.list <<EOR
 deb $MEPREPO/ubuntu binary trusty
@@ -58,11 +58,11 @@ deb $COREREPO/ubuntu binary trusty
 EORC
     cat /etc/apt/sources.list.d/mapr_core.list
     apt-get update
+    dpkg -l | fgrep mapr
     apt-get -y -m install mapr-librdkafka
     checkerror "Failed to install mapr-librdkafka"
     apt-get -y -m install mapr-client
     checkerror "Failed to install mapr-client"
-    dpkg -l | fgrep mapr
 fi
 
 ls -l /opt/mapr/lib
