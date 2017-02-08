@@ -46,6 +46,7 @@ EOFC
     checkerror "Failed to download mapr-client"
     rpm -i --nodeps /tmp/cache/mapr-client*
     checkerror "Failed to install mapr-client"
+    rpm -qa | fgrep mapr
 else
     cat > /etc/apt/sources.list.d/mapr_mep.list <<EOR
 deb $MEPREPO/ubuntu binary trusty
@@ -61,6 +62,7 @@ EORC
     checkerror "Failed to install mapr-librdkafka"
     apt-get -y -m install mapr-client
     checkerror "Failed to install mapr-client"
+    dpkg -l | fgrep mapr
 fi
 
 ls -l /opt/mapr/lib
