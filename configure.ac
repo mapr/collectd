@@ -4556,11 +4556,13 @@ AC_ARG_WITH(librdkafka, [AS_HELP_STRING([--with-librdkafka@<:@=PREFIX@:>@], [Pat
 SAVE_CPPFLAGS="$CPPFLAGS"
 SAVE_LDFLAGS="$LDFLAGS"
 
-echo "with_librdkafka_ldflags=$with_librdkafka_ldflags"
-echo "with_librdkafka_rpath=$with_librdkafka_rpath"
-
 CPPFLAGS="$CPPFLAGS $with_librdkafka_cppflags Lars"
-LDFLAGS="$LDFLAGS $with_librdkafka_ldflags $with_librdkafka_rpath"
+if test "x$with_librdkafka_rpath" != "x"
+then
+    LDFLAGS="$LDFLAGS $with_librdkafka_ldflags -Wl,-rpath,$with_librdkafka_rpath"
+else
+    LDFLAGS="$LDFLAGS $with_librdkafka_ldflags"
+fi
 
 if test "x$with_librdkafka" = "xyes"
 then
