@@ -4557,7 +4557,7 @@ SAVE_CPPFLAGS="$CPPFLAGS"
 SAVE_LDFLAGS="$LDFLAGS"
 
 CPPFLAGS="$CPPFLAGS $with_librdkafka_cppflags"
-LDFLAGS="$LDFLAGS $with_librdkafka_ldflags"
+LDFLAGS="$LDFLAGS $with_librdkafka_ldflags $with_librdkafka_rpath"
 
 if test "x$with_librdkafka" = "xyes"
 then
