@@ -4559,7 +4559,7 @@ SAVE_LDFLAGS="$LDFLAGS"
 CPPFLAGS="$CPPFLAGS $with_librdkafka_cppflags"
 if test "x$with_librdkafka_rpath" != "x"
 then
-    LDFLAGS="$LDFLAGS $with_librdkafka_ldflags -Wl,-rpath,$with_librdkafka_rpath"
+    LDFLAGS="$LDFLAGS $JAVA_LDFLAGS $with_librdkafka_ldflags -Wl,-rpath,$with_librdkafka_rpath"
 else
     LDFLAGS="$LDFLAGS $with_librdkafka_ldflags"
 fi
