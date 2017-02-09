@@ -4556,7 +4556,10 @@ AC_ARG_WITH(librdkafka, [AS_HELP_STRING([--with-librdkafka@<:@=PREFIX@:>@], [Pat
 SAVE_CPPFLAGS="$CPPFLAGS"
 SAVE_LDFLAGS="$LDFLAGS"
 
-CPPFLAGS="$CPPFLAGS $with_librdkafka_cppflags"
+echo "with_librdkafka_ldflags=$with_librdkafka_ldflags"
+echo "with_librdkafka_rpath=$with_librdkafka_rpath"
+
+CPPFLAGS="$CPPFLAGS $with_librdkafka_cppflags Lars"
 LDFLAGS="$LDFLAGS $with_librdkafka_ldflags $with_librdkafka_rpath"
 
 if test "x$with_librdkafka" = "xyes"
