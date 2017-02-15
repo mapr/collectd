@@ -301,32 +301,15 @@ static int wt_callback_init(struct wt_callback *cb) {
 
     set_sock_opts(cb->sock_fd);
 
-    status = getaddrinfo(node, service, &ai_hints, &ai_list);
+    status = connect(cb->sock_fd, ai_ptr->ai_addr, ai_ptr->ai_addrlen);
     if (status != 0)
     {
-      ERROR("write_tsdb plugin: getaddrinfo (%s, %s) failed: %s",
-            node, service, gai_strerror (status));
-      return -1;
+      close(cb->sock_fd);
+      cb->sock_fd = -1;
+      continue;
     }
-
-    assert (ai_list != NULL);
-    for (ai_ptr = ai_list; ai_ptr != NULL; ai_ptr = ai_ptr->ai_next)
-    {
-      cb->sock_fd = socket(ai_ptr->ai_family, ai_ptr->ai_socktype,
-                           ai_ptr->ai_protocol);
-      if (cb->sock_fd < 0)
-        continue;
-
-      status = connect(cb->sock_fd, ai_ptr->ai_addr, ai_ptr->ai_addrlen);
-      if (status != 0)
-      {
-        close(cb->sock_fd);
-        cb->sock_fd = -1;
-        continue;
-      }
-      INFO("write_tsdb plugin: Connected to %s:%s ",node,service);
-      break;
-    }
+    INFO("write_tsdb plugin: Connected to %s:%s ",node,service);
+    break;
   }
 
   freeaddrinfo(ai_list);
