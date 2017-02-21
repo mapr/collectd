@@ -167,7 +167,7 @@ case "$(uname -m)" in
 esac
 
 # need this to find the java jvm library
-export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${JAVA_HOME}/jre/lib/${J_ARCH}/server:$APP_HOME_DIR/lib/collectd:/usr/local/lib:/opt/mapr/lib
+export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${JAVA_HOME}/jre/lib/${J_ARCH}/server:$APP_HOME_DIR/lib/collectd:/usr/local/lib:${MAPR_HOME:-/opt/mapr}/lib
 
 
 # CHOOSE BEHAVOR: Set to fit app

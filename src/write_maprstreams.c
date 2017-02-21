@@ -115,7 +115,7 @@
 
 
 #ifndef WT_DEFAULT_STREAM
-# define WT_DEFAULT_STREAM "/var/mapr/mapr.monitoring/spyglass"
+# define WT_DEFAULT_STREAM "/var/mapr/mapr.monitoring/monitoring"
 #endif
 
 #ifndef WT_DEFAULT_ESCAPE
@@ -791,19 +791,19 @@ static int wt_config_stream(oconfig_item_t *ci)
 
     for (i = 0; i < ci->children_num; i++)
     {
-        oconfig_item_t *child = ci->children + i;
+      oconfig_item_t *child = ci->children + i;
 
-        if (strcasecmp("Stream", child->key) == 0)
-            cf_util_get_string(child, &tctx->stream);
-        else if (strcasecmp("HostTags", child->key) == 0)
-            cf_util_get_string(child, &tctx->host_tags);
-        else
-        {
-            ERROR("write_maprstreams plugin: Invalid configuration "
-                  "option: %s.", child->key);
-            clearContext(tctx);
-            return -1;
-        }
+      if (strcasecmp("Stream", child->key) == 0)
+        cf_util_get_string(child, &tctx->stream);
+      else if (strcasecmp("HostTags", child->key) == 0)
+        cf_util_get_string(child, &tctx->host_tags);
+      else
+      {
+        ERROR("write_maprstreams plugin: Invalid configuration "
+            "option: %s.", child->key);
+        clearContext(tctx);
+        return -1;
+      }
     }
 
     if (tctx->stream == NULL) {
