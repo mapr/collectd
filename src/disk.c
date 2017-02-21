@@ -941,8 +941,8 @@ static int disk_read(void) {
 			submit_io_time (output_name, io_time, weighted_time);
 			submit_disk_stats (output_name, "disk_utilization", ds->disk_util);
 			submit_disk_stats (output_name, "disk_await", ds->disk_await);
-			submit_disk_stats (output_name, "disk_avg_rqSize", ds->disk_avg_rqSize);
-			submit_disk_stats (output_name, "disk_avg_quSize", ds->disk_avg_quSize);
+			submit_disk_stats (output_name, "disk_avg_requests_size", ds->disk_avg_rqSize);
+			submit_disk_stats (output_name, "disk_avg_queue_size", ds->disk_avg_quSize);
 		} /* if (is_disk) */
 
 
