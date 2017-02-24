@@ -780,7 +780,7 @@ function createCustomConfDirectory()
         mkdir -p ${COLLECTD_CUSTOM_CONF_DIR} > /dev/null 2>&1
     fi
 
-    chown $MAPR_USER:$MAPR_GROUP ${COLLECTD_CUSTOM_CONF_DIR}
+    chown -R $MAPR_USER:$MAPR_GROUP ${COLLECTD_CUSTOM_CONF_DIR}
 }
 
 
