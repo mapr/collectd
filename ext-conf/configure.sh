@@ -53,6 +53,7 @@ MAPR_HOME=${MAPR_HOME:-/opt/mapr}
 MAPR_USER=${MAPR_USER:-mapr}
 MAPR_GROUP=${MAPR_GROUP:-mapr}
 MAPR_CONF_DIR="${MAPR_HOME}/conf/conf.d"
+COLLECTD_CUSTOM_CONF_DIR="${MAPR_HOME}/collectd/conf"
 CLUSTER_ID_FILE="${MAPR_HOME}/conf/clusterid"
 CLUSTER_ID_FILE="${MAPR_HOME}/conf/mapr-clusters.conf"
 HADOOP_VER=$(cat "$MAPR_HOME/hadoop/hadoopversion")
@@ -768,6 +769,21 @@ function configureClusterName() {
     fi
 }
 
+
+#############################################################################
+# Function to create conf directory for custom collectd.conf
+#
+#############################################################################
+function createCustomConfDirectory()
+{
+    if  ! [ -d ${COLLECTD_CUSTOM_CONF_DIR} ]; then
+        mkdir -p ${COLLECTD_CUSTOM_CONF_DIR} > /dev/null 2>&1
+    fi
+
+    chown $MAPR_USER:$MAPR_GROUP ${COLLECTD_CUSTOM_CONF_DIR}
+}
+
+
 #############################################################################
 # Function to install warden config file in $MAPR_CONF_DIR
 #
@@ -887,5 +903,6 @@ cp ${NEW_CD_CONF_FILE} ${CD_CONF_FILE}
 if [ $CD_ENABLE_SERVICE -eq 1 ]; then
     installWardenConfFile
 fi
+createCustomConfDirectory
 cleanupOldConfFiles
 true # make sure we have a good return
