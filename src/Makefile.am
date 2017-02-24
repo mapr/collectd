@@ -1384,12 +1384,10 @@ endif
 if BUILD_PLUGIN_WRITE_MAPRSTREAMS
 pkglib_LTLIBRARIES += write_maprstreams.la
 write_maprstreams_la_SOURCES = write_maprstreams.c \
-			      utils_format_graphite.c utils_format_graphite.h \
-                              utils_format_json.c utils_format_json.h \
-                              utils_cmd_putval.c utils_cmd_putval.h \
                               utils_crc32.c utils_crc32.h
 write_maprstreams_la_CPPFLAGS = $(AM_CPPFLAGS) $(BUILD_WITH_LIBRDKAFKA_CPPFLAGS)
-write_maprstreams_la_LDFLAGS = $(PLUGIN_LDFLAGS) $(BUILD_WITH_LIBRDKAFKA_LDFLAGS)
+write_maprstreams_la_LDFLAGS = $(PLUGIN_LDFLAGS) $(BUILD_WITH_LIBRDKAFKA_LDFLAGS) \
+                              libformat_graphite.la libformat_json.la libcmds.la
 write_maprstreams_la_LIBADD = $(BUILD_WITH_LIBRDKAFKA_LIBS)
 endif
 
