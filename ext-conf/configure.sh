@@ -745,7 +745,7 @@ function waitForCLDB() {
 function configureClusterId() {
     if [ $CLDB_RUNNING -eq 1 -o -s "$CLUSTER_ID_FILE" ]; then
         CLUSTER_ID=$(cat "$CLUSTER_ID_FILE")
-        sed -i 's/\"clusterid=.*/\"clusterid='$CLUSTER_ID'\"/g' ${NEW_CD_CONF_FILE}
+        sed -i 's/clusterid=.* /clusterid='$CLUSTER_ID' /g' ${NEW_CD_CONF_FILE}
         return 0
     else
         return 1
@@ -762,7 +762,7 @@ function configureClusterName() {
         line=$(head -n 1 "$CLUSTER_NAME_FILE")
         IFS=' ' read -ra words <<< "${line}"
         CLUSTER_NAME=${words[0]}
-        sed -i 's/\"clustername=.*/\"clustername='$CLUSTER_NAME'\"/g' ${NEW_CD_CONF_FILE}
+        sed -i 's/clustername=.*/clustername='$CLUSTER_NAME'\"/g' ${NEW_CD_CONF_FILE}
         return 0
     else
         return 1
@@ -879,7 +879,7 @@ cp ${CD_CONF_FILE} ${NEW_CD_CONF_FILE}
 adjustOwnership
 getRoles
 configureopentsdbplugin  # this ucomments everything between the MAPR_CONF_TAGs
-configuremaprstreamsplugin  # this ucomments everything between the MAPR_CONF_TAGs
+#configuremaprstreamsplugin  # this ucomments everything between the MAPR_CONF_TAGs
 configurejavajmxplugin
 #createFastJMXLink
 configureHadoopJMX
