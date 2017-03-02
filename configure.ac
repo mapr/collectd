@@ -4567,7 +4567,12 @@ SAVE_CPPFLAGS="$CPPFLAGS"
 SAVE_LDFLAGS="$LDFLAGS"
 
 CPPFLAGS="$CPPFLAGS $with_librdkafka_cppflags"
-LDFLAGS="$LDFLAGS $with_librdkafka_ldflags"
+if test "x$with_librdkafka_rpath" != "x"
+then
+    LDFLAGS="$LDFLAGS $JAVA_LDFLAGS $with_librdkafka_ldflags -Wl,-rpath,$with_librdkafka_rpath"
+else
+    LDFLAGS="$LDFLAGS $with_librdkafka_ldflags"
+fi
 
 if test "x$with_librdkafka" = "xyes"
 then
@@ -5955,6 +5960,7 @@ plugin_numa="no"
 plugin_perl="no"
 plugin_pinba="no"
 plugin_processes="no"
+plugin_mapr_process="no"
 plugin_protocols="no"
 plugin_python="no"
 plugin_serial="no"
@@ -6001,6 +6007,7 @@ then
 	plugin_nfs="yes"
 	plugin_numa="yes"
 	plugin_processes="yes"
+	plugin_mapr_process="yes"
 	plugin_protocols="yes"
 	plugin_serial="yes"
 	plugin_swap="yes"
@@ -6424,6 +6431,7 @@ AC_PLUGIN([lpar],                [$with_perfstat],          [AIX logical partiti
 AC_PLUGIN([lua],                 [$with_liblua],            [Lua plugin])
 AC_PLUGIN([lvm],                 [$with_liblvm2app],        [LVM statistics])
 AC_PLUGIN([madwifi],             [$have_linux_wireless_h],  [Madwifi wireless statistics])
+AC_PLUGIN([mapr_process],        [$plugin_mapr_process],    [MapR Process statistics])
 AC_PLUGIN([match_empty_counter], [yes],                     [The empty counter match])
 AC_PLUGIN([match_hashed],        [yes],                     [The hashed match])
 AC_PLUGIN([match_regex],         [yes],                     [The regex match])
@@ -6507,6 +6515,7 @@ AC_PLUGIN([write_http],          [$with_libcurl],           [HTTP output plugin]
 AC_PLUGIN([write_kafka],         [$with_librdkafka],        [Kafka output plugin])
 AC_PLUGIN([write_log],           [yes],                     [Log output plugin])
 AC_PLUGIN([write_mongodb],       [$with_libmongoc],         [MongoDB output plugin])
+AC_PLUGIN([write_maprstreams],   [$with_librdkafka],        [MapR Streams output plugin])
 AC_PLUGIN([write_prometheus],    [$plugin_write_prometheus], [Prometheus write plugin])
 AC_PLUGIN([write_redis],         [$with_libhiredis],        [Redis output plugin])
 AC_PLUGIN([write_riemann],       [$with_libriemann_client], [Riemann output plugin])
@@ -6861,6 +6870,7 @@ AC_MSG_RESULT([    lpar  . . . . . . . . $enable_lpar])
 AC_MSG_RESULT([    lua . . . . . . . . . $enable_lua])
 AC_MSG_RESULT([    lvm . . . . . . . . . $enable_lvm])
 AC_MSG_RESULT([    madwifi . . . . . . . $enable_madwifi])
+AC_MSG_RESULT([    mapr_process  . . . . $enable_mapr_process])
 AC_MSG_RESULT([    match_empty_counter . $enable_match_empty_counter])
 AC_MSG_RESULT([    match_hashed  . . . . $enable_match_hashed])
 AC_MSG_RESULT([    match_regex . . . . . $enable_match_regex])
@@ -6942,6 +6952,7 @@ AC_MSG_RESULT([    write_graphite  . . . $enable_write_graphite])
 AC_MSG_RESULT([    write_http  . . . . . $enable_write_http])
 AC_MSG_RESULT([    write_kafka . . . . . $enable_write_kafka])
 AC_MSG_RESULT([    write_log . . . . . . $enable_write_log])
+AC_MSG_RESULT([    write_maprstreams  . . . . . $enable_write_maprstreams])
 AC_MSG_RESULT([    write_mongodb . . . . $enable_write_mongodb])
 AC_MSG_RESULT([    write_prometheus. . . $enable_write_prometheus])
 AC_MSG_RESULT([    write_redis . . . . . $enable_write_redis])
