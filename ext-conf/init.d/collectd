@@ -323,6 +323,19 @@ execAsUser() {
     fi
 }
 
+isStaleLockFile() {
+    MOD_TIME=$(stat -c%y $APP_LOCK_FILE)
+    EPOC_MOD_TIME=$(date +%s -d"$MOD_TIME")
+    NOW_EPOC=$(date +%s)
+    DIFF_SEC=$(expr $NOW_EPOC - $EPOC_MOD_TIME)
+    if [ $DIFF_SEC -gt 300 ]; then
+        echo "found stale lock file ... removing - trying again"
+        return 0
+    else
+        return 1
+    fi
+}
+
 reload() {
     if check HUP; then
         echo "$APP ($APP_PID) reloaded"
@@ -348,20 +361,16 @@ start() {
               echo "$APP stale lock file - fixing"
               ;;
            starting)
-              echo "$APP is already starting"
-              MOD_TIME=$(stat -c%y $APP_LOCK_FILE)
-              EPOC_MOD_TIME=$(date +%s -d"$MOD_TIME")
-              NOW_EPOC=$(date +%s)
-              DIFF_SEC=$(expr $NOW_EPOC - $EPOC_MOD_TIME)
-              if [ $DIFF_SEC -gt 300 ]; then
-                  echo "found stale lock file ... it likely crashed - trying again"
-              else
+              if ! isStaleLockFile; then
+                  echo "$APP is already starting"
                   false || return
               fi
               ;;
            stopping)
-              echo "$APP is already stopping"
-              false || return
+              if ! isStaleLockFile; then
+                  echo "$APP is already stopping"
+                  false || return
+              fi
               ;;
         esac
     fi
