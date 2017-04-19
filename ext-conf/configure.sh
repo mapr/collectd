@@ -76,6 +76,7 @@ nodecount=0
 nodelist=""
 nodeport=4242
 secureCluster=0
+useStreams=0
 # isSecure is set in server/configure.sh
 if [ -n "$isSecure" ]; then
     if [ "$isSecure" == "true" ]; then
@@ -820,11 +821,11 @@ function cleanupOldConfFiles
 # is not the active one, we will be getting 0s for the stats.
 #
 
-usage="usage: $0 [-nodeCount <cnt>] [-nodePort <port>] [-secureCluster] [-R] -OT \"ip:port,ip1:port,\" "
+usage="usage: $0 [-nodeCount <cnt>] [-nodePort <port>] [-secureCluster] [-R] [-OS] [-OT \"ip:port,ip1:port,\"] "
 if [ ${#} -gt 1 ]; then
     # we have arguments - run as as standalone - need to get params and
     # XXX why do we need the -o to make this work?
-    OPTS=`getopt -a -o h -l nodeCount: -l nodePort: -l OT: -l secureCluster -l R -- "$@"`
+    OPTS=`getopt -a -o h -l nodeCount: -l nodePort: -l OS -l OT: -l secureCluster -l R -- "$@"`
     if [ $? != 0 ]; then
         echo ${usage}
         return 2 2>/dev/null || exit 2
@@ -836,6 +837,9 @@ if [ ${#} -gt 1 ]; then
             --nodeCount)
                 nodecount="$2";
                 shift 2;;
+            --OS)
+                useStreams=1;
+                shift 1;;
             --OT)
                 nodelist="$2";
                 shift 2;;
@@ -862,8 +866,8 @@ else
     return 2 2>/dev/null || exit 2
 fi
 
-if [ -z "$nodelist" ]; then
-    echo "-OT is required"
+if [ -z "$nodelist" -a $useStreams -eq 0 ]; then
+    echo "-OT or -OS is required"
     echo "${usage}"
     return 2 2>/dev/null || exit 2
 fi
@@ -878,8 +882,11 @@ cp ${CD_CONF_FILE} ${NEW_CD_CONF_FILE}
 #configurezookeeperconfig
 adjustOwnership
 getRoles
-configureopentsdbplugin  # this ucomments everything between the MAPR_CONF_TAGs
-#configuremaprstreamsplugin  # this ucomments everything between the MAPR_CONF_TAGs
+if [ $useStreams -eq 1 ]; then
+    configuremaprstreamsplugin  # this ucomments everything between the MAPR_CONF_TAGs
+else
+    configureopentsdbplugin  # this ucomments everything between the MAPR_CONF_TAGs
+fi
 configurejavajmxplugin
 #createFastJMXLink
 configureHadoopJMX
