@@ -395,8 +395,30 @@ user_allocated_memory value:COUNTER:U:U
 user_allocated_disks value:GAUGE:U:U
 user_allocated_vcores value:COUNTER:U:U
 
-
-
+# JVM Metrics
+mem_non_heap_used_m     value:COUNTER:U:U
+mem_non_heap_committed_m     value:COUNTER:U:U
+mem_non_heap_max_m     value:COUNTER:U:U
+mem_heap_used_m     value:COUNTER:U:U
+mem_heap_committed_m     value:COUNTER:U:U
+mem_heap_max_m     value:COUNTER:U:U
+mem_max_m     value:COUNTER:U:U
+gc_count_ps_scavenge     value:COUNTER:U:U
+gc_time_millis_ps_scavenge     value:COUNTER:U:U
+gc_count_ps_mark_sweep     value:COUNTER:U:U
+gc_time_millis_ps_mark_sweep     value:COUNTER:U:U
+gc_count     value:COUNTER:U:U
+gc_time_millis     value:COUNTER:U:U
+threads_new     value:COUNTER:U:U
+threads_runnable     value:COUNTER:U:U
+threads_blocked     value:COUNTER:U:U
+threads_waiting     value:COUNTER:U:U
+threads_time_waiting     value:COUNTER:U:U
+threads_terminated     value:COUNTER:U:U
+log_fatal     value:COUNTER:U:U
+log_error     value:COUNTER:U:U
+log_warn     value:COUNTER:U:U
+log_info     value:COUNTER:U:U
 
 # NodeManager
 containers_launched     value:COUNTER:U:U
@@ -408,6 +430,20 @@ containers_completed        value:COUNTER:U:U
 containers_failed       value:COUNTER:U:U
 containers_initing      value:COUNTER:U:U
 containers_running      value:COUNTER:U:U
+
+# NodeManager UGI Metrics
+login_success_num_ops     value:COUNTER:U:U
+login_success_avg_time     value:COUNTER:U:U
+login_failure_num_ops     value:COUNTER:U:U
+login_failure_avg_time     value:COUNTER:U:U
+get_groups_num_ops     value:COUNTER:U:U
+get_groups_avg_time     value:COUNTER:U:U
+
+# NodeManager Shuffle Metrics
+shuffle_output_bytes     value:COUNTER:U:U
+shuffle_outputs_failed     value:COUNTER:U:U
+shuffle_outputs_ok     value:COUNTER:U:U
+shuffle_connections     value:COUNTER:U:U
 
 # CLDB
 cluster_memory_capacity value:COUNTER:U:U
