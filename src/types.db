@@ -545,6 +545,47 @@ suspended_jobs value:COUNTER:U:U
 killed_jobs value:COUNTER:U:U
 prep_jobs value:COUNTER:U:U
 
+# Oozie JMX Metrics
+jobstatus_failed     value:COUNTER:U:U
+jobstatus_killed     value:COUNTER:U:U
+jobstatus_running     value:COUNTER:U:U
+jobstatus_prep     value:COUNTER:U:U
+jobstatus_succeeded     value:COUNTER:U:U
+jobstatus_suspended     value:COUNTER:U:U
+jvm_memory_heap_committed     value:COUNTER:U:U
+jvm_memory_heap_init     value:COUNTER:U:U
+jvm_memory_heap_max     value:COUNTER:U:U
+jvm_memory_heap_usage     value:COUNTER:U:U
+jvm_memory_heap_used     value:COUNTER:U:U
+jvm_memory_non-heap_committed     value:COUNTER:U:U
+jvm_memory_non-heap_init     value:COUNTER:U:U
+jvm_memory_non-heap_max     value:COUNTER:U:U
+jvm_memory_non-heap_usage     value:COUNTER:U:U
+jvm_memory_non-heap_used     value:COUNTER:U:U
+jvm_memory_pools_Code-Cache_usage     value:COUNTER:U:U
+jvm_memory_pools_Compressed-Class-Space_usage     value:COUNTER:U:U
+jvm_memory_pools_Metaspace_usage     value:COUNTER:U:U
+jvm_memory_pools_PS-Eden-Space_usage     value:COUNTER:U:U
+jvm_memory_pools_PS-Old-Gen_usage     value:COUNTER:U:U
+jvm_memory_pools_PS-Survivor-Space_usage     value:COUNTER:U:U
+jvm_memory_total_committed     value:COUNTER:U:U
+jvm_memory_total_init     value:COUNTER:U:U
+jvm_memory_total_max     value:COUNTER:U:U
+jvm_memory_total_used     value:COUNTER:U:U
+jvm_pause_extraSleepTime_count     value:COUNTER:U:U
+Max     value:COUNTER:U:U
+Count     value:COUNTER:U:U
+50thPercentile     value:COUNTER:U:U
+Mean     value:COUNTER:U:U
+Min     value:COUNTER:U:U
+75thPercentile     value:COUNTER:U:U
+95thPercentile     value:COUNTER:U:U
+98thPercentile     value:COUNTER:U:U
+99thPercentile     value:COUNTER:U:U
+999thPercentile     value:COUNTER:U:U
+StdDev     value:COUNTER:U:U
+webservices_requests_count     value:COUNTER:U:U
+
 # OpenTSDB
 tsd.connectionmgr.connections value:COUNTER:U:U
 tsd.connectionmgr.exceptions   value:COUNTER:U:U
