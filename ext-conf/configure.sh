@@ -44,6 +44,7 @@ RM_JMX_PORT=8025
 NM_JMX_PORT=8027
 CLDB_JMX_PORT=7220
 DRILLBITS_JMX_PORT=6090
+OOZIE_JMX_PORT=9010
 HBASE_MASTER_JMX_PORT=10101
 HBASE_REGION_SERVER_JMX_PORT=10102
 JMX_INSERT='#Enable JMX for MaprMonitoring\nJMX_OPTS=\"-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.port\"'
@@ -500,6 +501,10 @@ function configureConnections() {
     if [ ${CD_DRILLBITS_ROLE} -eq 1 ]; then
         enableSection MAPR_CONN_CONF_DRILLBITS_TAG
         configureServiceURL MAPR_CONN_CONF_DRILLBITS_TAG $host_name jmx $secureCluster $DRILLBITS_JMX_PORT
+    fi
+    if [ ${CD_OOZIE_ROLE} -eq 1 ]; then
+        enableSection MAPR_CONN_CONF_OOZIE_TAG
+        configureServiceURL MAPR_CONN_CONF_OOZIE_TAG $host_name jmx $secureCluster $OOZIE_JMX_PORT
     fi
 }
 
