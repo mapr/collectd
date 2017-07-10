@@ -179,6 +179,22 @@ static void wt_kafka_log(const rd_kafka_t *rkt, int level,
 }
 #endif
 
+/* msgDeliveryCB: Is the delivery callback.
+ * The delivery report callback will be called once for each message
+ * accepted by rd_kafka_produce() with err set to indicate
+ * the result of the produce request. An application must call rd_kafka_poll()
+ * at regular intervals to serve queued delivery report callbacks.
+ */
+static void msgDeliveryCB (rd_kafka_t *rk,
+                           const rd_kafka_message_t *rkmessage, void *opaque) {
+    if (rkmessage->err != RD_KAFKA_RESP_ERR_NO_ERROR) {
+        ERROR("FAILURE: Message not delivered to partition.\n");
+        ERROR("ERROR: %s", rd_kafka_err2str(rkmessage->err));
+    } else {
+        INFO("Produced: %.*s\n",(int)rkmessage->len, (const char*)rkmessage->payload);
+    }
+}
+
 static void wt_kafka_topic_context_free(void *p) /* {{{ */
 {
   struct wt_kafka_topic_context *ctx = p;
@@ -620,7 +636,7 @@ static int wt_send_message (const char* key, const char* value,
         RD_KAFKA_MSG_F_COPY, message, sizeof(message),
         &partition_key, sizeof(partition_key), NULL);
 
-    INFO("write_maprstreams plugin: PRINT message %s sent to topic %s ",message,ctx->topic_name);
+    INFO("write_maprstreams plugin: PRINT message %s sent to topic %s",message,rd_kafka_topic_name(ctx->topic));
     // Free the space allocated for temp topic name
     free(temp_topic_name);
     // Set topic name and topic to null so a new topic conf is created for each messages based on the metric key
@@ -770,6 +786,8 @@ static int wt_config_stream(oconfig_item_t *ci)
         ERROR("write_maprstreams plugin: cannot duplicate kafka config");
         return(1);
       }
+
+      rd_kafka_conf_set_dr_msg_cb(conf, msgDeliveryCB);
 
       if ((tctx->kafka = rd_kafka_new(RD_KAFKA_PRODUCER, conf,
           errbuf, sizeof(errbuf))) == NULL) {
