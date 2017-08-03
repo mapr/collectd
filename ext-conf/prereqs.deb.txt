@@ -1,0 +1,4 @@
+apt-get install libcurl4-openssl-dev
+apt-get install libatasmart-dev
+apt-get install libsensors4-dev
+apt-get install libmysqlclient-dev
