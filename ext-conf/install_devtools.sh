@@ -44,7 +44,7 @@ EOFC
     checkerror "Failed to download mapr-librdkafka"
     rpm -i --nodeps /tmp/cache/mapr-librdkafka*
     checkerror "Failed to install mapr-librdkafka"
-    yum -y install --downloadonly --downloaddir=/tmp/cache mapr-client
+    yum -y install --downloadonly --downloaddir=/tmp/cache mapr-core
     checkerror "Failed to download mapr-client"
     rpm -i --nodeps /tmp/cache/mapr-client*
     checkerror "Failed to install mapr-client"
