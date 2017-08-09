@@ -59,7 +59,7 @@ deb $COREREPO/ubuntu binary trusty
 EORC
     cat /etc/apt/sources.list.d/mapr_core.list
     apt-get update
-    apt-get -y remove mapr-*
+    apt-get -y purge mapr-*
     dpkg -l | fgrep mapr
     apt-get -y -m install mapr-librdkafka
     checkerror "Failed to install mapr-librdkafka"
