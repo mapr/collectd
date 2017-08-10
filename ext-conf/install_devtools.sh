@@ -58,6 +58,7 @@ EOR
 deb $COREREPO/ubuntu binary trusty
 EORC
     cat /etc/apt/sources.list.d/mapr_core.list
+    apt-key adv --fetch-keys http://package.mapr.com/releases/pub/maprgpg.key
     apt-get update
     apt-get -y purge mapr-*
     dpkg -l | fgrep mapr
