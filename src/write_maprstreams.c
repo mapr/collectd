@@ -114,8 +114,8 @@
 #include <sys/socket.h>
 
 
-#ifndef WT_DEFAULT_STREAM
-# define WT_DEFAULT_STREAM "/var/mapr/mapr.monitoring/monitoring"
+#ifndef WT_DEFAULT_PATH
+# define WT_DEFAULT_PATH "/var/mapr/mapr.monitoring/metricsStream"
 #endif
 
 #ifndef WT_DEFAULT_ESCAPE
@@ -159,6 +159,7 @@ struct wt_kafka_topic_context {
     char                        *topic_name;
     char                        *host_tags;
     char                        *stream;
+    char						*path;
     pthread_mutex_t              lock;
 };
 
@@ -178,6 +179,16 @@ static void wt_kafka_log(const rd_kafka_t *rkt, int level,
     plugin_log(level, "%s", msg);
 }
 #endif
+
+
+static int hash(const char *str, int range)
+{
+	int hash = 5381;
+	int c;
+	while ((c = *str++) != 0)
+		hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+	return abs(hash%range);
+}
 
 /* msgDeliveryCB: Is the delivery callback.
  * The delivery report callback will be called once for each message
@@ -553,6 +564,8 @@ static int wt_send_message (const char* key, const char* value,
 {
     int status;
     int message_len;
+    int hashCode;
+    int nDigits;
     char *temp = NULL;
     char *tags = "";
     char message[8192];
@@ -563,6 +576,23 @@ static int wt_send_message (const char* key, const char* value,
     uint32_t  partition_key;
 
     pthread_mutex_lock (&ctx->lock);
+    // Generate a hash between 0 and M for the metric
+    hashCode = hash(key,255);
+    if (hashCode == 0) {
+       nDigits = 1;
+    } else {
+      nDigits = floor(log10(abs(hashCode))) + 1;
+    }
+
+    char *stream_name = (char *) malloc( strlen(ctx->path) + nDigits + 1 );
+    strcpy(stream_name,ctx->path);
+    strcat(stream_name,"/");
+    char append[nDigits];
+    sprintf(append,"%d",hashCode);
+    strcat(stream_name,append);
+    ctx->stream = stream_name;
+    INFO("write_maprstreams plugin: Stream Name is %s for key %s",ctx->stream,key);
+
     // Allocate enough space for the topic name -- "<streamname>:<fqdn>_<metric name>"
     //char *temp_topic_name = (char *) malloc( strlen(ctx->clusterId) + strlen(ctx->stream) + strlen(host) + strlen(key) + 4 );
     char *temp_topic_name = (char *) malloc( strlen(ctx->stream) + strlen(host) + strlen(key) + 3 );
@@ -811,8 +841,8 @@ static int wt_config_stream(oconfig_item_t *ci)
     {
       oconfig_item_t *child = ci->children + i;
 
-      if (strcasecmp("Stream", child->key) == 0)
-        cf_util_get_string(child, &tctx->stream);
+      if (strcasecmp("Path", child->key) == 0)
+        cf_util_get_string(child, &tctx->path);
       else if (strcasecmp("HostTags", child->key) == 0)
         cf_util_get_string(child, &tctx->host_tags);
       else
@@ -824,8 +854,8 @@ static int wt_config_stream(oconfig_item_t *ci)
       }
     }
 
-    if (tctx->stream == NULL) {
-      ERROR("write_maprstreams plugin: Required parameters Stream is missing in configuration");
+    if (tctx->path == NULL) {
+      ERROR("write_maprstreams plugin: Required parameters streams base path is missing in configuration");
       clearContext(tctx);
 
     }
@@ -834,9 +864,9 @@ static int wt_config_stream(oconfig_item_t *ci)
     //rd_kafka_topic_conf_set_opaque(tctx->conf, tctx);
 
     ssnprintf(callback_name, sizeof(callback_name), "write_maprstreams/%s",
-        tctx->stream != NULL ? tctx->stream : WT_DEFAULT_STREAM);
+        tctx->path != NULL ? tctx->path : WT_DEFAULT_PATH);
 
-    INFO ("write_maprstreams plugin: stream name %s",tctx->stream);
+    INFO ("write_maprstreams plugin: streams base path %s",tctx->path);
     INFO ("write_maprstreams plugin: host tags name %s",tctx->host_tags);
     memset(&user_data, 0, sizeof(user_data));
     user_data.data = tctx;
