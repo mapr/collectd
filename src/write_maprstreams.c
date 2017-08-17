@@ -159,6 +159,7 @@ struct wt_kafka_topic_context {
     char                        *topic_name;
     char                        *host_tags;
     char                        *stream;
+    char						*path;
     pthread_mutex_t              lock;
 };
 
@@ -180,14 +181,12 @@ static void wt_kafka_log(const rd_kafka_t *rkt, int level,
 #endif
 
 
-static int hash(char *str, int range)
+static int hash(const char *str, int range)
 {
 	int hash = 5381;
 	int c;
-
-	while (c = *str++)
+	while ((c = *str++) != 0)
 		hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
-
 	return abs(hash%range);
 }
 
@@ -565,7 +564,7 @@ static int wt_send_message (const char* key, const char* value,
 {
     int status;
     int message_len;
-    int hash;
+    int hashCode;
     int nDigits;
     char *temp = NULL;
     char *tags = "";
@@ -578,17 +577,19 @@ static int wt_send_message (const char* key, const char* value,
 
     pthread_mutex_lock (&ctx->lock);
     // Generate a hash between 0 and M for the metric
-    hash = hash(key,255);
-    if (hash == 0) {
+    hashCode = hash(key,255);
+    if (hashCode == 0) {
        nDigits = 1;
     } else {
-       nDigits = floor(log10(abs(hash))) + 1;
+      nDigits = floor(log10(abs(hashCode))) + 1;
     }
 
-    char *stream_name = (char *) malloc( strlen(ctx->stream) + nDigits + 1 );
-    strcpy(stream_name,ctx->stream);
+    char *stream_name = (char *) malloc( strlen(ctx->path) + nDigits + 1 );
+    strcpy(stream_name,ctx->path);
     strcat(stream_name,"/");
-    strcat(stream_name,hash);
+    char append[nDigits];
+    sprintf(append,"%d",hashCode);
+    strcat(stream_name,append);
     ctx->stream = stream_name;
     INFO("write_maprstreams plugin: Stream Name is %s for key %s",ctx->stream,key);
 
@@ -841,7 +842,7 @@ static int wt_config_stream(oconfig_item_t *ci)
       oconfig_item_t *child = ci->children + i;
 
       if (strcasecmp("Path", child->key) == 0)
-        cf_util_get_string(child, &tctx->stream);
+        cf_util_get_string(child, &tctx->path);
       else if (strcasecmp("HostTags", child->key) == 0)
         cf_util_get_string(child, &tctx->host_tags);
       else
@@ -853,8 +854,8 @@ static int wt_config_stream(oconfig_item_t *ci)
       }
     }
 
-    if (tctx->stream == NULL) {
-      ERROR("write_maprstreams plugin: Required parameters Stream is missing in configuration");
+    if (tctx->path == NULL) {
+      ERROR("write_maprstreams plugin: Required parameters streams base path is missing in configuration");
       clearContext(tctx);
 
     }
@@ -863,9 +864,9 @@ static int wt_config_stream(oconfig_item_t *ci)
     //rd_kafka_topic_conf_set_opaque(tctx->conf, tctx);
 
     ssnprintf(callback_name, sizeof(callback_name), "write_maprstreams/%s",
-        tctx->stream != NULL ? tctx->stream : WT_DEFAULT_PATH);
+        tctx->path != NULL ? tctx->path : WT_DEFAULT_PATH);
 
-    INFO ("write_maprstreams plugin: stream name %s",tctx->stream);
+    INFO ("write_maprstreams plugin: streams base path %s",tctx->path);
     INFO ("write_maprstreams plugin: host tags name %s",tctx->host_tags);
     memset(&user_data, 0, sizeof(user_data));
     user_data.data = tctx;
