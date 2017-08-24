@@ -16,6 +16,7 @@ AM_CPPFLAGS += -DPIDFILE='"${localstatedir}/run/${PACKAGE_NAME}.pid"'
 endif
 AM_CPPFLAGS += -DPLUGINDIR='"${pkglibdir}"'
 AM_CPPFLAGS += -DPKGDATADIR='"${pkgdatadir}"'
+HDFS_CPPFLAGS = -I/opt/mapr/hadoop/hadoop-2.7.0/include
 
 LOG_COMPILER = env VALGRIND="@VALGRIND@" $(abs_top_srcdir)/testwrapper.sh
 
@@ -986,6 +987,14 @@ pkglib_LTLIBRARIES += mapr_process.la
 mapr_process_la_SOURCES = mapr_process.c
 mapr_process_la_LDFLAGS = $(PLUGIN_LDFLAGS)
 mapr_process_la_LIBADD =
+endif
+
+if BUILD_PLUGIN_MAPR_VOLMETRICS
+pkglib_LTLIBRARIES += mapr_volmetrics.la
+mapr_volmetrics_la_SOURCES = mapr_volmetrics.c
+mapr_volmetrics_la_CPPFLAGS = $(AM_CPPFLAGS) $(HDFS_CPPFLAGS) $(BUILD_WITH_LIBRDKAFKA_CPPFLAGS)
+mapr_volmetrics_la_LDFLAGS = $(PLUGIN_LDFLAGS) $(BUILD_WITH_LIBRDKAFKA_LDFLAGS)
+mapr_volmetrics_la_LIBADD = $(BUILD_WITH_LIBRDKAFKA_LIBS)
 endif
 
 if BUILD_PLUGIN_PROTOCOLS
