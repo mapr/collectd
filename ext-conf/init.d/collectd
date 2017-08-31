@@ -166,6 +166,11 @@ case "$(uname -m)" in
    *) echo "Unknown architecture - exiting " ; exit 1 ;;
 esac
 
+
+MAXSTREAMS=256
+STREAMSROOT="/var/mapr/mapr.monitoring/streams"
+DEFAULTSTREAMSPARTITIONS=5
+
 # need this to find the java jvm library
 export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${JAVA_HOME}/jre/lib/${J_ARCH}/server:$APP_HOME_DIR/lib/collectd:/usr/local/lib:${MAPR_HOME:-/opt/mapr}/lib
 
@@ -288,6 +293,28 @@ setEffectiveIds() {
     egid=${egid:-$gid}
 }
 
+createStreams() {
+   if ! hadoop fs -stat / > /dev/null 2>&1 ; then
+       echo "not starting because hdfs not available yet"
+       rm -f $APP_PID_FILE $MAPR_APP_PID_FILE $APP_LOCK_FILE
+       exit 1
+   fi
+      
+   # check to see if the streams directory exist
+   if ! hadoop fs -ls -d "$STREAMSROOT" > /dev/null 2>&1 ; then
+       hadoop fs -mkdir "$STREAMSROOT"
+   fi
+
+   # Create streams
+   local streamNum=0
+   while [ $streamNum -lt $MAXSTREAMS ] ; do
+       if ! hadoop fs -ls "$STREAMSROOT/$streamNum" > /dev/null 2>&1 ; then
+           maprcli stream create -path "$STREAMSROOT/$streamNum" defaultpartitions $DEFAULTSTREAMSPARTITIONS
+       fi
+       let streamNum=$streamNum+1
+   done
+}
+
 createDirectoriesAndFiles() {
     case $1 in
         start)
@@ -387,6 +414,7 @@ start() {
 
     # make sure ulimits/kernel options are set
     check_and_setup_system
+    createStreams
 
     # Verify config file
     if ! $APP_DAEMON -t -C "$APP_CONF_FILE" > $APP_LOG_DIR/$APP.config_verification 2>&1 ; then
