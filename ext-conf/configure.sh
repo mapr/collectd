@@ -77,7 +77,7 @@ nodecount=0
 nodelist=""
 nodeport=4242
 secureCluster=0
-useStreams=0
+useStreams=1
 # isSecure is set in server/configure.sh
 if [ -n "$isSecure" ]; then
     if [ "$isSecure" == "true" ]; then
@@ -336,7 +336,8 @@ function configuremaprstreamsplugin()
     # configure maprstreams
     # <plugin write_maprstreams>
     #     <node>
-    # 		Stream "/var/mapr/mapr.monitoring/spyglass"	
+    # 		Path "/var/mapr/mapr.monitoring/streams"
+    #           HostTags "clusterid=$clusterId clustername=$clusterName"
     #     </Node>
     # </Plugin>
     enableSection MAPR_CONF_STREAMS_TAG
