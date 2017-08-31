@@ -9,7 +9,7 @@
  *
  * <Plugin write_maprstreams>
  *   <Node>
- *     Stream "/var/mapr/mapr.monitoring/spyglass"
+ *     Path "/var/mapr/mapr.monitoring/streams"
  *     HostTags "clusterId=$clusterId"
  *   </Node>
  * </Plugin>
@@ -115,7 +115,7 @@
 
 
 #ifndef WT_DEFAULT_PATH
-# define WT_DEFAULT_PATH "/var/mapr/mapr.monitoring/metricsStream"
+# define WT_DEFAULT_PATH "/var/mapr/mapr.monitoring/streams"
 #endif
 
 #ifndef WT_DEFAULT_ESCAPE
