@@ -44,6 +44,10 @@ EOFC
     checkerror "Failed to download mapr-core"
     rpm -i --nodeps /tmp/cache/mapr-core*
     checkerror "Failed to install mapr-core"
+    yum -y install --downloadonly --downloaddir=/tmp/cache mapr-hadoop-core
+    checkerror "Failed to download mapr-hadoop-core"
+    rpm -i --nodeps /tmp/cache/mapr-hadoop-core*
+    checkerror "Failed to install mapr-hadoop-core"
     yum -y install --downloadonly --downloaddir=/tmp/cache mapr-librdkafka
     checkerror "Failed to download mapr-librdkafka"
     rpm -i --nodeps /tmp/cache/mapr-librdkafka*
