@@ -9,7 +9,7 @@
  *
  * <Plugin write_maprstreams>
  *   <Node>
- *     Path "/var/mapr/mapr.monitoring/streams"
+ *     Path "/var/mapr/metrics/streams"
  *     HostTags "clusterId=$clusterId"
  *   </Node>
  * </Plugin>
@@ -115,7 +115,7 @@
 
 
 #ifndef WT_DEFAULT_PATH
-# define WT_DEFAULT_PATH "/var/mapr/mapr.monitoring/streams"
+# define WT_DEFAULT_PATH "/var/mapr/metrics/streams"
 #endif
 
 #ifndef WT_DEFAULT_ESCAPE
@@ -180,7 +180,9 @@ static void wt_kafka_log(const rd_kafka_t *rkt, int level,
 }
 #endif
 
-
+/*
+ * djb2 hash algorithm
+ */
 static int hash(const char *str, int range)
 {
 	int hash = 5381;
