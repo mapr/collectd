@@ -336,7 +336,7 @@ function configuremaprstreamsplugin()
     # configure maprstreams
     # <plugin write_maprstreams>
     #     <node>
-    # 		Path "/var/mapr/metrics/streams"
+    # 		Path "/var/mapr/mapr.monitoring/streams"
     #           HostTags "clusterid=$clusterId clustername=$clusterName"
     #     </Node>
     # </Plugin>
