@@ -27,7 +27,6 @@
 #include "dirent.h"
 #include "hdfs.h"
 
-
 # include <glob.h>
 # include <sys/stat.h>
 # include <linux/limits.h>
@@ -60,11 +59,19 @@
 #define METRICS_FILE_PREFIX_LEN (strlen(METRICS_FILE_PREFIX))
 #define VOLLIST_FILE_PREFIX "Vollist_Metrics.log"
 #define VOLLIST_FILE_PREFIX_LEN (strlen(VOLLIST_FILE_PREFIX))
-#define BUF_SIZE 4096
-#define MAX_READ_ITER 10
+#define MAX_READ_ITER 8
 
 #define HASH_SEED 0x7fffffff
-inline uint64_t murmurhash64(const void * key, int len)
+
+#define METRICS_PATH_PREFIX "/var/mapr/local"
+#define PATH_MAX 4096
+#define READ_SIZE (128*1024)
+#define VOLUME_NAME_MAX 256
+#define METRICS_THRESHOLD (100*1024)
+
+/* Helpers go here */
+inline uint64_t
+murmurhash64(const void * key, int len)
 {
   const uint64_t m = 0xc6a4a7935bd1e995ULL;
   const int r = 47; 
@@ -104,58 +111,273 @@ inline uint64_t murmurhash64(const void * key, int len)
   return h;
 }
 
+static inline bool
+startsWith(char *src, char *pattern, int plen)
+{
+  int i;
+  for (i=0; i<plen; ++i) {
+    if (src[i] == '\0' || pattern[i] != src[i]) {
+      break;
+    }
+  }
+
+  return (i == plen);
+}
+
+static inline char*
+getNextDigit(char *record, char *end)
+{
+  while ((((*record) < '0') || ((*record) > '9')) && record <= end) {
+    record++;
+  }
+
+  return record;
+}
+
+char*
+getFileName(char *path)
+{
+  int i;
+  int sawSlash = 0;
+  char *ptr = NULL;
+
+  for (i=0; i<4096 && path[i] != '\0'; i++) {
+    if (path[i] == '/') {
+      sawSlash = 1;
+    } else if (sawSlash) {
+      ptr = &path[i];
+      sawSlash = 0;
+    }
+  }
+
+  return ptr;
+}
+
+static int
+isMetricsLogFile(hdfsFileInfo *fileInfo)
+{
+  if (fileInfo->mKind != kObjectKindFile) {
+    return 0;
+  }
+
+  char *filename = getFileName(fileInfo->mName);
+  if (startsWith(filename, (char *) VOLLIST_FILE_PREFIX,
+      VOLLIST_FILE_PREFIX_LEN)) {
+    return 1;
+  }
+
+  return 0;
+}
+
+static int
+isMetricsAuditFile(hdfsFileInfo *fileInfo)
+{
+  if (fileInfo->mKind != kObjectKindFile) {
+    return 0;
+  }
+  
+  char *filename = getFileName(fileInfo->mName);
+  if (startsWith(filename, (char *) METRICS_FILE_PREFIX,
+                 METRICS_FILE_PREFIX_LEN)) {
+    return 1;
+  }
+
+  return 0;
+}
+
+static uint64_t
+currentTimeMillis(void) {
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+
+  return ((tv.tv_sec * 1000) + (tv.tv_usec / 1000));
+}
+
+char *bufHead_ = NULL;
+int bufCount = 0;
+pthread_mutex_t bufferLock;
+
+char*
+getBuffer(void)
+{
+  char *buf = NULL;
+
+  pthread_mutex_lock(&bufferLock);
+  if (bufHead_ == NULL) {
+    buf = (char*)malloc(sizeof(char)*READ_SIZE);
+    bufCount++;
+  } else {
+    buf = bufHead_;
+    bufHead_ = *(char**)bufHead_;
+  }
+  pthread_mutex_unlock(&bufferLock);
+
+  return buf;
+}
+
+void
+releaseBuffer(char *buffer)
+{
+  pthread_mutex_lock(&bufferLock);
+  if (bufCount <= 100) {
+    *(char**)buffer = bufHead_;
+    bufHead_ = buffer;
+  } else {
+    free(buffer);
+    bufCount--;
+  }
+  pthread_mutex_unlock(&bufferLock);
+}
+
+pthread_mutex_t readLock;
+int readInProgress_ = 0;
+
 /*** Start of VolumeNameHashTable ***/
 
-typedef struct VNHTEntry {
+typedef struct VNHTEntry_ {
   uint32_t volId;
-  char volumeName[256];
-  struct VNHTEntry *next;
-} VNHTEntry;
+  char volumeName[VOLUME_NAME_MAX];
+  struct VNHTEntry_ *next;
+  struct VNHTEntry_ *fnext;
+} VNHTEntry_t;
 
 typedef struct {
   int nbuckets;
+  int max_limit;
   uint32_t nentries;
-  VNHTEntry **entries;
+  VNHTEntry_t **buckets;
+
+  pthread_spinlock_t freeLock;
+  VNHTEntry_t *freeList;
+  int fentries;
 } VolumeNameHashTable;
 
-static int vnhtHashValue(VolumeNameHashTable *tbl, uint32_t volId)
+static int
+vnhtHashValue(VolumeNameHashTable *tbl, uint32_t volId)
 {
   return (volId % tbl->nbuckets);
 }
 
-static void vnhtInit(VolumeNameHashTable *tbl, int nbuckets)
+static void
+vnhtInit(VolumeNameHashTable *tbl, int nbuckets, int limit)
 {
+  int i;
+
   tbl->nentries = 0;
   tbl->nbuckets = nbuckets;
-  tbl->entries = (VNHTEntry **)malloc(sizeof(VNHTEntry *) * nbuckets);
-  int i;
-  for (i = 0; i < nbuckets; ++i)
-    tbl->entries[i] = NULL;
+  tbl->max_limit = limit;
+  tbl->buckets = (VNHTEntry_t **)malloc(sizeof(VNHTEntry_t *)*nbuckets);
+  for (i=0; i<nbuckets; ++i) {
+    tbl->buckets[i] = NULL;
+  }
+
+  pthread_spin_init(&tbl->freeLock, PTHREAD_PROCESS_PRIVATE);
+  tbl->freeList = NULL;
+  tbl->fentries = 0;
 }
 
-static VNHTEntry *vnhtLookup(VolumeNameHashTable *tbl, uint32_t volId)
+static void
+vnhtInitEntry(VNHTEntry_t *entry)
+{
+  entry->volId = 0;
+  entry->volumeName[0] = '\0';
+  entry->next = NULL;
+  entry->fnext = NULL;
+}
+
+static void
+vnhtPutEntry(VolumeNameHashTable *tbl, VNHTEntry_t *entry)
+{
+  pthread_spin_lock(&tbl->freeLock);
+  if (tbl->fentries < 1000) {
+    entry->fnext = tbl->freeList;
+    tbl->freeList = entry;
+  } else {
+    free(entry);
+    tbl->fentries--;
+  }
+  pthread_spin_unlock(&tbl->freeLock);
+}
+
+static VNHTEntry_t*
+vnhtGetEntry(VolumeNameHashTable *tbl)
+{
+  VNHTEntry_t *entry = NULL;
+
+  pthread_spin_lock(&tbl->freeLock);
+  if (tbl->freeList) {
+    entry = tbl->freeList;
+    tbl->freeList = entry->fnext;
+    entry->fnext = NULL;
+  } else {
+    entry = (VNHTEntry_t*)malloc(sizeof(VNHTEntry_t));
+    vnhtInitEntry(entry);
+    tbl->fentries++;
+  }
+  pthread_spin_unlock(&tbl->freeLock);
+  return entry;
+}
+
+static void
+vnhtPurgeEntries(VolumeNameHashTable *tbl)
+{
+  int i;
+  VNHTEntry_t *entry = NULL;
+  VNHTEntry_t *next = NULL;
+   
+  for (i=0; i<tbl->nbuckets; i++) {
+    entry = tbl->buckets[i];
+    while (entry) {
+      next = entry->next;
+      entry->next = NULL;
+      vnhtPutEntry(tbl, entry);
+      entry = next;
+    }
+    tbl->buckets[i] = NULL;
+  }
+  tbl->nentries = 0;
+}
+
+static bool
+shouldPurge(VolumeNameHashTable *tbl)
+{
+  /* Over a period of time as old files are deleted and new files
+   * are created the table can get bigger in size. If it exceeds
+   * a certain limit purge all the entries.
+   */
+  if (tbl->nentries > tbl->max_limit) {
+    return true;
+  }
+  return false; 
+}
+
+static VNHTEntry_t*
+vnhtLookup(VolumeNameHashTable *tbl, uint32_t volId)
 {
   int hv = vnhtHashValue(tbl, volId);
-  VNHTEntry *entry = tbl->entries[hv];
-  while (entry && entry->volId != volId)
+  VNHTEntry_t *entry = tbl->buckets[hv];
+  while (entry && entry->volId != volId) {
     entry = entry->next;
+  }
 
   return entry;
 }
 
-static void vnhtAdd(VolumeNameHashTable *tbl, uint32_t volId,
-              const char *volName)
+static void
+vnhtAdd(VolumeNameHashTable *tbl, uint32_t volId,
+        const char *volName)
 {
   int hv = vnhtHashValue(tbl, volId);
-  VNHTEntry *entry = tbl->entries[hv];
-  while (entry && entry->volId != volId)
+  VNHTEntry_t *entry = tbl->buckets[hv];
+  while (entry && entry->volId != volId) {
     entry = entry->next;
+  }
 
   if (!entry) {
-    entry = (VNHTEntry *)malloc(sizeof(VNHTEntry));
+    entry = vnhtGetEntry(tbl);
     entry->volId = volId;
-    entry->next = tbl->entries[hv];
-    tbl->entries[hv] = entry;
+    entry->next = tbl->buckets[hv];
+    tbl->buckets[hv] = entry;
     tbl->nentries++;
   }
   strcpy(entry->volumeName, volName);
@@ -166,7 +388,8 @@ static void vnhtAdd(VolumeNameHashTable *tbl, uint32_t volId,
 /*** Start of MetricsHashTable ***/
 
 #define WINDOW_SIZE_SECONDS (60)
-#define WINDOW_SIZE_MS (60000)
+#define WINDOW_SIZE_MS (WINDOW_SIZE_SECONDS*1000)
+#define WINDOW_MINUTE_MS (60*1000)
 #define HASH_BUCKETS (1023)
 
 typedef enum {
@@ -180,171 +403,394 @@ typedef enum {
   MetricsOpMAX
 } MetricsOp;
 
-struct FileMetricsHashTable;
-
 typedef struct MHTEntry {
   uint32_t volId;
-  uint64_t ts;      // This will be multiple of WINDOW_SIZE_SECONDS
+  uint64_t ts;//This will be multiple of WINDOW_SIZE_SECONDS
   double values[MetricsOpMAX];
   struct MHTEntry *next;
+  struct MHTEntry *fnext;
 } MHTEntry;
 
 typedef struct {
   int nentries;
   int nbuckets;
-  struct FileMetricsHashTable *parentFMHT;
-  MHTEntry **entries;
+  MHTEntry **buckets;
 } MetricsHashTable;
 
-static int getHashValue(MetricsHashTable *tbl, uint32_t volId, uint64_t ts)
+typedef struct tsEntry_ {
+  uint64_t ts;
+  MetricsHashTable metricsTable;
+  struct tsEntry_ *next;
+  struct tsEntry_ *fnext;  
+} tsEntry_t;
+
+typedef struct TimestampHashTable_ {
+  //TODO: Check the sanity of entries in all hash tables
+  int nentries;
+  int metricEntries;
+  int nbuckets;
+  int volbuckets;
+  tsEntry_t **buckets;
+
+  pthread_spinlock_t freeLock;
+  MHTEntry *freeMetricList;
+  int fMetricentries;
+
+  tsEntry_t *freeList;
+  int fentries;
+} TimestampHashTable;
+
+static int
+getMetricsHashValue(MetricsHashTable *tbl, uint32_t volId)
 {
-  int v1 = volId % tbl->nbuckets;
-  int v2 = ts % tbl->nbuckets;
-  return ((v1 + v2) % tbl->nbuckets);
+  return volId % tbl->nbuckets;
 }
 
-static void initMetricsHashTable(MetricsHashTable *tbl, uint32_t nbuckets)
+static void
+initMetricsHashTable(MetricsHashTable *tbl, uint32_t nbuckets)
 {
+  int i;
+
   tbl->nbuckets = nbuckets;
   tbl->nentries = 0;
-  tbl->entries = (MHTEntry **)malloc(sizeof(MHTEntry *) * nbuckets);
-  int i;
-  for (i = 0; i < nbuckets; i++) {
-    tbl->entries[i] = NULL;
+  tbl->buckets = (MHTEntry **)malloc(sizeof(MHTEntry *)*nbuckets);
+  for (i=0; i<nbuckets; i++) {
+    tbl->buckets[i] = NULL;
   }
 }
 
-//TODO: use a slab for MHTEntry - Sriram
-static inline void freeMHTEntry(MHTEntry *entry)
+static void
+initMHTEntry(MHTEntry *entry)
 {
-  free(entry);
+  entry->volId = 0;
+  entry->ts = 0;
+  memset(entry->values, 0, sizeof(double)*MetricsOpMAX);
+  entry->next = NULL;
 }
 
-static inline MHTEntry *allocateMHTEntry()
+static void
+populateMHTEntry(MHTEntry *entry, uint64_t ts, int volId,
+                 uint32_t *values)
 {
-  MHTEntry *entry = (MHTEntry *)calloc(sizeof(MHTEntry), 1);
-  return entry;
-}
-
-static void mhtInsert(MetricsHashTable *tbl, uint32_t volId, uint64_t ts,
-                          uint32_t *values)
-{
-  int hv = getHashValue(tbl, volId, ts);
-  MHTEntry *entry = tbl->entries[hv];
-  while (entry && (entry->volId != volId || entry->ts != ts)) {
-    entry = entry->next;
-  }
-
-  if (!entry) {
-    entry = allocateMHTEntry();
-    entry->volId = volId;
-    entry->ts = ts;
-    entry->next = tbl->entries[hv];
-    tbl->entries[hv] = entry;
-    tbl->nentries++;
-  }
+  entry->ts = ts;
+  entry->volId = volId;
 
   int i;
-  for (i = 0; i < MetricsOpMAX; ++i) {
+  for (i=0; i<MetricsOpMAX; ++i) {
     entry->values[i] += values[i];
   }
 }
 
-static MHTEntry *getMHTEntriesWithTs(MetricsHashTable *tbl, uint64_t ts)
+static inline void
+mhtPutEntry(TimestampHashTable *tbl, MHTEntry *entry)
 {
-  if (tbl->nentries == 0) return NULL;
+  pthread_spin_lock(&tbl->freeLock);
+  if (tbl->fMetricentries < 1000) {
+    entry->fnext = tbl->freeMetricList;
+    tbl->freeMetricList = entry;
+  } else {
+    free(entry);
+    tbl->fMetricentries--;
+  }
+  pthread_spin_unlock(&tbl->freeLock);
+}
 
-  MHTEntry *entryList = NULL;
+static inline MHTEntry*
+mhtGetEntry(TimestampHashTable *tbl)
+{
+  MHTEntry *entry = NULL;
+
+  pthread_spin_lock(&tbl->freeLock);
+  if (tbl->freeMetricList) {
+    entry = tbl->freeMetricList;
+    tbl->freeMetricList = entry->fnext;
+    entry->fnext = NULL;
+  } else {
+    entry = (MHTEntry*)malloc(sizeof(MHTEntry));
+    initMHTEntry(entry);
+    tbl->fMetricentries++;
+  }
+  pthread_spin_unlock(&tbl->freeLock);
+  return entry;
+}
+
+static void
+initTsEntry(tsEntry_t *entry)
+{
+  entry->ts = 0;
+  entry->next = NULL;
+  entry->fnext = NULL;
+}
+
+static int
+getTsHashValue(TimestampHashTable* tbl, uint64_t ts)
+{
+  ts = ts - (ts % WINDOW_SIZE_MS);
+  return ts % tbl->nbuckets;
+}
+
+static void
+initTimestampHashTable(TimestampHashTable *tbl, int nbuckets,
+                       int volbuckets)
+{
   int i;
-  for (i = 0; i < tbl->nbuckets; ++i) {
-    MHTEntry *prevEntry = NULL, *nextEntry = NULL;
-    MHTEntry *entry = tbl->entries[i];
-    while (entry) {
-      nextEntry = entry->next;
 
-      // Remove from the hash table and add to entryList. Make sure the bucket
-      // head is set properly
-      if (entry->ts == ts) {
-        if (prevEntry) {
-          prevEntry->next = nextEntry;
-        } else {
-          tbl->entries[i] = nextEntry;
-        }
-
-        entry->next = entryList;
-        entryList = entry;
-
-        tbl->nentries--;
-      } else {
-        prevEntry = entry;
-      }
-
-      entry = nextEntry;
-    }
+  tbl->nbuckets = nbuckets;
+  tbl->volbuckets = volbuckets;
+  tbl->buckets = malloc(sizeof(tsEntry_t)*nbuckets);
+  for (i=0; i<nbuckets; i++) {
+    tbl->buckets[i] = NULL;
   }
 
-  return entryList;
+  pthread_spin_init(&tbl->freeLock, PTHREAD_PROCESS_PRIVATE);
+  tbl->fentries = 0;
+  tbl->freeList = NULL;
+  tbl->fMetricentries = 0;
+  tbl->freeMetricList = NULL;
+}
+
+static void
+tshtPutEntry(TimestampHashTable *tbl, tsEntry_t *entry)
+{
+  pthread_spin_lock(&tbl->freeLock);
+  if (tbl->fentries < 1000) {
+    entry->fnext = tbl->freeList;
+    tbl->freeList = entry;
+  } else {
+    free(entry);
+    tbl->fentries--;
+  }
+  pthread_spin_unlock(&tbl->freeLock);
+}
+
+static tsEntry_t*
+tshtGetEntry(TimestampHashTable *tbl)
+{
+  tsEntry_t *entry = NULL;
+
+  pthread_spin_lock(&tbl->freeLock);
+  if (tbl->freeList) {
+    entry = tbl->freeList;
+    tbl->freeList = entry->fnext;
+    entry->fnext = NULL;
+  } else {
+    entry = (tsEntry_t*)malloc(sizeof(tsEntry_t));
+    initTsEntry(entry);
+    initMetricsHashTable(&entry->metricsTable, tbl->volbuckets); 
+    tbl->fentries++;
+  }
+  pthread_spin_unlock(&tbl->freeLock);
+  return entry;
+}
+
+static void
+tshtInsert(TimestampHashTable *tbl, uint32_t volId, uint64_t ts,
+           double *values)
+{
+  int i;
+  int hv;
+  tsEntry_t *entry = NULL;
+  tsEntry_t *new_entry = NULL;
+  tsEntry_t *prev = NULL;
+  uint64_t new_ts = ts - (ts % WINDOW_SIZE_MS);
+
+  hv = getTsHashValue(tbl, ts);
+  entry = tbl->buckets[hv];
+  while (entry && new_ts > entry->ts) {
+    prev = entry;
+    entry = entry->next;
+  }
+
+  if ((entry && new_ts != entry->ts) ||
+      !entry) {
+    new_entry = tshtGetEntry(tbl);
+    new_entry->ts = new_ts;
+    if (prev) {
+      prev->next = new_entry;
+    } else {
+      tbl->buckets[hv] = new_entry;
+    }
+    new_entry->next = entry;
+    tbl->nentries++;
+    entry = new_entry;
+  }
+
+  /* Now we have pointer to the Metrics hash table */
+  MetricsHashTable *metricsTbl = &(entry->metricsTable);
+  hv = getMetricsHashValue(metricsTbl, volId);
+  MHTEntry* mEntry = metricsTbl->buckets[hv];
+  while (mEntry && mEntry->volId != volId) {
+    mEntry = mEntry->next;
+  }
+  
+  if (!mEntry) {
+    mEntry = mhtGetEntry(tbl);
+    mEntry->ts = ts;
+    mEntry->volId = volId;
+    mEntry->next = metricsTbl->buckets[hv];
+    metricsTbl->buckets[hv] = mEntry;
+    metricsTbl->nentries++;
+    tbl->metricEntries++;
+  }
+
+  for (i=0; i<MetricsOpMAX; ++i) {
+    mEntry->values[i] += values[i];
+  }
 }
 
 /*** End of MetricsHashTable ***/
 
 /*** Start of FileMetricsHashTable ***/
 
-typedef struct FMHTEntry {
-  char filepath[1024];
-  uint64_t curDispatchTs;
-  int64_t curOffset;
+typedef enum filetype_ {
+  LOG = 1,
+  AUDIT = 2
+} filetype_t;
+
+typedef struct FMHTEntry_ {
+  char filepath[PATH_MAX];
+  uint64_t curOffset;
   int64_t dispatchedOffset;
+  uint64_t minTs;
+  uint64_t maxTs;
+  uint64_t curDispatchTs;
   struct tm cachedMtime;
-  MetricsHashTable mht;
-  struct FMHTEntry *next;
-} FMHTEntry;
+  struct FMHTEntry_ *next;
+  struct FMHTEntry_ *fnext;
+  hdfsFS fs;
+  hdfsFile filehandle;
+  filetype_t type;
+} FMHTEntry_t;
 
 typedef struct {
   int nbuckets;
   int nentries;
-  FMHTEntry **entries;
+  FMHTEntry_t **buckets;
+
+  pthread_spinlock_t freeLock;
+  FMHTEntry_t *freeList;
+  int fentries;
 } FileMetricsHashTable;
 
-static void fmhtInit(FileMetricsHashTable *fmht, int nbuckets)
+static void
+fmhtInit(FileMetricsHashTable *tbl, int nbuckets)
 {
-  fmht->nbuckets = nbuckets;
-  fmht->nentries = 0;
-  fmht->entries = (FMHTEntry **)malloc(sizeof(FMHTEntry *) * nbuckets);
   int i;
-  for (i = 0; i < nbuckets; ++i)
-    fmht->entries[i] = NULL;
+
+  tbl->nbuckets = nbuckets;
+  tbl->nentries = 0;
+  tbl->buckets = (FMHTEntry_t **)malloc(sizeof(FMHTEntry_t *)*nbuckets);
+
+  for (i=0; i<nbuckets; i++) {
+    tbl->buckets[i] = NULL;
+  }
+
+  pthread_spin_init(&tbl->freeLock, PTHREAD_PROCESS_PRIVATE);
+  tbl->freeList = NULL;
+  tbl->fentries = 0;
 }
 
-static int fmhtHashValue(FileMetricsHashTable *tbl, const char *key)
+static void
+fmhtInitEntry(FMHTEntry_t *entry)
+{
+  entry->filepath[0] ='\0';
+  entry->curDispatchTs = (uint64_t)-1;
+  entry->curOffset = 0;
+  entry->dispatchedOffset = 0;
+  entry->minTs = 0;
+  entry->maxTs = 0;
+  entry->next = NULL;
+  entry->fnext = NULL;
+  entry->type = 0;
+  entry->fs = NULL;
+  entry->filehandle = NULL;
+}
+
+static void
+fmhtPutEntry(FileMetricsHashTable *tbl, FMHTEntry_t *entry)
+{
+  pthread_spin_lock(&tbl->freeLock);
+  if (tbl->fentries < 1000) {
+    entry->fnext = tbl->freeList;
+    tbl->freeList = entry;
+  } else {
+    free(entry);
+    tbl->fentries--;
+  }
+  pthread_spin_unlock(&tbl->freeLock);
+}
+
+static FMHTEntry_t*
+fmhtGetEntry(FileMetricsHashTable *tbl)
+{
+  FMHTEntry_t *entry = NULL;
+
+  pthread_spin_lock(&tbl->freeLock);
+  if (tbl->freeList) {
+    entry = tbl->freeList;
+    tbl->freeList = entry->fnext;
+    entry->fnext = NULL;
+  } else {
+    entry = (FMHTEntry_t*)malloc(sizeof(FMHTEntry_t));
+    fmhtInitEntry(entry);
+    tbl->fentries++;
+  }
+  pthread_spin_unlock(&tbl->freeLock);
+  return entry;
+}
+
+static void
+fmhtPurgeEntries(FileMetricsHashTable *tbl, filetype_t type)
+{
+  int i;
+  FMHTEntry_t *entry = NULL;
+  FMHTEntry_t *prev = NULL;
+  FMHTEntry_t *next = NULL;
+
+  for (i=0; i<tbl->nbuckets; ++i) {
+    entry = tbl->buckets[i];
+    while (entry) {
+      next = entry->next;
+      if (entry->type == type) {
+        if (!prev) {
+          tbl->buckets[i] = entry->next;
+        } else {
+          prev->next = entry->next;
+        }
+        entry->next = NULL;
+        fmhtPutEntry(tbl, entry);
+        tbl->nentries--;
+      } else {
+        prev = entry;
+      }
+      entry = next;
+    }
+  }
+}
+
+static int
+fmhtHashValue(FileMetricsHashTable *tbl, const char *key)
 {
   return (murmurhash64(key, strlen(key)) % tbl->nbuckets);
 }
 
-static FMHTEntry *allocateFMHTEntry()
-{
-  FMHTEntry *fmhtEntry = (FMHTEntry *)malloc(sizeof(FMHTEntry));
-  fmhtEntry->curDispatchTs = 0;
-  fmhtEntry->curOffset = 0;
-  fmhtEntry->dispatchedOffset = 0;
-  initMetricsHashTable(&fmhtEntry->mht, HASH_BUCKETS);
-  return fmhtEntry;
-}
-
-static FMHTEntry *fmhtLookupOrInsert(FileMetricsHashTable *tbl, const char *key,
-                    bool *created)
+static FMHTEntry_t*
+fmhtLookupOrInsert(FileMetricsHashTable *tbl, const char *key,
+                   bool *created, filetype_t type)
 {
   *created = false;
   int hv = fmhtHashValue(tbl, key);
-  FMHTEntry *fmhtEntry = tbl->entries[hv];
-  while (fmhtEntry && strcmp(fmhtEntry->filepath, key))
+  FMHTEntry_t *fmhtEntry = tbl->buckets[hv];
+  while (fmhtEntry && strcmp(fmhtEntry->filepath, key)) {
     fmhtEntry = fmhtEntry->next;
+  }
 
   if (!fmhtEntry) {
-    fmhtEntry = allocateFMHTEntry();
+    fmhtEntry = fmhtGetEntry(tbl);
     strcpy(fmhtEntry->filepath, key);
-    fmhtEntry->next = tbl->entries[hv];
-    tbl->entries[hv] = fmhtEntry;
+    fmhtEntry->type = type;
+    fmhtEntry->next = tbl->buckets[hv];
+    tbl->buckets[hv] = fmhtEntry;
     tbl->nentries++;
     *created = true;
   }
@@ -352,147 +798,15 @@ static FMHTEntry *fmhtLookupOrInsert(FileMetricsHashTable *tbl, const char *key,
   return fmhtEntry;
 }
 
-static void fmhtRemove(FileMetricsHashTable *tbl, const char *key)
-{
-  int hv = fmhtHashValue(tbl, key);
-  FMHTEntry *fmhtEntry = tbl->entries[hv], *prevFMHTEntry = NULL;
-  while (fmhtEntry && strcmp(fmhtEntry->filepath, key)) {
-    prevFMHTEntry = fmhtEntry;
-    fmhtEntry = fmhtEntry->next;
-  }
-
-  if (fmhtEntry) {
-    if (prevFMHTEntry) {
-      prevFMHTEntry->next = fmhtEntry->next;
-    } else {
-      tbl->entries[hv] = fmhtEntry->next;
-    }
-
-    //TODO: make sure we release the memory held by metricshashtable
-    free(fmhtEntry);
-  }
-}
-
 /*** End of FileMetricsHashTable ***/
 
 static FileMetricsHashTable fmht;
 static VolumeNameHashTable vnht;
+static TimestampHashTable tsht;
 static bool htableInitialized = false;
 
-//TODO: can we take the aggregation time from the config? - Sriram
-static int vm_config(oconfig_item_t *ci) {
-  INFO("Inside %s", __func__);
-  return 0;
-}
-
-static int vm_init(void) {
-  if (!htableInitialized) {
-    INFO("Inside %s", __func__);
-    htableInitialized = true;
-    fmhtInit(&fmht, 11);
-    vnhtInit(&vnht, 511);
-  }
-
-  return 0;
-}
-
-static void dispatchEntries(hdfsFS fs, FMHTEntry *fmhtEntry,
-              int64_t newDispatchedOffset, uint64_t newDispatchTs)
-{
-  int64_t oldDispatchedOffset = fmhtEntry->dispatchedOffset;
-  MHTEntry *entry = getMHTEntriesWithTs(&fmhtEntry->mht,
-                      fmhtEntry->curDispatchTs);
-  int i;
-  value_list_t vl = VALUE_LIST_INIT;
-  value_t values[1];
-
-  vl.time = MS_TO_CDTIME_T(fmhtEntry->curDispatchTs);
-  vl.values_len = 1;
-  vl.values = values;
-  sstrncpy(vl.plugin, "mapr.volmetrics", sizeof(vl.plugin));
-
-  MHTEntry *nextEntry = NULL;
-  while (entry) {
-    nextEntry = entry->next;
-    for (i = 0; i < MetricsOpMAX; ++i) {
-      VNHTEntry *vnhtEntry = vnhtLookup(&vnht, entry->volId);
-      if (vnhtEntry) {
-        sprintf(vl.plugin_instance, "%s", vnhtEntry->volumeName);
-      } else {
-        sprintf(vl.plugin_instance, "%u", entry->volId);
-      }
-      if (entry->values[i] > 0) {
-        //TODO: change this to set the volume name instead of volume id - Sriram
-
-        char *type = NULL;
-        double value = 0;
-        switch(i) {
-          case MetricsOpReadThroughput:
-            type = "read_throughput";
-            value = entry->values[i] / (double) WINDOW_SIZE_SECONDS;
-            break;
-          case MetricsOpReadLatency:
-            type = "read_latency";
-            value = entry->values[i] / (double) entry->values[MetricsOpReadIOps];
-            break;
-          case MetricsOpReadIOps:
-            type = "read_ops";
-            value = entry->values[i];
-            break;
-          case MetricsOpWriteThroughput:
-            type = "write_throughput";
-            value = entry->values[i] / (double) WINDOW_SIZE_SECONDS;
-            break;
-          case MetricsOpWriteLatency:
-            type = "write_latency";
-            value = entry->values[i] / (double) entry->values[MetricsOpWriteIOps];
-            break;
-          case MetricsOpWriteIOps:
-            type = "write_ops";
-            value = entry->values[i];
-            break;
-          default:
-            // We should never come here
-            assert(0);
-        }
-
-        sstrncpy(vl.type, type, sizeof(vl.type));
-        vl.values[0].gauge = value;
-        vl.values_len = 1;
-
-        plugin_dispatch_values(&vl);
-      }
-    }
-
-    freeMHTEntry(entry);
-    entry = nextEntry;
-  }
-
-  fmhtEntry->curDispatchTs = newDispatchTs;
-  fmhtEntry->dispatchedOffset = newDispatchedOffset;
-
-  if (oldDispatchedOffset != fmhtEntry->dispatchedOffset) {
-    char buf[32];
-    sprintf(&buf[0], "%ld", fmhtEntry->dispatchedOffset);
-    int err = hdfsSetXattr(fs, fmhtEntry->filepath, XATTR_NAME,
-        strlen(XATTR_NAME), &buf[0], strlen(buf));
-    if (err == -1) {
-      ERROR("Error when setting xattr %s on %s: %s", XATTR_NAME,
-          fmhtEntry->filepath, strerror(errno));
-    }
-  }
-}
-
-static inline char *getNextDigit(char *record)
-{
-  while ((((*record) < '0') || ((*record) > '9')) && *record != '\0')
-    record++;
-
-  return record;
-}
-
-
-static inline MetricsOp getMetricsOp(char *record)
+static inline
+MetricsOp getMetricsOp(char *record)
 {
   bool isRead = ((*record) == 'R') ? true : false;
   record += 2;
@@ -512,311 +826,779 @@ static inline MetricsOp getMetricsOp(char *record)
   assert(0);
 }
 
-static inline bool startsWith(char *src, char *pattern, int plen)
+static void
+dispatchMetrics(TimestampHashTable *tsTbl, tsEntry_t *tsEntry)
 {
   int i;
-  for (i = 0; i < plen; ++i) {
-    if (src[i] == '\0' || pattern[i] != src[i])
-      break;
+  int j;
+  uint64_t dispatchTs = tsEntry->ts;
+  MetricsHashTable *tbl = &(tsEntry->metricsTable);
+  MHTEntry *entry = NULL;
+  MHTEntry *nextEntry = NULL;
+
+  value_list_t vl = VALUE_LIST_INIT;
+  value_t values[1];
+
+  vl.time = MS_TO_CDTIME_T(dispatchTs);
+  vl.values_len = 1;
+  vl.values = values;
+  sstrncpy(vl.plugin, "mapr.volmetrics", sizeof(vl.plugin));
+
+  for (i=0; i<tbl->nbuckets; i++) {
+    entry = tbl->buckets[i];
+
+    VNHTEntry_t *vnhtEntry = NULL;
+    if (entry) {
+      vnhtEntry = vnhtLookup(&vnht, entry->volId);
+    }
+
+    while (entry) {
+      nextEntry = entry->next;
+      for (j= 0; j<MetricsOpMAX; j++) {
+        if (vnhtEntry) {
+          sprintf(vl.plugin_instance, "%s", vnhtEntry->volumeName);
+        } else {
+          sprintf(vl.plugin_instance, "%u", entry->volId);
+        }
+        if (entry->values[j] > 0) {
+        //TODO: change this to set the volume name instead of volume id - Sriram
+
+          char *type = NULL;
+          double value = 0;
+          switch(j) {
+            case MetricsOpReadThroughput:
+              type = "read_throughput";
+              value = entry->values[j] / (double) WINDOW_SIZE_MS;
+              break;
+            case MetricsOpReadLatency:
+              type = "read_latency";
+              value = entry->values[j] / (double) entry->values[MetricsOpReadIOps];
+              break;
+            case MetricsOpReadIOps:
+              type = "read_ops";
+              value = entry->values[j];
+              break;
+            case MetricsOpWriteThroughput:
+              type = "write_throughput";
+              value = entry->values[j] / (double) WINDOW_SIZE_MS;
+              break;
+            case MetricsOpWriteLatency:
+              type = "write_latency";
+              value = entry->values[j] / (double) entry->values[MetricsOpWriteIOps];
+              break;
+            case MetricsOpWriteIOps:
+              type = "write_ops";
+              value = entry->values[j];
+              break;
+            default:
+              // We should never come here
+              assert(0);
+          }
+
+          sstrncpy(vl.type, type, sizeof(vl.type));
+          vl.values[0].gauge = value;
+          vl.values_len = 1;
+
+          plugin_dispatch_values(&vl);
+        }
+      }
+      mhtPutEntry(tsTbl, entry);
+      entry = nextEntry;
+    }
+    tbl->buckets[i] = NULL;
   }
 
-  return (i == plen);
+  return;
 }
 
-void processRecord(hdfsFS fs, FMHTEntry *fmhtEntry, char **buffer,
-                    int64_t bufOffset)
+static int
+syncOffset(FMHTEntry_t *entry)
 {
-  // format = "{\"ts\":1502305800000,\"vid\":199334729,\"RDT\":43136.0,\"RDL\":732.0,\"RDO\":338.0,\"WRT\":13888.0,\"WRL\":29.0,\"WRO\":28.0}";
+  char buf[32];
+  sprintf(&buf[0], "%ld", entry->curOffset);
+  int err = hdfsSetXattr(entry->fs, entry->filepath, XATTR_NAME,
+                         strlen(XATTR_NAME), &buf[0], strlen(buf));
+  if (err == -1) {
+    ERROR("Error when setting xattr %s on %s: %s", XATTR_NAME,
+           entry->filepath, strerror(errno));
+    return -1;
+  }
+
+  INFO("Dispatched file %s offset to %lu", entry->filepath,
+        entry->dispatchedOffset);
+
+  entry->dispatchedOffset = entry->curOffset;
+  entry->minTs = entry->maxTs;
+  return 0;
+}
+
+int
+processBuffer(TimestampHashTable *tbl, char *buffer, int64_t bufOffset,
+              uint64_t *minTs, uint64_t *maxTs, bool *readAgain)
+{
+  /* format = {"ts":1502305800000,"vid":199334729,"RDT":43136.0,"RDL":732.0, 
+   *           "RDO":338.0,"WRT":13888.0,"WRL":29.0,"WRO":28.0}
+   */
 
   MetricsOp op;
   uint32_t volId = -1;
   uint64_t ts = -1;
+  uint64_t prevTs = 0;
+  char *saved_offset = NULL;
+  char *end_of_record = buffer;
+  char *start = buffer;
+  char *end = buffer + bufOffset - 1;
   uint32_t values[MetricsOpMAX];
-  char *record = *buffer;
+  uint64_t millis = currentTimeMillis();
+  uint64_t window = millis/WINDOW_SIZE_MS;
+  uint64_t validTs = (window - 1) * WINDOW_SIZE_MS;
+  MHTEntry* mEntry = NULL;
+  MHTEntry* prevMEntry = NULL;
+  MHTEntry* savedMEntry = NULL;
+  MHTEntry* headMEntry = NULL;
 
-  while ((*record) != '\0') {
-    if ((*record) == '\n') {
-      record++;
-      continue;
-    }
+  *minTs = (uint64_t)-1;
+  *maxTs = 0;
+  *readAgain = true;
 
-    switch(*record) {
-    case 't':
-      record = getNextDigit(record);
-      ts = strtoull(record, &record, 10);
-      ts = ts - (ts % WINDOW_SIZE_MS);
-      if (fmhtEntry->curDispatchTs == 0)
-        fmhtEntry->curDispatchTs = ts;
-      break;
+  while (*buffer != '\0') {
+    if (*buffer == '}') {
+      if (ts != -1 && volId != -1) {
+        DEBUG("ts %lu, vid %u, RDT %u, RDL %u, RDO %u, WRT %u, WRL %u, WRO %u\n",
+             ts, volId, values[MetricsOpReadThroughput],
+             values[MetricsOpReadLatency], values[MetricsOpReadIOps],
+             values[MetricsOpWriteThroughput], values[MetricsOpWriteLatency],
+             values[MetricsOpWriteIOps]);
 
-    case 'v':
-      record = getNextDigit(record);
-      volId = strtoul(record, &record, 10);
-      break;
-
-    case 'R':
-    case 'W':
-      op = getMetricsOp(record);
-      record = getNextDigit(record);
-      values[op] = strtoul(record, &record, 10);
-      break;
-
-    default:
-      break;
-    }
-
-    record++;
-  }
-
-  if (ts != -1 && volId != -1) {
-    INFO("ts %lu, vid %u, RDT %u, RDL %u, RDO %u, WRT %u, WRL %u, WRO %u\n",
-        ts, volId, values[MetricsOpReadThroughput],
-        values[MetricsOpReadLatency], values[MetricsOpReadIOps],
-        values[MetricsOpWriteThroughput], values[MetricsOpWriteLatency],
-        values[MetricsOpWriteIOps]);
-
-    if (fmhtEntry->curDispatchTs < ts) {
-      dispatchEntries(fs, fmhtEntry, fmhtEntry->curOffset + bufOffset, ts); 
-    }
-
-    mhtInsert(&fmhtEntry->mht, volId, ts, &values[0]);
-  }
-
-  *buffer = record + 1;
-}
-
-static void processBuffer(hdfsFS fs, FMHTEntry *fmhtEntry, char *buffer,
-              tSize len)
-{
-  char *initialBuffer = buffer;
-
-  int64_t bufOffset = 0;
-  while (buffer < (initialBuffer + len)) {
-    processRecord(fs, fmhtEntry, &buffer, bufOffset);
-    bufOffset = buffer - initialBuffer;
-  }
-}
-
-static int64_t readFile(hdfsFS fs, FMHTEntry *fmhtEntry)
-{
-  char buffer[BUF_SIZE];
-
-  hdfsFile file = hdfsOpenFile(fs, fmhtEntry->filepath, O_RDONLY, 0, 0, 0);
-  if (!file) {
-    ERROR( "Failed to open %s for reading!\n", fmhtEntry->filepath);
-    return errno;
-  }
-
-  int i;
-  tSize readBytes = 0;
-  int64_t totalRead = 0;
-  for (i = 0; i < MAX_READ_ITER; ++i) {
-    readBytes = hdfsPread(fs, file, fmhtEntry->curOffset, buffer, BUF_SIZE);
-    if (readBytes < 0) {
-      ERROR("hdfsPread failed for file: %s, offset: %ld", fmhtEntry->filepath,
-              fmhtEntry->curOffset);
-      break;
-    }
-
-    while (readBytes > 0 && buffer[readBytes - 1] != '}')
-      readBytes--;
-
-    if (readBytes == 0)
-      break;
-
-    buffer[readBytes] = '\0';
-    processBuffer(fs, fmhtEntry, buffer, readBytes);
-    fmhtEntry->curOffset += readBytes;
-    totalRead += readBytes;
-  }
-
-  hdfsCloseFile(fs, file);
-  return totalRead; 
-}
-
-static void processVolumeNamesBuffer(char *buffer)
-{
-  uint32_t volId;
-  char *lineSavePtr, *volSavePtr;
-  char *line = strtok_r(buffer, "\n", &lineSavePtr);
-  while (line) {
-    char *volIdStr = strtok_r(line, ",", &volSavePtr);
-    if (volIdStr) {
-      volId = strtoul(volIdStr, NULL, 10);
-      char *volName = strtok_r(NULL, ",", &volSavePtr);
-      vnhtAdd(&vnht, volId, volName);
-    }
-
-    line = strtok_r(NULL, "\n", &lineSavePtr);
-  }
-}
-
-static void readAndCacheVolumeNames(hdfsFS fs, FMHTEntry *fmhtEntry)
-{
-  char buffer[BUF_SIZE];
-
-  hdfsFile file = hdfsOpenFile(fs, fmhtEntry->filepath, O_RDONLY, 0, 0, 0);
-  if (!file) {
-    ERROR( "Failed to open %s for reading!\n", fmhtEntry->filepath);
-    return;
-  }
-
-  tSize readBytes = 0;
-  while (true) {
-    readBytes = hdfsPread(fs, file, fmhtEntry->curOffset, buffer, BUF_SIZE);
-    if (readBytes < 0) {
-      ERROR("hdfsPread failed for file: %s, offset: %ld", fmhtEntry->filepath,
-              fmhtEntry->curOffset);
-      break;
-    }
-
-    if (readBytes == 0)
-      break;
-
-    buffer[readBytes] = '\0';
-    processVolumeNamesBuffer(buffer);
-    fmhtEntry->curOffset += readBytes;
-  }
-
-  hdfsCloseFile(fs, file);
-}
-
-static void readVolumeListFiles(hdfsFS fs, hdfsFileInfo *fileList, int numFiles)
-{
-  int j;
-  bool created = false;
-  for (j = 0; j < numFiles; ++j) {
-    if (fileList[j].mKind == kObjectKindFile) {
-      char *filename = basename(fileList[j].mName);
-      if (startsWith(filename, (char *) VOLLIST_FILE_PREFIX,
-                  VOLLIST_FILE_PREFIX_LEN)) {
-        FMHTEntry *fmhtEntry = fmhtLookupOrInsert(&fmht, fileList[j].mName,
-                                  &created);
-
-        if (created || fmhtEntry->curOffset != fileList[j].mSize) {
-          readAndCacheVolumeNames(fs, fmhtEntry);
+        if (0 && ts > validTs) {
+          *readAgain = false;
+          saved_offset = end_of_record;
+          break;
         }
-      }
-    }
-  }
-}
 
-static void readMetricsFiles(hdfsFS fs, hdfsFileInfo *fileList, int numFiles)
-{
-  int j;
-  bool created = false;
-  for (j = 0; j < numFiles; ++j) {
-    if (fileList[j].mKind == kObjectKindFile) {
-      char *filename = basename(fileList[j].mName);
-      if (startsWith(filename, (char *) METRICS_FILE_PREFIX,
-            METRICS_FILE_PREFIX_LEN)) {
-        FMHTEntry *fmhtEntry = fmhtLookupOrInsert(&fmht,
-                                (const char *)fileList[j].mName, &created);
-        if (created) {
-          char buf[32];
-          ssize_t xattrSize = hdfsGetXattr(fs, fileList[j].mName, XATTR_NAME,
-                      &buf[0], 32);
-          if (xattrSize == -1 && errno != ENOENT) {
-            ERROR("Error when getting xattr %s on %s: %s", XATTR_NAME,
-              fileList[j].mName, strerror(errno));
-          } else if (xattrSize > 0 && !errno) {
-            buf[xattrSize] = '\0';
-            fmhtEntry->dispatchedOffset = strtoll((const char *)&buf[0], NULL, 10);
-            fmhtEntry->curOffset = fmhtEntry->dispatchedOffset;
+        if (prevTs && prevTs != ts) {
+          *readAgain = false;
+          saved_offset = end_of_record;
+          savedMEntry = prevMEntry;
+
+          if (prevTs < *minTs) {
+            *minTs = prevTs;
+          }
+
+          if (prevTs > *maxTs) {
+            *maxTs = prevTs;
           }
         }
 
-        struct tm curTm;
-        time_t curTime = time(NULL);
-
-        readFile(fs, fmhtEntry);
-        gmtime_r(&curTime, &curTm);
-
-        // NOTE: we check with (size -1 ) instead of just size because the last
-        // character is '\n', which will be skipped when setting
-        // dispatchedOffset
-        if (fmhtEntry->cachedMtime.tm_mday != 0 &&
-            fmhtEntry->dispatchedOffset >= (fileList[j].mSize - 1) &&
-            fmhtEntry->cachedMtime.tm_mday < curTm.tm_mday &&
-            (curTime - fileList[j].mLastMod) > 300) {
-
-          //TODO: remove the entry from FMHT and delte the file
-          fmhtRemove(&fmht, (const char *)fileList[j].mName);
-          hdfsDelete(fs, fileList[j].mName, false /*recursive*/);
+        mEntry = mhtGetEntry(tbl);
+        populateMHTEntry(mEntry, ts, volId, values);
+        if (!prevMEntry) {
+          headMEntry = mEntry;
+          prevMEntry = mEntry;
         } else {
-          gmtime_r(&fileList[j].mLastMod, &fmhtEntry->cachedMtime);
+          prevMEntry->next = mEntry;
         }
+        mEntry->next = NULL;
+        prevMEntry = mEntry;
 
-        curTime = curTime * 1000;
-        curTime = curTime - (curTime % WINDOW_SIZE_MS);
-        if (fmhtEntry->curDispatchTs && fmhtEntry->curDispatchTs < curTime) {
-          dispatchEntries(fs, fmhtEntry, fmhtEntry->curOffset, curTime);
-          fmhtEntry->curDispatchTs = 0;
+        prevTs = ts;
+        end_of_record = buffer;
+      }
+    }
+
+    switch(*buffer) {
+      case 't':
+        buffer = getNextDigit(buffer, end);
+        if (buffer > end) {
+          goto end;
         }
+        ts = strtoull(buffer, &buffer, 10);
+        break;
+
+      case 'v':
+        buffer = getNextDigit(buffer, end);
+        if (buffer > end) {
+          goto end;
+        }
+        volId = strtoul(buffer, &buffer, 10);
+        break;
+
+      case 'R':
+      case 'W':
+        op = getMetricsOp(buffer);
+        buffer = getNextDigit(buffer, end);
+        if (buffer > end) {
+          goto end;
+        }
+        values[op] = strtoul(buffer, &buffer, 10);
+        break;
+
+      default:
+        break;
+    }
+
+    buffer++;
+  }
+
+  /* Yeah too much of walking the lists */
+  MHTEntry *nextMEntry = NULL;
+  for (mEntry=headMEntry; mEntry; mEntry=nextMEntry) {
+    nextMEntry = mEntry->next;
+    tshtInsert(tbl, mEntry->volId, mEntry->ts, mEntry->values);
+    if (mEntry == savedMEntry) {
+      mEntry = nextMEntry;
+      break;
+    }
+    free(mEntry);
+  }
+
+  for (; mEntry; mEntry=nextMEntry) {
+    nextMEntry = mEntry->next;
+    free(mEntry);
+  }
+
+  if (!savedMEntry) {
+    *minTs = *maxTs = prevTs;
+  }
+
+  if (!(*readAgain)) {
+    assert (saved_offset >= start);
+    return (saved_offset - start + 1);
+  }
+
+end: 
+  return bufOffset;
+}
+
+static int64_t
+readMetrics(TimestampHashTable *tbl, hdfsFS fs, FMHTEntry_t *fmhtEntry,
+            hdfsFileInfo *fileInfo)
+{
+  int j;
+  int ret = 0;
+  uint64_t minTs;
+  uint64_t maxTs;
+  tSize actualLen = 0;
+  tSize readBytes = 0;
+  hdfsFile file;
+  bool readAgain = false;
+
+  char *buffer = getBuffer();
+  if (!buffer) {
+    ERROR("Could not allocate memory for the read buffer");
+    return -ENOMEM;
+  }
+
+  do {
+    file = hdfsOpenFile(fs, fmhtEntry->filepath, O_RDONLY, 0, 0, 0);
+    if (!file) {
+      ERROR( "Failed to open %s for reading, errno %d\n", fmhtEntry->filepath,
+             errno);
+      releaseBuffer(buffer);
+      return -errno;
+    }
+
+    /* TODO: Pread or seek and read. Throw away left over or save it.
+     * Will throwing away cause unnecessary decompression issues on server.
+     */
+
+    readBytes = hdfsPread(fs, file, fmhtEntry->curOffset, buffer, READ_SIZE);
+    if (readBytes <= 0) {
+      if (readBytes < 0) {
+        ERROR("hdfsPread failed for file: %s, offset: %ld, errno %d",
+            fmhtEntry->filepath, fmhtEntry->curOffset, errno);
+      }
+      goto end;
+    }
+   
+    for (j=0; j<readBytes; j++) {
+      if (buffer[j] == '{') {
+        break;
+      }
+    }
+
+    if (buffer[j] != '{') {
+      fmhtEntry->curOffset += readBytes;
+      break;
+    }
+
+    while (readBytes > 0 && buffer[readBytes - 1] != '}') {
+      readBytes--;
+    }
+
+    actualLen = readBytes - j; 
+    if (actualLen <= 0) {
+      /* Throw away the data. Reread later */
+      readBytes = -1;
+      goto end;
+    }
+
+    buffer[readBytes] = '\0';
+    ret = processBuffer(tbl, &buffer[j], actualLen, &minTs, &maxTs,
+        &readAgain);
+    if (ret < 0) {
+      readBytes = -1;
+      goto end;
+    }
+    INFO("Read audit file %s curoffset %lu consumed %d readBytes %d\n",
+         fmhtEntry->filepath, fmhtEntry->curOffset, j + ret + 1,
+         readBytes);
+
+    fmhtEntry->curOffset = fmhtEntry->curOffset + j + ret + 1;
+    fmhtEntry->minTs = minTs;
+    fmhtEntry->maxTs = maxTs;
+  } while (readAgain);
+
+end:
+  hdfsCloseFile(fs, file);
+  releaseBuffer(buffer);
+  return readBytes; 
+}
+
+/* Pick the file with the min maxTs.
+ * Also, ignore files which have nothing to be read.
+ */
+static FMHTEntry_t*
+pickFile(FileMetricsHashTable *fmht, hdfsFS fs,
+         hdfsFileInfo *fileList, int numFiles,
+         int *fileId)
+{
+  int i;
+  bool created;
+  uint64_t minTs = (uint64_t)-1;
+  FMHTEntry_t *fmhtEntry = NULL;
+  FMHTEntry_t *min = NULL;
+
+  *fileId = -1;
+  for (i=0; i<numFiles; i++) {
+    if (isMetricsAuditFile(&fileList[i])) {
+      fmhtEntry = fmhtLookupOrInsert(fmht, fileList[i].mName,
+                                     &created, AUDIT);
+
+      /* If the entry just got created let's get the offset from xattr */
+      /* See if this can be moved to a function */
+      if (created) {
+        char buf[32];
+        ssize_t xattrSize = hdfsGetXattr(fs, fileList[i].mName, XATTR_NAME,
+                                         &buf[0], 32);
+        //TODO: Check if the errors are handled properly
+        if (xattrSize == -1 && errno != ENOENT) {
+          ERROR("Error when getting xattr %s on %s, errno %d", XATTR_NAME,
+                fileList[i].mName, errno);
+        } else if (xattrSize > 0 && !errno) {
+          buf[xattrSize] = '\0';
+          fmhtEntry->dispatchedOffset = strtoll((const char *)&buf[0], NULL, 10);
+          fmhtEntry->curOffset = fmhtEntry->dispatchedOffset;
+        }
+      }
+
+      if (fmhtEntry->curOffset < fileList[i].mSize) {
+        if (fmhtEntry->maxTs < minTs) {
+          minTs = fmhtEntry->maxTs;
+          min = fmhtEntry;
+          *fileId = i;
+        }
+      }
+    }
+  }
+
+  return min;
+}
+
+static uint64_t
+getDispatchTs(hdfsFileInfo *fileList, int numFiles, FMHTEntry_t **retEntry)
+{
+  int i;
+  bool created = false;
+  FMHTEntry_t *fmhtEntry = NULL;
+  uint64_t minTs = (uint64_t)-1;;
+  uint64_t millis = currentTimeMillis();
+  uint64_t curWindow = millis/WINDOW_SIZE_SECONDS;
+  uint64_t dispatchTs = (curWindow - 1)*WINDOW_SIZE_SECONDS;
+
+  *retEntry = NULL;
+  for (i=0; i<numFiles; i++) {
+    if (isMetricsAuditFile(&fileList[i])) {
+      fmhtEntry = fmhtLookupOrInsert(&fmht, fileList[i].mName,
+                                     &created, AUDIT);
+      if (fmhtEntry) {
+        if (fmhtEntry->dispatchedOffset < fileList[i].mSize &&
+            fmhtEntry->maxTs < minTs && fmhtEntry->maxTs <= dispatchTs) {
+          minTs = fmhtEntry->maxTs;
+          *retEntry = fmhtEntry;
+        }
+      }
+    }
+  }
+
+  return minTs;
+}
+
+/* Either clock struck a new minute or the table size
+ * got too big.
+ */
+int rung = 0;
+static bool
+dispatchNow(TimestampHashTable *tbl)
+{
+  if (rung >= 6) {
+    rung = 0;
+    return true;
+  } else if (tbl->metricEntries > METRICS_THRESHOLD) {
+    return true;
+  }
+  return false;
+}
+
+static void
+processAuditFiles(FileMetricsHashTable *fmht, TimestampHashTable *tsTbl,
+                  hdfsFS fs, hdfsFileInfo *fileList, int numFiles)
+{
+  int i;
+  int fileid = 0;
+  FMHTEntry_t *fmhtEntry = NULL;
+  FMHTEntry_t *dispatchEntry = NULL;
+  tsEntry_t *next = NULL;
+  bool dispatch = false;
+  uint64_t dispatchTs = 0;
+
+  /* Pick a file to read.
+   * Read the metrics.
+   * Dispatch the metrics.
+   */
+  fmhtEntry = pickFile(fmht, fs, fileList, numFiles, &fileid);
+  if (fmhtEntry) {
+    INFO("Picked audit file %s for processing, curOffset %lu size %lu",
+         fileList[fileid].mName, fmhtEntry->curOffset, fileList[fileid].mSize);
+    readMetrics(tsTbl, fs, fmhtEntry, &fileList[fileid]);
+    dispatch = dispatchNow(tsTbl);
+
+    if (dispatch) {
+      /* Get a timestamp which is safe to dispatch */
+      dispatchTs = getDispatchTs(fileList, numFiles, &dispatchEntry);
+      if (dispatchEntry != NULL) {
+        for (i=0; i<tsTbl->nbuckets; i++) {
+          tsEntry_t *entry = tsTbl->buckets[i];
+          while (entry) {
+            if (entry->ts <= dispatchTs) {
+              dispatchMetrics(tsTbl, entry);
+            } else {
+              break;
+            }
+            tsTbl->buckets[i] = entry->next;
+            next = entry->next;
+            tshtPutEntry(tsTbl, entry);
+            entry = next;
+          }
+        }
+        syncOffset(dispatchEntry);
       }
     }
   }
 }
 
-static int vm_read(void)
+static void
+readAndCacheVolumeNames(hdfsFS fs, FMHTEntry_t *fmhtEntry)
 {
-  char metricsDir[1024];
-  const char *metricsPathPrefix = "/var/mapr/local";
+  uint32_t volId;
+  char *line;
+  tSize readBytes = 0;
+  char *lineSavePtr;
+  char *volSavePtr;
+  hdfsFile file;
+  int j;
 
-  //Get Hostname
+  char *buffer = getBuffer();
+  if (!buffer) {
+    ERROR("Could not allocate memory for the read buffer");
+    return;
+  }
+
+  file = hdfsOpenFile(fs, fmhtEntry->filepath, O_RDONLY, 0, 0, 0);
+  if (!file) {
+    ERROR("Failed to open %s for reading, errno %d\n", fmhtEntry->filepath,
+          errno);
+    releaseBuffer(buffer);
+    return;
+  }
+
+  while (true) {
+    readBytes = hdfsPread(fs, file, fmhtEntry->curOffset, buffer, READ_SIZE);
+    if (readBytes <= 0) {
+      if (readBytes < 0) {
+        WARNING("hdfsPread failed for file: %s, offset: %ld, errno %d",
+               fmhtEntry->filepath, fmhtEntry->curOffset, errno);
+      }
+      break;
+    }
+
+    buffer[readBytes] = '\0';
+
+    line = strtok_r(buffer, "\n", &lineSavePtr);
+    while (line) {
+      char *volIdStr = strtok_r(line, ",", &volSavePtr);
+      if (!volIdStr) {
+        WARNING("Bad line. Volume Id not found.");
+      } else {
+        volId = strtoul(volIdStr, NULL, 10);
+        char *volName = strtok_r(NULL, ",", &volSavePtr);
+        if (volName == NULL) {
+          WARNING("Bad line. Volume name not found.");
+        } else {
+          INFO("Adding volume %u with name %s to cache ", volId, volName);
+          vnhtAdd(&vnht, volId, volName);
+        }
+      }
+      line = strtok_r(NULL, "\n", &lineSavePtr);
+    }
+
+    /* Throw away the partial data from the previous read */
+    for (j=readBytes-1; j>=0; j--) {
+      if (buffer[j] == '\n') {
+        readBytes = j+1;
+        break;
+      }
+    }
+   
+    buffer[readBytes] = '\0'; 
+    fmhtEntry->curOffset += readBytes;
+  }
+
+  hdfsCloseFile(fs, file);
+  releaseBuffer(buffer);
+  return;
+}
+
+static void
+processLogFiles(FileMetricsHashTable *fmht, hdfsFS fs, hdfsFileInfo *fileList,
+                int numFiles)
+{
+  int i;
+  bool created = false;
+  FMHTEntry_t *fmhtEntry = NULL;
+
+  for (i=0; i<numFiles; i++) {
+    if (isMetricsLogFile(&fileList[i])) {
+      /* Metrics log file maintains a map of volume id to volume name.
+       * Since the audit file is going to have the volume id we might to
+       * convert the volume id to volume name before pushing it to opentsdb.
+       */
+      fmhtEntry = fmhtLookupOrInsert(fmht, fileList[i].mName, &created, LOG);
+      if (fmhtEntry->curOffset < fileList[i].mSize) {
+        INFO("Processing log file %s offset %lu size %lu", fileList[i].mName,
+              fmhtEntry->curOffset, fileList[i].mSize);
+        readAndCacheVolumeNames(fs, fmhtEntry);
+      }
+    }
+  }
+}
+
+static void
+PurgeVolumeCache(void) {
+  /* Purge all the log files from the file cache and volume names
+   * from the volume name cache.
+   */  
+  vnhtPurgeEntries(&vnht);
+  fmhtPurgeEntries(&fmht, LOG);
+}
+
+static inline int
+directoryExists(hdfsFS fs, char *metricsDir)
+{
+  hdfsFileInfo *info = hdfsGetPathInfo(fs, metricsDir);
+  if (!info) {
+    return -1;
+  } else if (info->mKind != kObjectKindDirectory) {
+    hdfsFreeFileInfo(info, 1);
+    return -1;
+  }
+
+  hdfsFreeFileInfo(info, 1);
+  return 0;
+}
+
+static inline int
+getMetricsPath(char *metricsDir)
+{
   char hostname[1024];
   hostname[1023] = '\0';
   gethostname(hostname, 1023);
   struct hostent *h;
   h = gethostbyname(hostname);
 
-  //File path prefix
-  //const char *filePrefix = "Metrics.log";
+  sprintf(&metricsDir[0], "%s/%s/%s", METRICS_PATH_PREFIX, h->h_name,
+           METRICS_DIRNAME);
 
+  DEBUG("Metrics path is %s ", metricsDir);
+  return 0;
+}
+
+hdfsFS fs = NULL;
+
+hdfsFS
+connectCluster(void)
+{
   int err = hdfsSetRpcTimeout(30);
   if (err) {
-    ERROR( "Failed to set rpc timeout!\n");
-    return err;
+    ERROR("Failed to set rpc timeout!\n");
+    return NULL;
   }
 
   hdfsFS fs = hdfsConnect("default", 0);
   if (!fs ) {
-    ERROR( "Oops! Failed to connect to hdfs!\n");
-    return err;
+    ERROR("Oops! Failed to connect to hdfs!\n");
+    return NULL;
   }
 
-  sprintf(&metricsDir[0], "%s/%s/%s", metricsPathPrefix, h->h_name,
-            METRICS_DIRNAME);
+  return fs;
+}
 
-  hdfsFileInfo *info = hdfsGetPathInfo(fs, metricsDir); //audit directory
-  if (info) {
-    if (info->mKind != kObjectKindDirectory) {
-      hdfsFreeFileInfo(info, 1);
-      ERROR("Expected directory received file: %s", info->mName);
+static inline int
+readInProgress(void)
+{
+  pthread_mutex_lock(&readLock);
+  if (readInProgress_) {
+    pthread_mutex_unlock(&readLock);
+    return 1;
+  }
+  readInProgress_ = 1;
+  rung++;
+  pthread_mutex_unlock(&readLock);
+
+  return 0;
+}
+
+typedef struct dirlist_ {
+  hdfsFileInfo *entries;
+  int numFiles;
+  struct dirlist_ *next;
+} dirlist_t;
+
+int
+compare(const void *x, const void *y)
+{
+  hdfsFileInfo *a = (hdfsFileInfo*)x;
+  hdfsFileInfo *b = (hdfsFileInfo*)y;
+  return a->mLastMod - b->mLastMod;
+}
+
+static int
+vm_read(void)
+{
+  char metricsDir[1024];
+  int err = 0;
+  int i = 0;
+  int numEntries = 0;
+
+  /* Let's make sure only one thread runs at a time */
+  if (readInProgress()) {
+    return 0;
+  }
+
+  /* Let's try to reuse the fs handle */
+  if (!fs) {
+    fs = connectCluster();
+    if (!fs) {
       return -1;
     }
-
-    int i;
-    int numEntries = 0; // Num of mfs instances
-    hdfsFileInfo *dirList = hdfsListDirectory(fs, metricsDir, &numEntries);
-    if (dirList != NULL) {
-      for (i = 0; i < numEntries; ++i) {
-        if (dirList[i].mKind == kObjectKindDirectory) {
-          int numFiles = 0;
-          hdfsFileInfo *fileList = hdfsListDirectory(fs, dirList[i].mName, &numFiles);
-          readVolumeListFiles(fs, fileList, numFiles);
-          readMetricsFiles(fs, fileList, numFiles);
-        }
-      }
-    } 
-
-    hdfsFreeFileInfo(dirList, numEntries);
-    hdfsFreeFileInfo(info, 1);
-  } else {
-    ERROR("Info is NULL for path %s", metricsDir);
   }
 
-  hdfsDisconnect(fs);
+  err = getMetricsPath(metricsDir);
+  if (err) {
+    return -1;
+  }
+
+  err = directoryExists(fs, metricsDir);
+  if (err) {
+    return -1;
+  }
+
+  /* We could be holding up too many volume name entries
+   * in memory. Let's see if it got too big and purge
+   * the cache.
+   */
+  if (shouldPurge(&vnht)) {
+    PurgeVolumeCache();
+  }
+
+  //TODO: In one iteration we want to process x number of records
+  dirlist_t *head = NULL;
+  dirlist_t *cur = NULL;
+  dirlist_t *next = NULL;
+  int numFiles = 0;
+  int totalFiles = 0;
+  int j;
+
+  hdfsFileInfo *dirList = hdfsListDirectory(fs, metricsDir, &numEntries);
+  for (i=0; i<numEntries; ++i) {
+    /* Let's walk over each mfs instance */ 
+    if (dirList[i].mKind == kObjectKindDirectory) {
+      hdfsFileInfo *fileList = hdfsListDirectory(fs, dirList[i].mName,
+                                                 &numFiles);
+      if (numFiles) {
+        dirlist_t *entry = (dirlist_t*) malloc(sizeof(dirlist_t));
+        entry->entries = fileList;
+        entry->numFiles = numFiles;
+        entry->next = head;
+        head = entry;
+        totalFiles += numFiles;
+      }
+    }
+  }
+
+  if (totalFiles) {
+    /* Flatten the directory structure and create list of files */
+    hdfsFileInfo *fileList = (hdfsFileInfo*)malloc(sizeof(hdfsFileInfo)
+        *totalFiles);
+
+    for (cur=head, j=0; cur; cur=cur->next) {
+      for (i=0; i<cur->numFiles; i++) {
+        fileList[j] = cur->entries[i];
+        j++; 
+      }
+    }
+
+    qsort(fileList, totalFiles, sizeof(hdfsFileInfo), compare);
+    processLogFiles(&fmht, fs, fileList, totalFiles);
+    processAuditFiles(&fmht, &tsht, fs, fileList, totalFiles);
+
+    for (next=NULL; head; head=next) {
+      next = head->next;
+      hdfsFreeFileInfo(head->entries, head->numFiles);
+      free(head);
+    }
+  }
+
+  assert(head == NULL);
+  hdfsFreeFileInfo(dirList, numEntries);
+  readInProgress_ = 0;
+  return 0;
+}
+
+//TODO: can we take the aggregation time from the config? - Sriram
+//Since this is going to run in mfs do we have to make sure 
+//that meaningful client config can be read from here
+static int
+vm_config(oconfig_item_t *ci) {
+  return 0;
+}
+
+/* TODO: Will this function get called multiple times ? */
+static int
+vm_init(void) {
+  if (!htableInitialized) {
+    htableInitialized = true;
+    fmhtInit(&fmht, 11);
+    vnhtInit(&vnht, 511, 10240);
+    initTimestampHashTable(&tsht, 101, 1279);
+  }
+
+  int err = pthread_mutex_init(&readLock, NULL);
+  if (err) {
+    ERROR("mutex could not be initialized, errno %d ", err);
+    return err;
+  }
+  readInProgress_ = 0;
   return 0;
 }
 
