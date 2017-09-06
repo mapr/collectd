@@ -306,13 +306,7 @@ createStreams() {
    fi
 
    # Create streams
-   local streamNum=0
-   while [ $streamNum -lt $MAXSTREAMS ] ; do
-       if ! hadoop fs -ls "$STREAMSROOT/$streamNum" > /dev/null 2>&1 ; then
-           maprcli stream create -path "$STREAMSROOT/$streamNum" defaultpartitions $DEFAULTSTREAMSPARTITIONS
-       fi
-       let streamNum=$streamNum+1
-   done
+   java -cp `mapr classpath`:$APP_HOME_DIR/lib/fast-jmx-1.1.jar org.collectd.CreateStreams $STREAMSROOT $MAXSTREAMS $DEFAULTSTREAMSPARTITIONS >> "$APP_LOG_START_FILE"
 }
 
 createDirectoriesAndFiles() {
