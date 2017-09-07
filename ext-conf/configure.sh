@@ -831,7 +831,7 @@ usage="usage: $0 [-nodeCount <cnt>] [-nodePort <port>] [-secureCluster] [-R] [-O
 if [ ${#} -gt 1 ]; then
     # we have arguments - run as as standalone - need to get params and
     # XXX why do we need the -o to make this work?
-    OPTS=`getopt -a -o h -l nodeCount: -l nodePort: -l OS -l OT: -l secureCluster -l R -- "$@"`
+    OPTS=`getopt -a -o h -l EC: -l nodeCount: -l nodePort: -l OS -l OT: -l secure -l secureCluster -l R -l unsecure -l customSecure -- "$@"`
     if [ $? != 0 ]; then
         echo ${usage}
         return 2 2>/dev/null || exit 2
@@ -840,8 +840,8 @@ if [ ${#} -gt 1 ]; then
 
     for i ; do
         case "$i" in
-            --nodeCount)
-                nodecount="$2";
+            --EC)
+                ecOpts=$2;
                 shift 2;;
             --OS)
                 useStreams=1;
@@ -849,14 +849,20 @@ if [ ${#} -gt 1 ]; then
             --OT)
                 nodelist="$2";
                 shift 2;;
+            --R)
+                CD_CONF_ASSUME_RUNNING_CORE=1
+                shift 1;;
+            --nodeCount)
+                nodecount="$2";
+                shift 2;;
             --nodePort)
                 nodeport="$2";
                 shift 2;;
-            --secureCluster)
+            --secureCluster|--secure|--customSecure)
                 secureCluster=1;
                 shift 1;;
-            --R)
-                CD_CONF_ASSUME_RUNNING_CORE=1
+            --unsecure)
+                secureCluster=0;
                 shift 1;;
             -h)
                 echo ${usage}
