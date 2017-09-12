@@ -206,6 +206,7 @@ static void msgDeliveryCB (rd_kafka_t *rk,
     } else {
         INFO("Produced: %.*s\n",(int)rkmessage->len, (const char*)rkmessage->payload);
     }
+    free((rd_kafka_message_t*)rkmessage);
 }
 
 static void wt_kafka_topic_context_free(void *p) /* {{{ */
@@ -669,8 +670,9 @@ static int wt_send_message (const char* key, const char* value,
         &partition_key, sizeof(partition_key), NULL);
 
     INFO("write_maprstreams plugin: PRINT message %s sent to topic %s",message,rd_kafka_topic_name(ctx->topic));
-    // Free the space allocated for temp topic name
+    // Free the space allocated for temp topic name and stream name
     free(temp_topic_name);
+    free(stream_name);
     // Set topic name and topic to null so a new topic conf is created for each messages based on the metric key
     ctx->topic_name = NULL;
     if (ctx->topic != NULL)
@@ -795,6 +797,7 @@ static int wt_config_stream(oconfig_item_t *ci)
     tctx->stream = NULL;
     tctx->host_tags = NULL;
     tctx->topic_name = NULL;
+    tctx->kafka = NULL;
 
     if ((tctx->kafka_conf = rd_kafka_conf_dup(conf)) == NULL) {
       sfree(tctx);
