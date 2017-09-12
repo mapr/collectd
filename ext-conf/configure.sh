@@ -48,6 +48,7 @@ OOZIE_JMX_PORT=9010
 HBASE_MASTER_JMX_PORT=10101
 HBASE_REGION_SERVER_JMX_PORT=10102
 JMX_INSERT='#Enable JMX for MaprMonitoring\nJMX_OPTS=\"-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.port\"'
+SECURE_JMX_INSERT='#Enable JMX for MaprMonitoring\nJMX_OPTS=\"-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=true -Dcom.sun.management.jmxremote.password.file=$MAPR_HOME/conf/jmxremote.password -Dcom.sun.management.jmxremote.access.file=$MAPR_HOME/conf/jmxremote.access -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.port\"'
 YARN_JMX_RM_OPT_STR='$JMX_OPTS='${RM_JMX_PORT}
 YARN_JMX_NM_OPT_STR='$JMX_OPTS='${NM_JMX_PORT}
 MAPR_HOME=${MAPR_HOME:-/opt/mapr}
@@ -541,8 +542,17 @@ function configureHadoopJMX() {
         # only change the script once
         if ! grep "^#Enable JMX for MaprMonitoring" ${YARN_BIN} > /dev/null 2>&1; then
             cp -p ${YARN_BIN} ${YARN_BIN}.prejmx
-    
-            awk -v jmx_ins_after='JAVA_HEAP_MAX' -v jmx_insert="$JMX_INSERT" \
+            if [ ${secureCluster} -eq 1 ]; then
+                if [ -f ${MAPR_HOME}/conf/jmxremote.password -a -f ${MAPR_HOME}/conf/jmxremote.access ]; then
+                    JMX_INSERT_STRING=$SECURE_JMX_INSERT
+                else
+                    JMX_INSERT_STRING=$JMX_INSERT
+                    logMsg "WARNING: Failed to enable secure jmx for NM/RM - see ${YARN_BIN}.tmp.tmp"
+                fi
+            else
+                JMX_INSERT_STRING=$JMX_INSERT
+            fi
+            awk -v jmx_ins_after='JAVA_HEAP_MAX' -v jmx_insert="$JMX_INSERT_STRING" \
                 -v jmx_opts_pattern='"\\$COMMAND" = "resourcemanager"' \
                 -v yarn_opts="$YARN_JMX_RM_OPT_STR" \
                 -f ${AWKLIBPATH}/configureYarnJmx.awk ${YARN_BIN} > ${YARN_BIN}.tmp
