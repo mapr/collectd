@@ -51,12 +51,8 @@ JMX_INSERT='#Enable JMX for MaprMonitoring\nJMX_OPTS=\"-Dcom.sun.management.jmxr
 YARN_JMX_RM_OPT_STR='$JMX_OPTS='${RM_JMX_PORT}
 YARN_JMX_NM_OPT_STR='$JMX_OPTS='${NM_JMX_PORT}
 MAPR_HOME=${MAPR_HOME:-/opt/mapr}
-MAPR_USER=${MAPR_USER:-mapr}
-MAPR_GROUP=${MAPR_GROUP:-mapr}
-MAPR_CONF_DIR="${MAPR_HOME}/conf/conf.d"
 COLLECTD_CUSTOM_CONF_DIR="${MAPR_HOME}/collectd/conf"
 CLUSTER_ID_FILE="${MAPR_HOME}/conf/clusterid"
-CLUSTER_NAME_FILE="${MAPR_HOME}/conf/mapr-clusters.conf"
 HADOOP_VER=$(cat "$MAPR_HOME/hadoop/hadoopversion")
 YARN_BIN="${MAPR_HOME}/hadoop/hadoop-${HADOOP_VER}/bin/yarn"
 CD_CONF_ASSUME_RUNNING_CORE=${isOnlyRoles:-0}
@@ -78,27 +74,19 @@ nodelist=""
 nodeport=4242
 secureCluster=0
 useStreams=1
-# isSecure is set in server/configure.sh
-if [ -n "$isSecure" ]; then
-    if [ "$isSecure" == "true" ]; then
-        secureCluster=1
-    fi
+
+if [ -e "${MAPR_HOME}/server/common-ecosystem.sh" ]; then
+    . "${MAPR_HOME}/server/common-ecosystem.sh"
+else
+   echo "Failed to source common-ecosystem.sh"
+   exit 0
 fi
 
-#############################################################################
-# Function to log messages
-#
-# if $logFile is set the message gets logged there too
-#
-#############################################################################
-function logMsg() {
-    local msg
-    msg="$(date): $1"
-    echo $msg
-    if [ -n "$logFile" ] ; then
-        echo $msg >> $logFile
-    fi
-}
+#TODO 
+# register 4242 port
+# try to discover jmx ports for services
+# move clusterid/name code to init.d
+
 
 #############################################################################
 # function to adjust ownership
@@ -111,6 +99,8 @@ function adjustOwnership() {
     fi
     # set correct user/group on Exec plugins
     sed -i -e 's/\(#* *Exec *\)"[a-zA-Z0-9]*:[a-zA-Z0-9]*"/\1 "'"$MAPR_USER:$MAPR_GROUP\"/" ${NEW_CD_CONF_FILE}
+    # in case we could not do it from the package
+    chown -R "$MAPR_USER"$MAPR_GROUP $COLLECTD_HOME
  }
 
 #############################################################################
@@ -246,14 +236,14 @@ function configureHostname() {
 # CD_OT_ROLE
 #############################################################################
 function getRoles() {
-    [ -f ${MAPR_HOME}/roles/resourcemanager ] && CD_RM_ROLE=1
-    [ -f ${MAPR_HOME}/roles/nodemanager ] && CD_NM_ROLE=1
-    [ -f ${MAPR_HOME}/roles/cldb ] && CD_CLDB_ROLE=1
-    [ -f ${MAPR_HOME}/roles/hbregionserver ] && CD_HBASE_REGION_SERVER_ROLE=1
-    [ -f ${MAPR_HOME}/roles/hbmaster ] && CD_HBASE_MASTER_ROLE=1
-    [ -f ${MAPR_HOME}/roles/drill-bits ] && CD_DRILLBITS_ROLE=1
-    [ -f ${MAPR_HOME}/roles/oozie ] && CD_OOZIE_ROLE=1
-    [ -f ${MAPR_HOME}/roles/opentsdb ] && CD_OT_ROLE=1
+    hasRole 'resourcemanager' && CD_RM_ROLE=1
+    hasRole 'nodemanager' && CD_NM_ROLE=1
+    hasRole 'cldb' ] && CD_CLDB_ROLE=1
+    hasRole 'hbregionserver '] && CD_HBASE_REGION_SERVER_ROLE=1
+    hasRole 'hbmaster' ] && CD_HBASE_MASTER_ROLE=1
+    hasRole 'drill-bits' ] && CD_DRILLBITS_ROLE=1
+    hasRole 'oozie' && CD_OOZIE_ROLE=1
+    hasRole 'opentsdb' && CD_OT_ROLE=1
 }
 
 #############################################################################
@@ -280,7 +270,7 @@ function configureInterfacePlugin() {
 
 
 #############################################################################
-# Function to configure Interface Plugin
+# Function to configure Disk Plugin
 #
 function configureDiskPlugin()
 {
@@ -562,7 +552,7 @@ function configureHadoopJMX() {
                     CD_RESTART_SVC_LIST="$CD_RESTART_SVC_LIST nodemanager"
                 fi
             else
-                logMsg "WARNING: Failed to enable jmx for NM/RM - see ${YARN_BIN}.tmp.tmp"
+                logWarn "Failed to enable jmx for NM/RM - see ${YARN_BIN}.tmp.tmp"
             fi
             rm -f ${YARN_BIN}.tmp
         fi
@@ -601,7 +591,7 @@ function configureHbaseJMX() {
                     CD_RESTART_SVC_LIST="$CD_RESTART_SVC_LIST hbregionserver"
                 fi
             else
-                logMsg "WARNING: Failed to enable jmx for HBase Maser/Region Server - see ${HBASE_ENV}.tmp"
+                logWarn "Failed to enable jmx for HBase Maser/Region Server - see ${HBASE_ENV}.tmp"
             fi
         fi
     fi
@@ -626,7 +616,7 @@ function configureDrillBitsJMX() {
         DRILL_MAJ_VER=$(echo $DRILL_VER | cut -d . -f 1)
         DRILL_MIN_VER=$(echo $DRILL_VER | cut -d . -f 2)
         if [ -z "$DRILL_MAJ_VER" -o -z "$DRILL_MIN_VER" ]; then
-            logMsg "WARNING: Failed to enable jmx for Drill - couldn't determine version"
+            logWarn "Failed to enable jmx for Drill - couldn't determine version"
             return
         fi
         if [ $DRILL_MAJ_VER -le 1 -a $DRILL_MIN_VER -le 6 ]; then
@@ -649,7 +639,7 @@ function configureDrillBitsJMX() {
                 chmod a+x ${DRILL_ENV}
                 CD_RESTART_SVC_LIST="$CD_RESTART_SVC_LIST drill-bits"
             else
-                logMsg "WARNING: Failed to enable jmx for Drill Server - see ${DRILL_ENV}.tmp"
+                logWarn "Failed to enable jmx for Drill Server - see ${DRILL_ENV}.tmp"
             fi
         fi
     fi
@@ -710,7 +700,7 @@ function isMaprServiceRunning() {
 function restartServices() {
     local MyHname
 
-    if [ $CLDB_RUNNING -eq 1 ]; then
+    if safeToRunMaprCLI; then
         MyHname=$(hostname -f)
         if [ -z "$MyHname" ]; then
             # some aws machine reports an empty string with hostname -f
@@ -744,37 +734,6 @@ function waitForCLDB() {
     return $CLDB_RUNNING
 }
 
-#############################################################################
-# Function to configure clusterID
-#
-# uses global CLDB_RUNNING
-#############################################################################
-function configureClusterId() {
-    if [ $CLDB_RUNNING -eq 1 -o -s "$CLUSTER_ID_FILE" ]; then
-        CLUSTER_ID=$(cat "$CLUSTER_ID_FILE")
-        sed -i 's/clusterid=.* /clusterid='$CLUSTER_ID' /g' ${NEW_CD_CONF_FILE}
-        return 0
-    else
-        return 1
-    fi
-}
-
-#############################################################################
-# Function to configure clusterName
-#
-# uses global CLDB_RUNNING
-#############################################################################
-function configureClusterName() {
-    if [ $CLDB_RUNNING -eq 1 -o -s "$CLUSTER_NAME_FILE" ]; then
-        line=$(head -n 1 "$CLUSTER_NAME_FILE")
-        IFS=' ' read -ra words <<< "${line}"
-        CLUSTER_NAME=${words[0]}
-        sed -i 's/clustername=.*/clustername='$CLUSTER_NAME'\"/g' ${NEW_CD_CONF_FILE}
-        return 0
-    else
-        return 1
-    fi
-}
 
 
 #############################################################################
@@ -826,23 +785,43 @@ function cleanupOldConfFiles
 # we need will use the roles file to know if this node is a RM. If this RM
 # is not the active one, we will be getting 0s for the stats.
 #
+#sets MAPR_USER/MAPR_GROUP/logfile
+initCfgEnv
 
-usage="usage: $0 [-nodeCount <cnt>] [-nodePort <port>] [-secureCluster] [-R] [-OS] [-OT \"ip:port,ip1:port,\"] "
+usage="usage: $0 [-nodeCount <cnt>] [-nodePort <port>] [-noStreams] [-EC <commonEcoOpts>] [--secure] [--customSecure] [--unsecure]  [-R] [-OS] [-OT \"ip:port,ip1:port,\"] "
 if [ ${#} -gt 1 ]; then
     # we have arguments - run as as standalone - need to get params and
     # XXX why do we need the -o to make this work?
-    OPTS=`getopt -a -o h -l EC: -l nodeCount: -l nodePort: -l OS -l OT: -l secure -l secureCluster -l R -l unsecure -l customSecure -- "$@"`
+    OPTS=`getopt -a -o h -l EC: -l nodeCount: -l nodePort: -l noStreams -l OS -l OT: -l secure -l R -l unsecure -l customSecure -- "$@"`
     if [ $? != 0 ]; then
         echo ${usage}
         return 2 2>/dev/null || exit 2
     fi
     eval set -- "$OPTS"
 
-    for i ; do
-        case "$i" in
+    while true; do
+        case "$1" in
             --EC)
-                ecOpts=$2;
-                shift 2;;
+                #Parse Common options
+                #Ingore ones we don't care about
+                shift 2
+                restOpts="$*"
+                eval set -- "$2 --"
+                while true ; do
+                    case "$1" in
+                        --OT|-OT)
+                            nodelist="$2"
+                            shift 2;;
+                        --) shift
+                            break;;
+                        *)
+                            #Ignoring common option $1"
+                            shift 1;;
+                    esac
+                done
+                shift 2 
+                eval set -- "$restOpts"
+                ;;
             --OS)
                 useStreams=1;
                 shift 1;;
@@ -858,7 +837,25 @@ if [ ${#} -gt 1 ]; then
             --nodePort)
                 nodeport="$2";
                 shift 2;;
-            --secureCluster|--secure|--customSecure)
+            --noStreams)
+                useStreams=0;
+                shift 1;;
+            --customSecure)
+                if [ -f "$COLLECTD_HOME/etc/.not_configured_yet" ]; then
+                    # collectd added after secure 5.x cluster upgraded to customSecure
+                    # 6.0 cluster. Deal with this by assuming a regular --secure path
+                    :
+                else 
+                    # this is a little tricky. It either means a simpel configure.sh -R run
+                    # or it means that collectd was part of the 5.x to 6.0 upgrade
+                    # At the moment collectd knows of no other security settings besides jmx
+                    # and port numbers the jmx uses. Since we have no way of detecting what 
+                    # these ports are - we assume for now they don't change.
+                    :
+                fi
+                secureCluster=1;
+                shift 1;;
+            --secure)
                 secureCluster=1;
                 shift 1;;
             --unsecure)
@@ -869,7 +866,8 @@ if [ ${#} -gt 1 ]; then
                 return 2 2>/dev/null || exit 2
                 ;;
             --)
-                shift;;
+                shift
+                break;;
         esac
     done
 
@@ -883,7 +881,6 @@ if [ -z "$nodelist" -a $useStreams -eq 0 ]; then
     echo "${usage}"
     return 2 2>/dev/null || exit 2
 fi
-
 # Make a copy, the script will work on the copy
 cp ${CD_CONF_FILE} ${NEW_CD_CONF_FILE}
 
@@ -908,19 +905,14 @@ configureOozieJMX
 if [ $CD_CONF_ASSUME_RUNNING_CORE -eq 1 ]; then
     waitForCLDB
     restartServices
-    configureClusterId
-    configureClusterName
-    if [ $? -eq 0 ]; then
-        CD_ENABLE_SERVICE=1
-    else
-        logMsg "ERROR: collectd service not enabled - missing clusterid"
-    fi
 fi
 
 cp -p ${CD_CONF_FILE} ${CD_CONF_FILE}.${CD_NOW}
 cp ${NEW_CD_CONF_FILE} ${CD_CONF_FILE}
-if [ $CD_ENABLE_SERVICE -eq 1 ]; then
-    installWardenConfFile
+installWardenConfFile
+# remove state file
+if [ -f "$COLLECTD_HOME/etc/.not_configured_yet" ]; then
+    rm -f "$COLLECTD_HOME/etc/.not_configured_yet"
 fi
 createCustomConfDirectory
 cleanupOldConfFiles
