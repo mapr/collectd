@@ -342,7 +342,10 @@ function configureClusterName() {
 
 createDirectoriesAndFiles() {
     case $1 in
-        start)
+        start|restart)
+            if [ "$1" = "restart" -a -e "$APP_LOG_DIR" ]; then
+                return
+            fi
             # Setup required directories and files
             mkdir -m $APP_DATA_DIR_PERM -p "$APP_DATA_DIR"
             mkdir -p "$APP_LOG_DIR" "$APP_PID_DIR"
