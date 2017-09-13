@@ -83,10 +83,7 @@ else
 fi
 
 #TODO 
-# register 4242 port
 # try to discover jmx ports for services
-# move clusterid/name code to init.d
-
 
 #############################################################################
 # function to adjust ownership
@@ -804,14 +801,19 @@ if [ ${#} -gt 1 ]; then
             --EC)
                 #Parse Common options
                 #Ingore ones we don't care about
+                ecOpts="$2"
                 shift 2
                 restOpts="$*"
-                eval set -- "$2 --"
+                eval set -- "$ecOpts --"
                 while true ; do
                     case "$1" in
                         --OT|-OT)
                             nodelist="$2"
                             shift 2;;
+                        --R)
+                            CD_CONF_ASSUME_RUNNING_CORE=1
+                            shift 1
+                            ;;
                         --) shift
                             break;;
                         *)
