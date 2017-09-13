@@ -98,7 +98,7 @@ function adjustOwnership() {
     # set correct user/group on Exec plugins
     sed -i -e 's/\(#* *Exec *\)"[a-zA-Z0-9]*:[a-zA-Z0-9]*"/\1 "'"$MAPR_USER:$MAPR_GROUP\"/" ${NEW_CD_CONF_FILE}
     # in case we could not do it from the package
-    chown -R "$MAPR_USER"$MAPR_GROUP $COLLECTD_HOME
+    chown -R "$MAPR_USER":"$MAPR_GROUP" $COLLECTD_HOME
  }
 
 #############################################################################
@@ -795,7 +795,7 @@ function cleanupOldConfFiles
 #sets MAPR_USER/MAPR_GROUP/logfile
 initCfgEnv
 
-usage="usage: $0 [-nodeCount <cnt>] [-nodePort <port>] [-noStreams] [-EC <commonEcoOpts>] [--secure] [--customSecure] [--unsecure]  [-R] [-OS] [-OT \"ip:port,ip1:port,\"] "
+usage="usage: $0 [-nodeCount <cnt>] [-nodePort <port>] [-noStreams] [-EC <commonEcoOpts>] [--secure] [--customSecure] [--unsecure] [-R] [-OS] [-OT \"ip:port,ip1:port,\"] "
 if [ ${#} -gt 1 ]; then
     # we have arguments - run as as standalone - need to get params and
     # XXX why do we need the -o to make this work?
