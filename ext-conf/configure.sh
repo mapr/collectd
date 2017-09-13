@@ -801,7 +801,7 @@ if [ ${#} -gt 1 ]; then
             --EC)
                 #Parse Common options
                 #Ingore ones we don't care about
-                ecOpts="$2"
+                eval ecOpts=$2
                 shift 2
                 restOpts="$*"
                 eval set -- "$ecOpts --"
