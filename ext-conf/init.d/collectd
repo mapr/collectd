@@ -313,13 +313,13 @@ createStreams() {
 function configureClusterId() {
     if [ -s "$CLUSTER_ID_FILE" ]; then
         CLUSTER_ID=$(cat "$CLUSTER_ID_FILE")
-        fgrep 'clusterid=' "${APP_CONF_FILE} | fgrep "$CLUSTER_ID" > /dev/null 2>&1
+        fgrep 'clusterid=' "${APP_CONF_FILE}" | fgrep "$CLUSTER_ID" > /dev/null 2>&1
         if [ $? -ne 0 ]; then 
             sed -i 's/clusterid=.* /clusterid='$CLUSTER_ID' /g' ${APP_CONF_FILE}
         fi
         return 0
     else
-        echo "Cluster is not configured yet - not starting'
+        echo "Cluster is not configured yet - not starting"
         exit 1
     fi
 }
@@ -329,13 +329,13 @@ function configureClusterName() {
         line=$(head -n 1 "$MAPR_CLUSTERS_CONF")
         IFS=' ' read -ra words <<< "${line}"
         CLUSTER_NAME=${words[0]}
-        fgrep 'clustername=' "${APP_CONF_FILE} | fgrep "$CLUSTER_NAME" > /dev/null 2>&1
+        fgrep 'clustername=' "${APP_CONF_FILE}" | fgrep "$CLUSTER_NAME" > /dev/null 2>&1
         if [ $? -ne 0 ]; then 
             sed -i 's/clustername=.*/clustername='$CLUSTER_NAME'\"/g' ${APP_CONF_FILE}
         fi
         return 0
     else
-        echo "Cluster is not configured yet - not starting'
+        echo "Cluster is not configured yet - not starting"
         exit 1
     fi
 }
