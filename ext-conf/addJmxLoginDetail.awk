@@ -10,7 +10,7 @@ $0 ~ "<Connection>" { if (addJmxUserInfo == 1) {
                         next
                       }
                     }
-$0 ~ tag"_END"      { addJmxUserInfo0
+$0 ~ tag"_END"      { addJmxUserInfo=0
                       print $0
                     }
                     { print $0 }
