@@ -47,6 +47,7 @@ DRILLBITS_JMX_PORT=6090
 OOZIE_JMX_PORT=9010
 HBASE_MASTER_JMX_PORT=10101
 HBASE_REGION_SERVER_JMX_PORT=10102
+JMX_REMOTE_PASSWORD_FILE="${MAPR_CONF}/jmxremote.password"
 JMX_INSERT='#Enable JMX for MaprMonitoring\nJMX_OPTS=\"-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.port\"'
 SECURE_JMX_INSERT='#Enable JMX for MaprMonitoring\nJMX_OPTS=\"-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=true -Dcom.sun.management.jmxremote.password.file=$MAPR_HOME/conf/jmxremote.password -Dcom.sun.management.jmxremote.access.file=$MAPR_HOME/conf/jmxremote.access -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.port\"'
 YARN_JMX_RM_OPT_STR='$JMX_OPTS='${RM_JMX_PORT}
@@ -178,6 +179,7 @@ function configureServiceURL()
     local secureStr
     local oldPort
     local section
+    local password
 
     section="$1"
     hostname="$2"
@@ -185,6 +187,7 @@ function configureServiceURL()
     secure="$4"
     secureStr=""
     port="$5"
+    password=""
 
     if [ $secure -eq 1 ]; then
         secureStr="s"
@@ -200,6 +203,26 @@ function configureServiceURL()
         -v replacePattern="$replacePattern" ${NEW_CD_CONF_FILE} > ${NEW_CD_CONF_FILE}.tmp
     if [[ $? -eq 0 ]]; then
         mv ${NEW_CD_CONF_FILE}.tmp ${NEW_CD_CONF_FILE}
+    fi
+    if [ "$urlType" == "jmx" ]; then
+        if [ $secure -eq 1 ]; then
+
+            if [ -f "$JMX_REMOTE_PASSWORD_FILE" ]; then
+                password=$(cat $JMX_REMOTE_PASSWORD_FILE)
+            else
+                logWarn "collectd - no jmx remote password file found"
+            fi
+            awk -f ${AWKLIBPATH}/addJmxLoginDetail.awk -v tag="$1" -v password="$password" \
+                ${NEW_CD_CONF_FILE} > ${NEW_CD_CONF_FILE}.tmp
+            if [[ $? -eq 0 ]]; then
+                mv ${NEW_CD_CONF_FILE}.tmp ${NEW_CD_CONF_FILE}
+            fi
+        else
+            awk -f ${AWKLIBPATH}/removeJmxLoginDetail.awk -v tag="$1" ${NEW_CD_CONF_FILE} > ${NEW_CD_CONF_FILE}.tmp
+            if [[ $? -eq 0 ]]; then
+                mv ${NEW_CD_CONF_FILE}.tmp ${NEW_CD_CONF_FILE}
+            fi
+        fi
     fi
 }
 
