@@ -763,12 +763,12 @@ function createCustomConfDirectory()
 #############################################################################
 function installWardenConfFile()
 {
-    if  ! [ -d ${MAPR_CONF_DIR} ]; then
-        mkdir -p ${MAPR_CONF_DIR} > /dev/null 2>&1
+    if  ! [ -d ${MAPR_CONF_DIR}/conf.d ]; then
+        mkdir -p ${MAPR_CONF_DIR}/conf.d > /dev/null 2>&1
     fi
 
-    cp ${COLLECTD_HOME}/etc/conf/warden.collectd.conf ${MAPR_CONF_DIR}/
-    chown $MAPR_USER:$MAPR_GROUP ${MAPR_CONF_DIR}/warden.collectd.conf
+    cp ${COLLECTD_HOME}/etc/conf/warden.collectd.conf ${MAPR_CONF_DIR}/conf.d/
+    chown $MAPR_USER:$MAPR_GROUP ${MAPR_CONF_DIR}/conf.d/warden.collectd.conf
 }
 
 #############################################################################
