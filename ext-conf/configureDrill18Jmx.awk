@@ -2,7 +2,7 @@ $0 ~ jmx_insert_after      { if (jmx_start_found == 0) {
                                 jmx_start_found=1
                                 print
                                 print "#Enable JMX for MaprMonitoring"
-                                print "DRILL_JMX_OPTS=\"-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.port=6090\""
+                                print "DRILL_JMX_OPTS=\"-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=" securejmx " -Dcom.sun.management.jmxremote.password.file=" mapr_home "/conf/jmxremote.password -Dcom.sun.management.jmxremote.access.file=" mapr_home "/conf/jmxremote.access -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.port=" drillport "\""
                                 next
                              }
                            }

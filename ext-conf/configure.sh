@@ -47,9 +47,7 @@ DRILLBITS_JMX_PORT=6090
 OOZIE_JMX_PORT=9010
 HBASE_MASTER_JMX_PORT=10101
 HBASE_REGION_SERVER_JMX_PORT=10102
-JMX_REMOTE_PASSWORD_FILE="${MAPR_CONF}/jmxremote.password"
-JMX_INSERT='#Enable JMX for MaprMonitoring\nJMX_OPTS=\"-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.port\"'
-SECURE_JMX_INSERT='#Enable JMX for MaprMonitoring\nJMX_OPTS=\"-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=true -Dcom.sun.management.jmxremote.password.file=$MAPR_HOME/conf/jmxremote.password -Dcom.sun.management.jmxremote.access.file=$MAPR_HOME/conf/jmxremote.access -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.port\"'
+HADOOP_JMX_INSERT='#Enable JMX for MaprMonitoring\nJMX_OPTS=\"-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.password.file=$MAPR_HOME/conf/jmxremote.password -Dcom.sun.management.jmxremote.access.file=$MAPR_HOME/conf/jmxremote.access -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.port\"'
 YARN_JMX_RM_OPT_STR='$JMX_OPTS='${RM_JMX_PORT}
 YARN_JMX_NM_OPT_STR='$JMX_OPTS='${NM_JMX_PORT}
 MAPR_HOME=${MAPR_HOME:-/opt/mapr}
@@ -205,20 +203,21 @@ function configureServiceURL()
         mv ${NEW_CD_CONF_FILE}.tmp ${NEW_CD_CONF_FILE}
     fi
     if [ "$urlType" == "jmx" ]; then
+        # we always remove it so we don't have dups and if someone updates the 
+        # jmx password file we will get the new values
+        awk -f ${AWKLIBPATH}/removeJmxLoginDetail.awk -v tag="$1" ${NEW_CD_CONF_FILE} > ${NEW_CD_CONF_FILE}.tmp
+        if [[ $? -eq 0 ]]; then
+            mv ${NEW_CD_CONF_FILE}.tmp ${NEW_CD_CONF_FILE}
+        fi
         if [ $secure -eq 1 ]; then
 
             if [ -f "$JMX_REMOTE_PASSWORD_FILE" ]; then
-                password=$(cat $JMX_REMOTE_PASSWORD_FILE)
+                password=$(fgrep mapr $JMX_REMOTE_PASSWORD_FILE | cut -d' ' -f2)
             else
                 logWarn "collectd - no jmx remote password file found"
             fi
             awk -f ${AWKLIBPATH}/addJmxLoginDetail.awk -v tag="$1" -v password="$password" \
                 ${NEW_CD_CONF_FILE} > ${NEW_CD_CONF_FILE}.tmp
-            if [[ $? -eq 0 ]]; then
-                mv ${NEW_CD_CONF_FILE}.tmp ${NEW_CD_CONF_FILE}
-            fi
-        else
-            awk -f ${AWKLIBPATH}/removeJmxLoginDetail.awk -v tag="$1" ${NEW_CD_CONF_FILE} > ${NEW_CD_CONF_FILE}.tmp
             if [[ $? -eq 0 ]]; then
                 mv ${NEW_CD_CONF_FILE}.tmp ${NEW_CD_CONF_FILE}
             fi
@@ -547,44 +546,77 @@ function createFastJMXLink() {
 function configureHadoopJMX() {
     local rc1
     local rc2
+    local jmxAlreadyEnabled=0
+    local jmxSecured=0
+    local securityChanged=0
     # Enable JMX for RM and NM only if they are installed
     if [ ${CD_RM_ROLE} -eq 1 -o ${CD_NM_ROLE} -eq 1 ]; then
-        # only change the script once
-        if ! grep "^#Enable JMX for MaprMonitoring" ${YARN_BIN} > /dev/null 2>&1; then
-            cp -p ${YARN_BIN} ${YARN_BIN}.prejmx
+        if grep "^#Enable JMX for MaprMonitoring" ${YARN_BIN} > /dev/null 2>&1; then
+            jmxAlreadyEnabled=1
+        fi
+        if grep "^JMX_OPTS=" ${YARN_BIN} | grep "jmxremote.authenticate=true"> /dev/null 2>&1; then
+            jmxSecured=1
+        fi
+        if [ \( ${secureCluster} -eq 0 -a $jmxSecured -eq 1 \) -o \( ${secureCluster} -eq 1 -a $jmxSecured -eq 0 \) ]; then
+            securityChanged=1
+        fi
+
+        # only change the script once or when security config changed
+        if [ $jmxAlreadyEnabled -eq 0 -o \( $jmxAlreadyEnabled -eq 1 -a $securityChanged -eq 1 \) ]; then
+            # save backup copy fist time only
+            if [ $jmxAlreadyEnabled -eq 0 ]; then
+                cp -p ${YARN_BIN} ${YARN_BIN}.prejmx
+            fi
             if [ ${secureCluster} -eq 1 ]; then
                 if [ -f ${MAPR_HOME}/conf/jmxremote.password -a -f ${MAPR_HOME}/conf/jmxremote.access ]; then
-                    JMX_INSERT_STRING=$SECURE_JMX_INSERT
+                    JMX_INSERT_STRING=${HADOOP_JMX_INSERT/.jmxremote.authenticate=false/.jmxremote.authenticate=true}
                 else
-                    JMX_INSERT_STRING=$JMX_INSERT
+                    JMX_INSERT_STRING=$HADOOP_JMX_INSERT
                     logMsg "WARNING: Failed to enable secure jmx for NM/RM - see ${YARN_BIN}.tmp.tmp"
                 fi
             else
-                JMX_INSERT_STRING=$JMX_INSERT
+                JMX_INSERT_STRING=$HADOOP_JMX_INSERT
             fi
-            awk -v jmx_ins_after='JAVA_HEAP_MAX' -v jmx_insert="$JMX_INSERT_STRING" \
-                -v jmx_opts_pattern='"\\$COMMAND" = "resourcemanager"' \
-                -v yarn_opts="$YARN_JMX_RM_OPT_STR" \
-                -f ${AWKLIBPATH}/configureYarnJmx.awk ${YARN_BIN} > ${YARN_BIN}.tmp
-            rc1=$?
-    
-            awk  -v jmx_opts_pattern='"\\$COMMAND" = "nodemanager"' \
-                 -v yarn_opts="$YARN_JMX_NM_OPT_STR" \
-                 -f ${AWKLIBPATH}/configureYarnJmx.awk ${YARN_BIN}.tmp > ${YARN_BIN}.tmp.tmp
-            rc2=$?
-            if [ $rc1 -eq 0 -a $rc2 -eq 0 ]; then
-                mv ${YARN_BIN}.tmp.tmp ${YARN_BIN}
-                chmod a+x ${YARN_BIN}
+            if [ $jmxAlreadyEnabled -eq 0 ]; then
+                awk -v jmx_ins_after='JAVA_HEAP_MAX' -v jmx_insert="$JMX_INSERT_STRING" \
+                    -v jmx_opts_pattern='"\\$COMMAND" = "resourcemanager"' \
+                    -v yarn_opts="$YARN_JMX_RM_OPT_STR" \
+                    -f ${AWKLIBPATH}/configureYarnJmx.awk ${YARN_BIN} > ${YARN_BIN}.tmp
+                rc1=$?
+        
+                awk  -v jmx_opts_pattern='"\\$COMMAND" = "nodemanager"' \
+                     -v yarn_opts="$YARN_JMX_NM_OPT_STR" \
+                     -f ${AWKLIBPATH}/configureYarnJmx.awk ${YARN_BIN}.tmp > ${YARN_BIN}.tmp.tmp
+                rc2=$?
+                if [ $rc1 -eq 0 -a $rc2 -eq 0 ]; then
+                    mv ${YARN_BIN}.tmp.tmp ${YARN_BIN}
+                    chmod a+x ${YARN_BIN}
+                    if [ ${CD_RM_ROLE} -eq 1 ]; then
+                        CD_RESTART_SVC_LIST="$CD_RESTART_SVC_LIST resourcemanager"
+                    fi
+                    if [ ${CD_NM_ROLE} -eq 1 ]; then
+                        CD_RESTART_SVC_LIST="$CD_RESTART_SVC_LIST nodemanager"
+                    fi
+                else
+                    logWarn "Failed to enable jmx for NM/RM - see ${YARN_BIN}.tmp.tmp"
+                fi
+                rm -f ${YARN_BIN}.tmp
+            else
+                if [ $jmxSecured -eq 1 ]; then
+                    cur_auth_val="true"
+                    new_auth_val="false"
+                else
+                    cur_auth_val="false"
+                    new_auth_val="true"
+                fi
+                sed -i -e "s/\.jmxremote\.authenticate=$cur_auth_val/\.jmxremote\.authenticate=$new_auth_val/" ${YARN_BIN}
                 if [ ${CD_RM_ROLE} -eq 1 ]; then
                     CD_RESTART_SVC_LIST="$CD_RESTART_SVC_LIST resourcemanager"
                 fi
                 if [ ${CD_NM_ROLE} -eq 1 ]; then
                     CD_RESTART_SVC_LIST="$CD_RESTART_SVC_LIST nodemanager"
                 fi
-            else
-                logWarn "Failed to enable jmx for NM/RM - see ${YARN_BIN}.tmp.tmp"
             fi
-            rm -f ${YARN_BIN}.tmp
         fi
     fi
 }
@@ -636,6 +668,9 @@ function configureDrillBitsJMX() {
     local rc1
     local DRILL_VER
     local DRILL_ENV
+    local jmxAlreadyEnabled=0
+    local jmxSecured=0
+    local securityChanged=0
 
     # Enable JMX for Drill server only if they are installed
     # DRILL_JMX_OPTS="-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.port=6090"
@@ -658,18 +693,47 @@ function configureDrillBitsJMX() {
             DRILL_TAG="HADOOP_HOME="
             DRILL_AWK_SCRIPT=configureDrill18Jmx.awk
         fi
-        if ! grep "^#Enable JMX for MaprMonitoring" ${DRILL_ENV} > /dev/null 2>&1; then
-            cp -p ${DRILL_ENV} ${DRILL_ENV}.prejmx
+        if grep "^#Enable JMX for MaprMonitoring" ${DRILL_ENV} > /dev/null 2>&1; then
+            jmxAlreadyEnabled=1
+        fi
+        if grep "^DRILL_JMX_OPTS=" ${DRILL_ENV} | grep "jmxremote.authenticate=true"> /dev/null 2>&1; then
+            jmxSecured=1
+        fi
+        if [ \( ${secureCluster} -eq 0 -a $jmxSecured -eq 1 \) -o \( ${secureCluster} -eq 1 -a $jmxSecured -eq 0 \) ]; then
+            securityChanged=1
+        fi
+
+        # only change the script once or when security config changed
+        if [ $jmxAlreadyEnabled -eq 0 -o \( $jmxAlreadyEnabled -eq 1 -a $securityChanged -eq 1 \) ]; then
+            # save backup copy fist time only
+            if [ $jmxAlreadyEnabled -eq 0 ]; then
+                cp -p ${DRILL_ENV} ${DRILL_ENV}.prejmx
     
-            awk -v jmx_insert_after="$DRILL_TAG" \
-                -f ${AWKLIBPATH}/${DRILL_AWK_SCRIPT} ${DRILL_ENV} > ${DRILL_ENV}.tmp
-            rc1=$?
-            if [ $rc1 -eq 0 ]; then
-                mv ${DRILL_ENV}.tmp ${DRILL_ENV}
-                chmod a+x ${DRILL_ENV}
-                CD_RESTART_SVC_LIST="$CD_RESTART_SVC_LIST drill-bits"
+                DRILL_SECURE_JMX="false"
+                if [ $secureCluster -eq 1 ]; then
+                    DRILL_SECURE_JMX="true"
+                fi
+        
+                awk -v jmx_insert_after="$DRILL_TAG" \
+                    -f ${AWKLIBPATH}/${DRILL_AWK_SCRIPT} -vmapr_home=${MAPR_HOME} -vdrillport=$DRILLBITS_JMX_PORT -vsecurejmx=$DRILL_SECURE_JMX ${DRILL_ENV} > ${DRILL_ENV}.tmp
+                rc1=$?
+                if [ $rc1 -eq 0 ]; then
+                    mv ${DRILL_ENV}.tmp ${DRILL_ENV}
+                    chmod a+x ${DRILL_ENV}
+                    CD_RESTART_SVC_LIST="$CD_RESTART_SVC_LIST drill-bits"
+                else
+                    logWarn "Failed to enable jmx for Drill Server - see ${DRILL_ENV}.tmp"
+                fi
             else
-                logWarn "Failed to enable jmx for Drill Server - see ${DRILL_ENV}.tmp"
+                if [ $jmxSecured -eq 1 ]; then
+                    cur_auth_val="true"
+                    new_auth_val="false"
+                else
+                    cur_auth_val="false"
+                    new_auth_val="true"
+                fi
+                sed -i -e "s/\.jmxremote\.authenticate=$cur_auth_val/\.jmxremote\.authenticate=$new_auth_val/" ${DRILL_ENV}
+                CD_RESTART_SVC_LIST="$CD_RESTART_SVC_LIST drill-bits"
             fi
         fi
     fi
@@ -817,6 +881,7 @@ function cleanupOldConfFiles
 #
 #sets MAPR_USER/MAPR_GROUP/logfile
 initCfgEnv
+JMX_REMOTE_PASSWORD_FILE="${MAPR_CONF_DIR}/jmxremote.password"
 
 usage="usage: $0 [-nodeCount <cnt>] [-nodePort <port>] [-noStreams] [-EC <commonEcoOpts>] [--secure] [--customSecure] [--unsecure] [-R] [-OS] [-OT \"ip:port,ip1:port,\"] "
 if [ ${#} -gt 1 ]; then
