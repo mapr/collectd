@@ -883,28 +883,28 @@ function cleanupOldConfFiles
 initCfgEnv
 JMX_REMOTE_PASSWORD_FILE="${MAPR_CONF_DIR}/jmxremote.password"
 
-usage="usage: $0 [-nodeCount <cnt>] [-nodePort <port>] [-noStreams] [-EC <commonEcoOpts>] [--secure] [--customSecure] [--unsecure] [-R] [-OS] [-OT \"ip:port,ip1:port,\"] "
+usage="usage: $0 [-nodeCount <cnt>] [-nodePort <port>] [-noStreams] [-EC <commonEcoOpts>]\n\t[--secure] [--customSecure] [--unsecure] [-R] [-OS] [-OT \"ip:port,ip1:port,\"] "
 if [ ${#} -gt 1 ]; then
     # we have arguments - run as as standalone - need to get params and
     # XXX why do we need the -o to make this work?
     OPTS=`getopt -a -o h -l EC: -l nodeCount: -l nodePort: -l noStreams -l OS -l OT: -l secure -l R -l unsecure -l customSecure -- "$@"`
     if [ $? != 0 ]; then
-        echo ${usage}
+        echo -e ${usage}
         return 2 2>/dev/null || exit 2
     fi
     eval set -- "$OPTS"
 
-    while true; do
-        case "$1" in
+    for i in "$@" ; do
+        case "$i" in
             --EC)
                 #Parse Common options
                 #Ingore ones we don't care about
-                eval "ecOpts=($2)"
+                ecOpts=($2)
                 shift 2
-                restOpts="$*"
-                eval set -- "$ecOpts --"
-                while true ; do
-                    case "$1" in
+                restOpts="$@"
+                eval set -- "${ecOpts[@]} --"
+                for j in "$@" ; do
+                    case "$j" in
                         --OT|-OT)
                             nodelist="$2"
                             shift 2;;
@@ -915,7 +915,7 @@ if [ ${#} -gt 1 ]; then
                         --) shift
                             break;;
                         *)
-                            #Ignoring common option $1"
+                            #echo "Ignoring common option $j"
                             shift 1;;
                     esac
                 done
@@ -962,7 +962,7 @@ if [ ${#} -gt 1 ]; then
                 secureCluster=0;
                 shift 1;;
             -h)
-                echo ${usage}
+                echo -e ${usage}
                 return 2 2>/dev/null || exit 2
                 ;;
             --)
@@ -972,13 +972,13 @@ if [ ${#} -gt 1 ]; then
     done
 
 else
-    echo "${usage}"
+    echo -e "${usage}"
     return 2 2>/dev/null || exit 2
 fi
 
 if [ -z "$nodelist" -a $useStreams -eq 0 ]; then
     echo "-OT or -OS is required"
-    echo "${usage}"
+    echo -e "${usage}"
     return 2 2>/dev/null || exit 2
 fi
 # Make a copy, the script will work on the copy
