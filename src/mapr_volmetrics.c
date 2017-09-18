@@ -70,6 +70,9 @@
 #define VOLUME_NAME_MAX 256
 #define METRICS_THRESHOLD (100*1024)
 
+#define WINDOW_SIZE_SECONDS (60)
+#define WINDOW_SIZE_MS (WINDOW_SIZE_SECONDS*1000)
+#define WINDOW_MINUTE_MS (60*1000)
 /* Helpers go here */
 inline uint64_t
 murmurhash64(const void * key, int len)
@@ -186,17 +189,31 @@ isMetricsAuditFile(hdfsFileInfo *fileInfo)
   return 0;
 }
 
+uint64_t millis_ = 0;
+uint64_t mins_ = 0;
+bool dispatch_ = true;
+
+static uint64_t
+getMillis(void) {
+  return millis_;
+}
+
+static uint64_t
+getMins(void) {
+  return millis_/(WINDOW_SIZE_MS);
+}
+
 static uint64_t
 currentTimeMillis(void) {
   struct timeval tv;
   gettimeofday(&tv, NULL);
 
-  return ((tv.tv_sec * 1000) + (tv.tv_usec / 1000));
+  millis_ = ((tv.tv_sec * 1000) + (tv.tv_usec / 1000));
+  return millis_;
 }
 
 char *bufHead_ = NULL;
 int bufCount = 0;
-int iteration_ = 0;
 
 char*
 getBuffer(void)
@@ -378,9 +395,6 @@ vnhtAdd(VolumeNameHashTable *tbl, uint32_t volId,
 
 /*** Start of MetricsHashTable ***/
 
-#define WINDOW_SIZE_SECONDS (60)
-#define WINDOW_SIZE_MS (WINDOW_SIZE_SECONDS*1000)
-#define WINDOW_MINUTE_MS (60*1000)
 #define HASH_BUCKETS (1023)
 
 typedef enum {
@@ -846,9 +860,8 @@ dispatchMetrics(TimestampHashTable *tsTbl, tsEntry_t *tsEntry)
         } else {
           sprintf(vl.plugin_instance, "%u", entry->volId);
         }
-        if (entry->values[j] > 0) {
-        //TODO: change this to set the volume name instead of volume id - Sriram
 
+        if (entry->values[j] > 0) {
           char *type = NULL;
           double value = 0;
           switch(j) {
@@ -903,26 +916,29 @@ static int
 syncOffset(hdfsFS fs, FMHTEntry_t *entry)
 {
   char buf[32];
-  sprintf(&buf[0], "%ld", entry->curOffset);
-  int err = hdfsSetXattr(fs, entry->filepath, XATTR_NAME,
-                         strlen(XATTR_NAME), &buf[0], strlen(buf));
-  if (err == -1) {
-    ERROR("Error when setting xattr %s on %s: %s", XATTR_NAME,
-           entry->filepath, strerror(errno));
-    return -1;
+  if (entry->dispatchedOffset != entry->curOffset) {
+    sprintf(&buf[0], "%ld", entry->curOffset);
+    int err = hdfsSetXattr(fs, entry->filepath, XATTR_NAME,
+                           strlen(XATTR_NAME), &buf[0], strlen(buf));
+    if (err == -1) {
+      ERROR("Error when setting xattr %s on %s: %s", XATTR_NAME,
+            entry->filepath, strerror(errno));
+      return -1;
+    }
+
+    INFO("Dispatched file %s offset to %lu", entry->filepath,
+         entry->curOffset);
+
+    entry->dispatchedOffset = entry->curOffset;
+    entry->minTs = entry->maxTs;
   }
-
-  INFO("Dispatched file %s offset to %lu", entry->filepath,
-        entry->dispatchedOffset);
-
-  entry->dispatchedOffset = entry->curOffset;
-  entry->minTs = entry->maxTs;
   return 0;
 }
 
 int
-processBuffer(TimestampHashTable *tbl, char *buffer, int64_t bufOffset,
-              uint64_t *minTs, uint64_t *maxTs, bool *readAgain)
+processBuffer(TimestampHashTable *tbl, char *buffer, int64_t bufLen,
+              uint64_t *minTs, uint64_t *maxTs, bool *readAgain,
+              int *records)
 {
   /* format = {"ts":1502305800000,"vid":199334729,"RDT":43136.0,"RDL":732.0, 
    *           "RDO":338.0,"WRT":13888.0,"WRL":29.0,"WRO":28.0}
@@ -932,14 +948,14 @@ processBuffer(TimestampHashTable *tbl, char *buffer, int64_t bufOffset,
   uint32_t volId = -1;
   uint64_t ts = -1;
   uint64_t prevTs = 0;
-  char *saved_offset = NULL;
-  char *end_of_record = buffer;
   char *start = buffer;
-  char *end = buffer + bufOffset - 1;
+  char *end = buffer + bufLen - 1;
   uint32_t values[MetricsOpMAX];
-  uint64_t millis = currentTimeMillis();
+  uint64_t millis = getMillis();
   uint64_t window = millis/WINDOW_SIZE_MS;
   uint64_t validTs = (window - 1) * WINDOW_SIZE_MS;
+  int readBytes = 0;
+  int saved_readBytes = 0;
   MHTEntry* mEntry = NULL;
   MHTEntry* prevMEntry = NULL;
   MHTEntry* savedMEntry = NULL;
@@ -948,6 +964,7 @@ processBuffer(TimestampHashTable *tbl, char *buffer, int64_t bufOffset,
   *minTs = (uint64_t)-1;
   *maxTs = 0;
   *readAgain = true;
+  *records = 0;
 
   while (*buffer != '\0') {
     if (*buffer == '}') {
@@ -960,13 +977,13 @@ processBuffer(TimestampHashTable *tbl, char *buffer, int64_t bufOffset,
 
         if (ts > validTs) {
           *readAgain = false;
-          saved_offset = end_of_record;
+          saved_readBytes = readBytes;
           break;
         }
 
         if (prevTs && prevTs != ts) {
           *readAgain = false;
-          saved_offset = end_of_record;
+          saved_readBytes = readBytes;
           savedMEntry = prevMEntry;
 
           if (prevTs < *minTs) {
@@ -990,7 +1007,7 @@ processBuffer(TimestampHashTable *tbl, char *buffer, int64_t bufOffset,
         prevMEntry = mEntry;
 
         prevTs = ts;
-        end_of_record = buffer;
+        readBytes = (buffer - start + 1);
       }
     }
 
@@ -1032,6 +1049,7 @@ processBuffer(TimestampHashTable *tbl, char *buffer, int64_t bufOffset,
   MHTEntry *nextMEntry = NULL;
   for (mEntry=headMEntry; mEntry; mEntry=nextMEntry) {
     nextMEntry = mEntry->next;
+    (*records)++;
     tshtInsert(tbl, mEntry->volId, mEntry->ts, mEntry->values);
     if (mEntry == savedMEntry) {
       mEntry = nextMEntry;
@@ -1050,12 +1068,11 @@ processBuffer(TimestampHashTable *tbl, char *buffer, int64_t bufOffset,
   }
 
   if (!(*readAgain)) {
-    assert (saved_offset >= start);
-    return (saved_offset - start + 1);
+    return saved_readBytes;
   }
 
 end: 
-  return bufOffset;
+  return bufLen;
 }
 
 static int64_t
@@ -1068,8 +1085,10 @@ readMetrics(TimestampHashTable *tbl, hdfsFS fs, FMHTEntry_t *fmhtEntry,
   uint64_t maxTs;
   tSize actualLen = 0;
   tSize readBytes = 0;
+  tSize totalRead = 0;
   hdfsFile file;
   bool readAgain = false;
+  int records = 0;
 
   char *buffer = getBuffer();
   if (!buffer) {
@@ -1094,12 +1113,12 @@ readMetrics(TimestampHashTable *tbl, hdfsFS fs, FMHTEntry_t *fmhtEntry,
      */
 
     readBytes = hdfsPread(fs, file, fmhtEntry->curOffset, buffer, READ_SIZE);
-    if (readBytes < 0) {
-      ERROR("hdfsPread failed for file: %s, offset: %ld, errno %d",
-            fmhtEntry->filepath, fmhtEntry->curOffset, errno);
-      readBytes = -errno;
-      goto end;
-    } else if (readBytes == 0) {
+    if (readBytes <= 0) {
+      if (readBytes < 0) {
+        ERROR("hdfsPread failed for file: %s, offset: %ld, errno %d",
+              fmhtEntry->filepath, fmhtEntry->curOffset, errno);
+        totalRead = -errno;
+      }
       goto end;
     } 
    
@@ -1111,6 +1130,7 @@ readMetrics(TimestampHashTable *tbl, hdfsFS fs, FMHTEntry_t *fmhtEntry,
 
     if (buffer[j] != '{') {
       fmhtEntry->curOffset += readBytes;
+      totalRead += readBytes;
       break;
     }
 
@@ -1127,24 +1147,27 @@ readMetrics(TimestampHashTable *tbl, hdfsFS fs, FMHTEntry_t *fmhtEntry,
 
     buffer[readBytes] = '\0';
     ret = processBuffer(tbl, &buffer[j], actualLen + 1, &minTs, &maxTs,
-        &readAgain);
-    if (ret < 0) {
-      readBytes = -1;
+                        &readAgain, &records);
+    if (ret <= 0) {
       goto end;
     }
+
     INFO("Read audit file %s curoffset %lu consumed %d readBytes %d\n",
          fmhtEntry->filepath, fmhtEntry->curOffset, j + ret,
          readBytes);
 
+    totalRead += j + ret;
     fmhtEntry->curOffset = fmhtEntry->curOffset + j + ret;
-    fmhtEntry->minTs = minTs;
-    fmhtEntry->maxTs = maxTs;
+    if (records) {
+      fmhtEntry->minTs = minTs;
+      fmhtEntry->maxTs = fmhtEntry->maxTs < maxTs ? maxTs : fmhtEntry->maxTs;
+    }
   } while (readAgain);
 
 end:
   hdfsCloseFile(fs, file);
   releaseBuffer(buffer);
-  return readBytes; 
+  return totalRead; 
 }
 
 /* Pick the file with the min maxTs.
@@ -1171,13 +1194,14 @@ pickFile(FileMetricsHashTable *fmht, hdfsFS fs,
       /* See if this can be moved to a function */
       if (created) {
         char buf[32];
-        ssize_t xattrSize = hdfsGetXattr(fs, fileList[i].mName, XATTR_NAME,
+        int xattrSize = hdfsGetXattr(fs, fileList[i].mName, XATTR_NAME,
                                          &buf[0], 32);
-        //TODO: Check if the errors are handled properly
-        if (xattrSize == -1 && errno != ENOENT) {
+        if (xattrSize <= 0) {
           ERROR("Error when getting xattr %s on %s, errno %d", XATTR_NAME,
                 fileList[i].mName, errno);
-        } else if (xattrSize > 0 && !errno) {
+          fmhtEntry->curOffset = 0;
+          fmhtEntry->dispatchedOffset = 0;
+        } else {
           buf[xattrSize] = '\0';
           fmhtEntry->dispatchedOffset = strtoll((const char *)&buf[0], NULL, 10);
           fmhtEntry->curOffset = fmhtEntry->dispatchedOffset;
@@ -1204,7 +1228,7 @@ getDispatchTs(hdfsFileInfo *fileList, int numFiles, FMHTEntry_t **retEntry)
   bool created = false;
   FMHTEntry_t *fmhtEntry = NULL;
   uint64_t minTs = (uint64_t)-1;;
-  uint64_t millis = currentTimeMillis();
+  uint64_t millis = getMillis();
   uint64_t curWindow = millis/WINDOW_SIZE_SECONDS;
   uint64_t dispatchTs = (curWindow - 1)*WINDOW_SIZE_SECONDS;
 
@@ -1232,7 +1256,7 @@ getDispatchTs(hdfsFileInfo *fileList, int numFiles, FMHTEntry_t **retEntry)
 static bool
 dispatchNow(TimestampHashTable *tbl)
 {
-  if ((iteration_ % 6) == 0) {
+  if (dispatch_) {
     return true;
   } else if (tbl->metricEntries > METRICS_THRESHOLD) {
     return true;
@@ -1248,25 +1272,27 @@ processAuditFiles(FileMetricsHashTable *fmht, TimestampHashTable *tsTbl,
   int ret = 0;
   int fileid = 0;
   FMHTEntry_t *fmhtEntry = NULL;
+  int totalRead = 0;
   FMHTEntry_t *dispatchEntry = NULL;
   tsEntry_t *next = NULL;
   bool dispatch = false;
   uint64_t dispatchTs = 0;
-  int totalRead = 0;
+  int totalFiles = numFiles;
 
   while (totalRead < MAX_READ_SIZE) {
     /* Pick a file to read.
      * Read the metrics.
      * Dispatch the metrics.
      */
-    fmhtEntry = pickFile(fmht, fs, fileList, numFiles, &fileid);
+    fmhtEntry = pickFile(fmht, fs, fileList, totalFiles, &fileid);
     if (fmhtEntry) {
-      INFO("Picked audit file %s for processing, curOffset %lu size %lu",
-           fileList[fileid].mName, fmhtEntry->curOffset, fileList[fileid].mSize);
       ret = readMetrics(tsTbl, fs, fmhtEntry, &fileList[fileid]);
+      INFO("Picked audit file %s for processing, curOffset %lu size %lu "
+           "consumed %d", fileList[fileid].mName, fmhtEntry->curOffset,
+           fileList[fileid].mSize, ret);
       if (ret <= 0) {
-        fileList[fileid] = fileList[numFiles-1];
-        numFiles--;
+        fileList[fileid] = fileList[totalFiles-1];
+        totalFiles--;
         continue;
       }
       totalRead += ret;
@@ -1530,6 +1556,14 @@ vm_read(void)
     return 0;
   }
 
+  currentTimeMillis();
+  if (mins_ != getMins()) {
+    mins_ = getMins();
+    dispatch_ = true;
+  } else {
+    dispatch_ = false;
+  }
+
   /* Let's try to reuse the fs handle */
   if (!fs) {
     fs = connectCluster();
@@ -1556,9 +1590,6 @@ vm_read(void)
     PurgeVolumeCache();
   }
 
-  iteration_ = (iteration_ + 1) % 6;
-
-  //TODO: In one iteration we want to process x number of records
   dirlist_t *head = NULL;
   dirlist_t *cur = NULL;
   dirlist_t *next = NULL;
@@ -1629,7 +1660,7 @@ static int
 vm_init(void) {
   if (!htableInitialized) {
     htableInitialized = true;
-    fmhtInit(&fmht, 11, 10);
+    fmhtInit(&fmht, 11, 20);
     vnhtInit(&vnht, 511, 10240);
     initTimestampHashTable(&tsht, 101, 1279);
   }
