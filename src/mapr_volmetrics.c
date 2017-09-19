@@ -73,6 +73,8 @@
 #define WINDOW_SIZE_SECONDS (60)
 #define WINDOW_SIZE_MS (WINDOW_SIZE_SECONDS*1000)
 #define WINDOW_MINUTE_MS (60*1000)
+#define MAX_RECORDS_PER_ITER (10*1000)
+
 /* Helpers go here */
 inline uint64_t
 murmurhash64(const void * key, int len)
@@ -179,7 +181,7 @@ isMetricsAuditFile(hdfsFileInfo *fileInfo)
   if (fileInfo->mKind != kObjectKindFile) {
     return 0;
   }
-  
+ 
   char *filename = getFileName(fileInfo->mName);
   if (startsWith(filename, (char *) METRICS_FILE_PREFIX,
                  METRICS_FILE_PREFIX_LEN)) {
@@ -488,7 +490,7 @@ populateMHTEntry(MHTEntry *entry, uint64_t ts, int volId,
 static inline void
 mhtPutEntry(TimestampHashTable *tbl, MHTEntry *entry)
 {
-  if (tbl->fMetricentries < 1000) {
+  if (tbl->fMetricentries < 10000) {
     entry->fnext = tbl->freeMetricList;
     tbl->freeMetricList = entry;
   } else {
@@ -651,7 +653,6 @@ typedef struct FMHTEntry_ {
   int64_t dispatchedOffset;
   uint64_t minTs;
   uint64_t maxTs;
-  uint64_t curDispatchTs;
   struct FMHTEntry_ *next;
   struct FMHTEntry_ *fnext;
   filetype_t type;
@@ -692,7 +693,6 @@ static void
 fmhtInitEntry(FMHTEntry_t *entry)
 {
   entry->filepath[0] ='\0';
-  entry->curDispatchTs = (uint64_t)-1;
   entry->curOffset = 0;
   entry->dispatchedOffset = 0;
   entry->minTs = 0;
@@ -826,11 +826,12 @@ MetricsOp getMetricsOp(char *record)
   assert(0);
 }
 
-static void
+static int
 dispatchMetrics(TimestampHashTable *tsTbl, tsEntry_t *tsEntry)
 {
   int i;
   int j;
+  int count = 0;
   uint64_t dispatchTs = tsEntry->ts;
   MetricsHashTable *tbl = &(tsEntry->metricsTable);
   MHTEntry *entry = NULL;
@@ -905,11 +906,12 @@ dispatchMetrics(TimestampHashTable *tsTbl, tsEntry_t *tsEntry)
       tbl->nentries--;
       tsTbl->metricEntries--;
       entry = nextEntry;
+      count++;
     }
     tbl->buckets[i] = NULL;
   }
 
-  return;
+  return count;
 }
 
 static int
@@ -921,8 +923,8 @@ syncOffset(hdfsFS fs, FMHTEntry_t *entry)
     int err = hdfsSetXattr(fs, entry->filepath, XATTR_NAME,
                            strlen(XATTR_NAME), &buf[0], strlen(buf));
     if (err == -1) {
-      ERROR("Error when setting xattr %s on %s: %s", XATTR_NAME,
-            entry->filepath, strerror(errno));
+      WARNING("Error when setting xattr %s on %s: %s", XATTR_NAME,
+              entry->filepath, strerror(errno));
       return -1;
     }
 
@@ -956,6 +958,7 @@ processBuffer(TimestampHashTable *tbl, char *buffer, int64_t bufLen,
   uint64_t validTs = (window - 1) * WINDOW_SIZE_MS;
   int readBytes = 0;
   int saved_readBytes = 0;
+  int ret;
   MHTEntry* mEntry = NULL;
   MHTEntry* prevMEntry = NULL;
   MHTEntry* savedMEntry = NULL;
@@ -1015,6 +1018,7 @@ processBuffer(TimestampHashTable *tbl, char *buffer, int64_t bufLen,
       case 't':
         buffer = getNextDigit(buffer, end);
         if (buffer > end) {
+          ret = bufLen;
           goto end;
         }
         ts = strtoull(buffer, &buffer, 10);
@@ -1023,6 +1027,7 @@ processBuffer(TimestampHashTable *tbl, char *buffer, int64_t bufLen,
       case 'v':
         buffer = getNextDigit(buffer, end);
         if (buffer > end) {
+          ret = bufLen;
           goto end;
         }
         volId = strtoul(buffer, &buffer, 10);
@@ -1033,6 +1038,7 @@ processBuffer(TimestampHashTable *tbl, char *buffer, int64_t bufLen,
         op = getMetricsOp(buffer);
         buffer = getNextDigit(buffer, end);
         if (buffer > end) {
+          ret = bufLen;
           goto end;
         }
         values[op] = strtoul(buffer, &buffer, 10);
@@ -1068,11 +1074,15 @@ processBuffer(TimestampHashTable *tbl, char *buffer, int64_t bufLen,
   }
 
   if (!(*readAgain)) {
-    return saved_readBytes;
+    ret = saved_readBytes;
+  } else {
+    ret = bufLen;
   }
 
-end: 
-  return bufLen;
+end:
+  INFO("minTs %lu maxTs %lu readAgain %d ret %d records %d", *minTs, *maxTs, 
+        *readAgain, ret, *records); 
+  return ret;
 }
 
 static int64_t
@@ -1096,32 +1106,31 @@ readMetrics(TimestampHashTable *tbl, hdfsFS fs, FMHTEntry_t *fmhtEntry,
     return -ENOMEM;
   }
 
-  do {
-    /* We are opening the file and closing it every time because of the
-     * attr timeout issues.
-     */
-    file = hdfsOpenFile(fs, fmhtEntry->filepath, O_RDONLY, 0, 0, 0);
-    if (!file) {
-      ERROR( "Failed to open %s for reading, errno %d\n", fmhtEntry->filepath,
-             errno);
-      releaseBuffer(buffer);
-      return -errno;
-    }
+  /* We are opening the file and closing it every time because of the
+   * attr timeout issues.
+   */
+  file = hdfsOpenFile(fs, fmhtEntry->filepath, O_RDONLY, 0, 0, 0);
+  if (!file) {
+    ERROR( "Failed to open %s for reading, errno %d\n", fmhtEntry->filepath,
+           errno);
+    releaseBuffer(buffer);
+    return -errno;
+  }
 
+  do {
     /* TODO: Pread or seek and read. Throw away left over or save it.
      * Will throwing away cause unnecessary decompression issues on server.
      */
-
     readBytes = hdfsPread(fs, file, fmhtEntry->curOffset, buffer, READ_SIZE);
     if (readBytes <= 0) {
+      INFO("hdfsPread failed for file: %s, offset: %ld, errno %d readBytes %d",
+           fmhtEntry->filepath, fmhtEntry->curOffset, errno, readBytes);
       if (readBytes < 0) {
-        ERROR("hdfsPread failed for file: %s, offset: %ld, errno %d",
-              fmhtEntry->filepath, fmhtEntry->curOffset, errno);
         totalRead = -errno;
       }
       goto end;
     } 
-   
+  
     for (j=0; j<readBytes; j++) {
       if (buffer[j] == '{') {
         break;
@@ -1238,7 +1247,7 @@ getDispatchTs(hdfsFileInfo *fileList, int numFiles, FMHTEntry_t **retEntry)
       fmhtEntry = fmhtLookupOrInsert(&fmht, fileList[i].mName,
                                      &created, AUDIT);
       if (fmhtEntry) {
-        if (fmhtEntry->dispatchedOffset < fileList[i].mSize &&
+        if (fmhtEntry->dispatchedOffset < fmhtEntry->curOffset &&
             fmhtEntry->maxTs < minTs && fmhtEntry->maxTs <= dispatchTs) {
           minTs = fmhtEntry->maxTs;
           *retEntry = fmhtEntry;
@@ -1271,6 +1280,7 @@ processAuditFiles(FileMetricsHashTable *fmht, TimestampHashTable *tsTbl,
   int i;
   int ret = 0;
   int fileid = 0;
+  int count = 0;
   FMHTEntry_t *fmhtEntry = NULL;
   int totalRead = 0;
   FMHTEntry_t *dispatchEntry = NULL;
@@ -1301,27 +1311,33 @@ processAuditFiles(FileMetricsHashTable *fmht, TimestampHashTable *tsTbl,
     }
   }
 
-  dispatch = dispatchNow(tsTbl);
-  if (dispatch) {
-    /* Get a timestamp which is safe to dispatch */
-    dispatchTs = getDispatchTs(fileList, numFiles, &dispatchEntry);
-    if (dispatchEntry != NULL) {
-      for (i=0; i<tsTbl->nbuckets; i++) {
-        tsEntry_t *entry = tsTbl->buckets[i];
-        while (entry) {
-          if (entry->ts <= dispatchTs) {
-            dispatchMetrics(tsTbl, entry);
-          } else {
-            break;
+  while (count < MAX_RECORDS_PER_ITER) {
+    dispatch = dispatchNow(tsTbl);
+    if (dispatch) {
+      /* Get a timestamp which is safe to dispatch */
+      dispatchTs = getDispatchTs(fileList, numFiles, &dispatchEntry);
+      if (dispatchEntry != NULL) {
+        for (i=0; i<tsTbl->nbuckets; i++) {
+          tsEntry_t *entry = tsTbl->buckets[i];
+          while (entry) {
+            if (entry->ts <= dispatchTs) {
+              count += dispatchMetrics(tsTbl, entry);
+            } else {
+              break;
+            }
+            tsTbl->buckets[i] = entry->next;
+            next = entry->next;
+            tshtPutEntry(tsTbl, entry);
+            tsTbl->nentries--;
+            entry = next;
           }
-          tsTbl->buckets[i] = entry->next;
-          next = entry->next;
-          tshtPutEntry(tsTbl, entry);
-          tsTbl->nentries--;
-          entry = next;
         }
+        syncOffset(fs, dispatchEntry);
+      } else {
+        break;
       }
-      syncOffset(fs, dispatchEntry);
+    } else {
+      break;
     }
   }
 }
@@ -1500,12 +1516,6 @@ hdfsFS fs = NULL;
 hdfsFS
 connectCluster(void)
 {
-  int err = hdfsSetRpcTimeout(30);
-  if (err) {
-    ERROR("Failed to set rpc timeout!\n");
-    return NULL;
-  }
-
   hdfsFS fs = hdfsConnect("default", 0);
   if (!fs ) {
     ERROR("Oops! Failed to connect to hdfs!\n");
@@ -1635,6 +1645,7 @@ vm_read(void)
       hdfsFreeFileInfo(head->entries, head->numFiles);
       free(head);
     }
+    hdfsFreeFileInfo(dirList, numEntries);
   }
 
   if (shouldPurgeFMHT(&fmht, &tsht)) {
@@ -1642,7 +1653,6 @@ vm_read(void)
   }
 
   assert(head == NULL);
-  hdfsFreeFileInfo(dirList, numEntries);
   readInProgress_ = 0;
   return 0;
 }
