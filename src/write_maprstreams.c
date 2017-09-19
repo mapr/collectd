@@ -201,12 +201,12 @@ static int hash(const char *str, int range)
 static void msgDeliveryCB (rd_kafka_t *rk,
                            const rd_kafka_message_t *rkmessage, void *opaque) {
     if (rkmessage->err != RD_KAFKA_RESP_ERR_NO_ERROR) {
-        ERROR("FAILURE: Message not delivered to partition.\n");
-        ERROR("ERROR: %s", rd_kafka_err2str(rkmessage->err));
+        ERROR("write_maprstreams plugin: FAILURE: Message not delivered to partition.\n");
+        ERROR("write_maprstreams plugin: ERROR: %s", rd_kafka_err2str(rkmessage->err));
     } else {
-        INFO("Produced: %.*s\n",(int)rkmessage->len, (const char*)rkmessage->payload);
+        INFO("write_maprstreams plugin: Produced: %.*s\n",(int)rkmessage->len, (const char*)rkmessage->payload);
     }
-    free((rd_kafka_message_t*)rkmessage);
+    //free((rd_kafka_message_t*)rkmessage);
 }
 
 static void wt_kafka_topic_context_free(void *p) /* {{{ */
@@ -669,6 +669,7 @@ static int wt_send_message (const char* key, const char* value,
         RD_KAFKA_MSG_F_COPY, message, sizeof(message),
         &partition_key, sizeof(partition_key), NULL);
 
+    rd_kafka_poll(ctx->kafka,10);
     INFO("write_maprstreams plugin: PRINT message %s sent to topic %s",message,rd_kafka_topic_name(ctx->topic));
     // Free the space allocated for temp topic name and stream name
     free(temp_topic_name);
