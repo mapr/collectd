@@ -11,7 +11,7 @@
 # TODO: add support to tweak other collection facilities, like disk, fs, network
 # TODO: Need to add support to clean up old copies
 #
-# __INSTALL_ (two _ at the end) gets expanded to /opt/mapr/collectd/collectd-5.5.1 during pakcaging
+# __INSTALL_ (two _ at the end) gets expanded to __INSTALL__ during pakcaging
 # set COLLECTD_HOME explicitly if running this in a source built env.
 #
 # This script is sourced by the master configure.sh to setup collectd during
@@ -108,6 +108,20 @@ function enableSection()
 {
     # $1 is the sectionTag prefix we will use to determine section to uncomment
     awk -f ${AWKLIBPATH}/uncommentSection.awk -v tag="$1" \
+        ${NEW_CD_CONF_FILE} > ${NEW_CD_CONF_FILE}.tmp
+    if [[ $? -eq 0 ]]; then
+        mv ${NEW_CD_CONF_FILE}.tmp ${NEW_CD_CONF_FILE}
+    fi
+}
+
+#############################################################################
+# Function to comment a section if it isn't already
+# $1 is the sectionTag prefix we will use to determine section to comment out
+#############################################################################
+function disableSection()
+{
+    # $1 is the sectionTag prefix we will use to determine section to uncomment
+    awk -f ${AWKLIBPATH}/commentOutSection.awk -v tag="$1" \
         ${NEW_CD_CONF_FILE} > ${NEW_CD_CONF_FILE}.tmp
     if [[ $? -eq 0 ]]; then
         mv ${NEW_CD_CONF_FILE}.tmp ${NEW_CD_CONF_FILE}
@@ -336,21 +350,35 @@ function pluginEnable() {
 }
 
 #############################################################################
+# Function to disable plugin
+#
+# $1 is the name of the plugin
+#############################################################################
+function pluginDisable() {
+    sed -i -e "s/\(^LoadPlugin $1\)/#\1/;" ${NEW_CD_CONF_FILE}
+}
+
+#############################################################################
 # Function to configure mapr streams plugin
 #############################################################################
 function configuremaprstreamsplugin()
 { 
-    # first enable the plugin   
-    pluginEnable write_maprstreams
+    if [ $useStreams -eq 1 ]; then
+        # first enable the plugin   
+        pluginEnable write_maprstreams
 
-    # configure maprstreams
-    # <plugin write_maprstreams>
-    #     <node>
-    # 		Path "/var/mapr/mapr.monitoring/streams"
-    #           HostTags "clusterid=$clusterId clustername=$clusterName"
-    #     </Node>
-    # </Plugin>
-    enableSection MAPR_CONF_STREAMS_TAG
+        # configure maprstreams
+        # <plugin write_maprstreams>
+        #     <node>
+        # 		Path "/var/mapr/mapr.monitoring/streams"
+        #           HostTags "clusterid=$clusterId clustername=$clusterName"
+        #     </Node>
+        # </Plugin>
+        enableSection MAPR_CONF_STREAMS_TAG
+    else
+        pluginDisable write_maprstreams
+        disableSection MAPR_CONF_STREAMS_TAG
+    fi
     return 0
 }
 
@@ -361,31 +389,36 @@ function configuremaprstreamsplugin()
 #############################################################################
 function configureopentsdbplugin()
 {
-    # first enable the plugin
+    if [ $useStreams -eq 0 ]; then
+        # first enable the plugin
 
-    pluginEnable write_tsdb
+        pluginEnable write_tsdb
 
-    # configure opentsdb connections
-    # <plugin write_tsdb>
-    #     <node>
-    #             host "spy-98.qa.lab"
-    #             port "4242"
-    #             storerates false
-    #             AlwaysAppendDS false
-    #     </Node>
-    # </Plugin>
-    local tsdbhost
-    local nodesList=""
-    for i in $(echo $nodelist | sed "s/,/ /g"); do
-        tsdbhost=${i%%:*}
-        nodesList=$nodesList","$tsdbhost
-    done
-    nodesList=${nodesList:1}
-    enableSection MAPR_CONF_OT_TAG
-    awk -v hostname=$nodesList -v port=$nodeport -v plugin=write_tsdb \
-        -f ${AWKLIBPATH}/configurePlugin.awk ${NEW_CD_CONF_FILE} > ${NEW_CD_CONF_FILE}.tmp
-    if [[ $? -eq 0 ]]; then
-        mv ${NEW_CD_CONF_FILE}.tmp ${NEW_CD_CONF_FILE}
+        # configure opentsdb connections
+        # <plugin write_tsdb>
+        #     <node>
+        #             host "spy-98.qa.lab"
+        #             port "4242"
+        #             storerates false
+        #             AlwaysAppendDS false
+        #     </Node>
+        # </Plugin>
+        local tsdbhost
+        local nodesList=""
+        for i in $(echo $nodelist | sed "s/,/ /g"); do
+            tsdbhost=${i%%:*}
+            nodesList=$nodesList","$tsdbhost
+        done
+        nodesList=${nodesList:1}
+        enableSection MAPR_CONF_OT_TAG
+        awk -v hostname=$nodesList -v port=$nodeport -v plugin=write_tsdb \
+            -f ${AWKLIBPATH}/configurePlugin.awk ${NEW_CD_CONF_FILE} > ${NEW_CD_CONF_FILE}.tmp
+        if [[ $? -eq 0 ]]; then
+            mv ${NEW_CD_CONF_FILE}.tmp ${NEW_CD_CONF_FILE}
+        fi
+    else
+        pluginDisable write_tsdb
+        disableSection MAPR_CONF_OT_TAG
     fi
 
     return 0
@@ -908,10 +941,13 @@ if [ ${#} -gt 1 ]; then
                         --OT|-OT)
                             nodelist="$2"
                             shift 2;;
-                        --R)
+                        --R|-R)
                             CD_CONF_ASSUME_RUNNING_CORE=1
                             shift 1
                             ;;
+                        --noStreams|-noStreams)
+                            useStreams=0;
+                            shift 1;;
                         --) shift
                             break;;
                         *)
@@ -991,11 +1027,8 @@ cp ${CD_CONF_FILE} ${NEW_CD_CONF_FILE}
 #configurezookeeperconfig
 adjustOwnership
 getRoles
-if [ $useStreams -eq 1 ]; then
-    configuremaprstreamsplugin  # this ucomments everything between the MAPR_CONF_TAGs
-else
-    configureopentsdbplugin  # this ucomments everything between the MAPR_CONF_TAGs
-fi
+configuremaprstreamsplugin  # this ucomments everything between the MAPR_CONF_TAGs
+configureopentsdbplugin  # this ucomments everything between the MAPR_CONF_TAGs
 configurejavajmxplugin
 #createFastJMXLink
 configureHadoopJMX
@@ -1003,8 +1036,10 @@ configureHbaseJMX
 configureDrillBitsJMX
 configureOozieJMX
 if [ $CD_CONF_ASSUME_RUNNING_CORE -eq 1 ]; then
-    waitForCLDB
-    restartServices
+    if safeToRunMaprCLI ; then
+        waitForCLDB
+        restartServices
+    fi
 fi
 
 cp -p ${CD_CONF_FILE} ${CD_CONF_FILE}.${CD_NOW}
