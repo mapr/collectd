@@ -1,5 +1,6 @@
 #!/bin/bash
 # Copyright (c) 2009 & onwards. MapR Tech, Inc., All rights reserved
+set -x
 
 #############################################################################
 #
@@ -47,7 +48,9 @@ DRILLBITS_JMX_PORT=6090
 OOZIE_JMX_PORT=9010
 HBASE_MASTER_JMX_PORT=10101
 HBASE_REGION_SERVER_JMX_PORT=10102
-HADOOP_JMX_INSERT='#Enable JMX for MaprMonitoring\nJMX_OPTS=\"-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.password.file=$MAPR_HOME/conf/jmxremote.password -Dcom.sun.management.jmxremote.access.file=$MAPR_HOME/conf/jmxremote.access -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.port\"'
+JMX_INSERT='-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.password.file=$MAPR_HOME/conf/jmxremote.password -Dcom.sun.management.jmxremote.access.file=$MAPR_HOME/conf/jmxremote.access -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.port'
+HADOOP_JMX_INSERT="#Enable JMX for MaprMonitoring\nJMX_OPTS=\"${JMX_INSERT//\$MAPR_HOME/$MAPR_HOME}\""
+OOZIE_JMX_INSERT="${JMX_INSERT/jmxremote.authenticate=false/jmxremote.authenticate=true}=$OOZIE_JMX_PORT\""
 YARN_JMX_RM_OPT_STR='$JMX_OPTS='${RM_JMX_PORT}
 YARN_JMX_NM_OPT_STR='$JMX_OPTS='${NM_JMX_PORT}
 MAPR_HOME=${MAPR_HOME:-/opt/mapr}
@@ -778,18 +781,49 @@ function configureDrillBitsJMX() {
 # uses global CD_OOZIE_ROLE
 #############################################################################
 function configureOozieJMX() {
+    local oozie_restart=0
+    local rc0=0
+    local rc1=0
 
     if [ ${CD_OOZIE_ROLE} -eq 1 ]; then
         OOZIE_VER=$( cat $MAPR_HOME/oozie/oozieversion )
         OOZIE_HOME="$MAPR_HOME/oozie/oozie-$OOZIE_VER"
+        OOZIE_ENV="$OOZIE_HOME/conf/oozie-env.sh"
         if ! fgrep org.apache.oozie.service.MetricsInstrumentationService \
             $OOZIE_HOME/conf/oozie-site.xml  > /dev/null 2>&1 ; then
 
             cp $OOZIE_HOME/conf/oozie-site.xml $OOZIE_HOME/conf/oozie-site.xml.$CD_NOW
             sed -i -e 's/<\/configuration>/    <property>\n        <name>oozie.services.ext<\/name>\n        <value>\n            org.apache.oozie.service.MetricsInstrumentationService\n        <\/value>\n    <\/property>\n\n<\/configuration>/' \
-                $OOZIE_HOME/conf/oozie-site.xml
-            CD_RESTART_SVC_LIST="$CD_RESTART_SVC_LIST oozie"
-       fi
+               $OOZIE_HOME/conf/oozie-site.xml
+            rc0=$?
+            if [ $rc1 -eq 0 ]; then
+                oozie_restart=1
+            fi
+        fi
+        if ! grep "^export CATALINA_OPTS" ${OOZIE_ENV} | grep jmxremote.authenticate > /dev/null 2>&1; then
+            cp -p ${OOZIE_ENV} ${OOZIE_ENV}.prejmx
+
+            sed -i -e '/export CATALINA_OPTS/a export CATALINA_OPTS=\"\$CATALINA_OPTS '"${OOZIE_JMX_INSERT//\$MAPR_HOME/$MAPR_HOME}" $OOZIE_ENV
+            rc1=$?
+            if [ $rc1 -eq 0 ]; then
+                oozie_restart=1
+            fi
+         fi
+         if [ $rc0 -ne 0 -o $rc1 -ne 0 ]; then
+             logWarn "Failed to enable jmx for Oozie Server - see ${OOZIE_ENV}.tmp"
+         fi
+         if [ $secureCluster -eq 1 ]; then
+            secureVal="true"
+            oldSecureVal="false"
+         else
+            secureVal="false"
+            oldSecureVal="true"
+         fi
+         sed -i -e "s/\(jmxremote.authenticate=\)$oldSecureVal/\1$secureVal/" $OOZIE_ENV
+         oozie_restart=1
+    fi
+    if [ $oozie_restart -eq 1 ]; then
+        CD_RESTART_SVC_LIST="$CD_RESTART_SVC_LIST oozie"
     fi
 }
 
