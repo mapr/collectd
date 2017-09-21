@@ -221,7 +221,7 @@ set_kernel_opts() {
 
 check_and_setup_system() {
     if [ -f "$MAPR_TICKETFILE_LOCATION" ]; then
-        export MAPR_TICKETFILE_LOCATION=$MAPR_TICKETFILE_LOCATION
+        export MAPR_TICKETFILE_LOCATION
     fi
     set_ulimit "-n" "max open files" $APP_ULIMIT_MAX_OPEN_FILES
     set_ulimit "-l" "max locked memory" $APP_ULIMIT_MAX_LOCKED_MEMORY
