@@ -481,7 +481,7 @@ function configurejavajmxplugin()
             if [ ${CD_RM_ROLE} -eq 1 ]; then
                 enableSection MAPR_CONF_RM_REST_TAG
                 if [ $secureCluster -eq 1 ]; then
-                    configureServiceURL MAPR_CONF_RM_REST_TAG $host_name http $secureCluster $RM_SECURE_REST_PORT
+                    configureServiceURL MAPR_CONF_RM_REST_TAG $host_name https $secureCluster $RM_SECURE_REST_PORT
                 else
                     configureServiceURL MAPR_CONF_RM_REST_TAG $host_name http $secureCluster $RM_REST_PORT
                 fi
@@ -489,7 +489,7 @@ function configurejavajmxplugin()
             if [ ${CD_OOZIE_ROLE} -eq 1 ]; then
                 enableSection MAPR_CONF_OOZIE_REST_TAG
                 if [ $secureCluster -eq 1 ]; then
-                    configureServiceURL MAPR_CONF_OOZIE_REST_TAG $host_name http $secureCluster $OOZIE_SECURE_REST_PORT
+                    configureServiceURL MAPR_CONF_OOZIE_REST_TAG $host_name https $secureCluster $OOZIE_SECURE_REST_PORT
                 else
                     configureServiceURL MAPR_CONF_OOZIE_REST_TAG $host_name http $secureCluster $OOZIE_REST_PORT
                 fi
