@@ -199,7 +199,7 @@ static int hash(const char *str, int range)
  * the result of the produce request. An application must call rd_kafka_poll()
  * at regular intervals to serve queued delivery report callbacks.
  */
-static void owt_s (rd_kafka_t *rk,
+static void msgDeliveryCB (rd_kafka_t *rk,
                            const rd_kafka_message_t *rkmessage, void *opaque) {
     if (rkmessage->err != RD_KAFKA_RESP_ERR_NO_ERROR) {
         ERROR("write_maprstreams plugin: FAILURE: Message not delivered to partition.\n");
