@@ -160,6 +160,7 @@ struct wt_kafka_topic_context {
     char                        *host_tags;
     char                        *stream;
     char						*path;
+    int 						 streamsCount;
     pthread_mutex_t              lock;
 };
 
@@ -198,7 +199,7 @@ static int hash(const char *str, int range)
  * the result of the produce request. An application must call rd_kafka_poll()
  * at regular intervals to serve queued delivery report callbacks.
  */
-static void msgDeliveryCB (rd_kafka_t *rk,
+static void owt_s (rd_kafka_t *rk,
                            const rd_kafka_message_t *rkmessage, void *opaque) {
     if (rkmessage->err != RD_KAFKA_RESP_ERR_NO_ERROR) {
         ERROR("write_maprstreams plugin: FAILURE: Message not delivered to partition.\n");
@@ -580,7 +581,7 @@ static int wt_send_message (const char* key, const char* value,
 
     pthread_mutex_lock (&ctx->lock);
     // Generate a hash between 0 and M for the metric
-    hashCode = hash(key,255);
+    hashCode = hash(key,ctx->streamsCount);
     if (hashCode == 0) {
        nDigits = 1;
     } else {
@@ -851,6 +852,8 @@ static int wt_config_stream(oconfig_item_t *ci)
         cf_util_get_string(child, &tctx->path);
       else if (strcasecmp("HostTags", child->key) == 0)
         cf_util_get_string(child, &tctx->host_tags);
+      else if (strcasecmp("StreamsCount", child->key) == 0)
+        cf_util_get_int(child, &tctx->streamsCount);
       else
       {
         ERROR("write_maprstreams plugin: Invalid configuration "
