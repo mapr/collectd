@@ -177,7 +177,7 @@ DEFAULTSTREAMSPARTITIONS=5
 # need this to find the java jvm library
 export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${JAVA_HOME}/jre/lib/${J_ARCH}/server:$APP_HOME_DIR/lib/collectd:/usr/local/lib:${MAPR_HOME:-/opt/mapr}/lib
 export MAPR_DAEMON=spyglass
-
+export MALLOC_ARENA_MAX=2
 # CHOOSE BEHAVOR: Set to fit app
 if [ $APP_REQUIRE_JAVA -eq 1 -a $APP_STARTS_WITH_JAVA -eq 1 ]; then
     APP_JAVA_LIBRARY_PATH="$APP_HOME_DIR/lib"
