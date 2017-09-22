@@ -328,7 +328,8 @@ function configuremaprstreamsplugin()
     # <plugin write_maprstreams>
     #     <node>
     # 		Path "/var/mapr/mapr.monitoring/streams"
-    #           HostTags "clusterid=$clusterId clustername=$clusterName"
+    #           StreamsCount 64
+    #	        HostTags "clusterid=$clusterId clustername=$clusterName"
     #     </Node>
     # </Plugin>
     enableSection MAPR_CONF_STREAMS_TAG
