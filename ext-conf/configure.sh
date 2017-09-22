@@ -11,7 +11,7 @@
 # TODO: add support to tweak other collection facilities, like disk, fs, network
 # TODO: Need to add support to clean up old copies
 #
-# __INSTALL_ (two _ at the end) gets expanded to /opt/mapr/collectd/collectd-5.5.1 during pakcaging
+# __INSTALL_ (two _ at the end) gets expanded to __INSTALL__ during pakcaging
 # set COLLECTD_HOME explicitly if running this in a source built env.
 #
 # This script is sourced by the master configure.sh to setup collectd during
@@ -47,8 +47,9 @@ DRILLBITS_JMX_PORT=6090
 OOZIE_JMX_PORT=9010
 HBASE_MASTER_JMX_PORT=10101
 HBASE_REGION_SERVER_JMX_PORT=10102
-JMX_INSERT='#Enable JMX for MaprMonitoring\nJMX_OPTS=\"-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.port\"'
-SECURE_JMX_INSERT='#Enable JMX for MaprMonitoring\nJMX_OPTS=\"-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=true -Dcom.sun.management.jmxremote.password.file=$MAPR_HOME/conf/jmxremote.password -Dcom.sun.management.jmxremote.access.file=$MAPR_HOME/conf/jmxremote.access -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.port\"'
+JMX_INSERT='-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.password.file=$MAPR_HOME/conf/jmxremote.password -Dcom.sun.management.jmxremote.access.file=$MAPR_HOME/conf/jmxremote.access -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.port'
+HADOOP_JMX_INSERT="#Enable JMX for MaprMonitoring\nJMX_OPTS=\"${JMX_INSERT//\$MAPR_HOME/$MAPR_HOME}\""
+OOZIE_JMX_INSERT="${JMX_INSERT/jmxremote.authenticate=false/jmxremote.authenticate=true}=$OOZIE_JMX_PORT\""
 YARN_JMX_RM_OPT_STR='$JMX_OPTS='${RM_JMX_PORT}
 YARN_JMX_NM_OPT_STR='$JMX_OPTS='${NM_JMX_PORT}
 MAPR_HOME=${MAPR_HOME:-/opt/mapr}
@@ -84,10 +85,7 @@ else
 fi
 
 #TODO 
-# register 4242 port
 # try to discover jmx ports for services
-# move clusterid/name code to init.d
-
 
 #############################################################################
 # function to adjust ownership
@@ -101,7 +99,7 @@ function adjustOwnership() {
     # set correct user/group on Exec plugins
     sed -i -e 's/\(#* *Exec *\)"[a-zA-Z0-9]*:[a-zA-Z0-9]*"/\1 "'"$MAPR_USER:$MAPR_GROUP\"/" ${NEW_CD_CONF_FILE}
     # in case we could not do it from the package
-    chown -R "$MAPR_USER"$MAPR_GROUP $COLLECTD_HOME
+    chown -R "$MAPR_USER":"$MAPR_GROUP" $COLLECTD_HOME
  }
 
 #############################################################################
@@ -112,6 +110,20 @@ function enableSection()
 {
     # $1 is the sectionTag prefix we will use to determine section to uncomment
     awk -f ${AWKLIBPATH}/uncommentSection.awk -v tag="$1" \
+        ${NEW_CD_CONF_FILE} > ${NEW_CD_CONF_FILE}.tmp
+    if [[ $? -eq 0 ]]; then
+        mv ${NEW_CD_CONF_FILE}.tmp ${NEW_CD_CONF_FILE}
+    fi
+}
+
+#############################################################################
+# Function to comment a section if it isn't already
+# $1 is the sectionTag prefix we will use to determine section to comment out
+#############################################################################
+function disableSection()
+{
+    # $1 is the sectionTag prefix we will use to determine section to uncomment
+    awk -f ${AWKLIBPATH}/commentOutSection.awk -v tag="$1" \
         ${NEW_CD_CONF_FILE} > ${NEW_CD_CONF_FILE}.tmp
     if [[ $? -eq 0 ]]; then
         mv ${NEW_CD_CONF_FILE}.tmp ${NEW_CD_CONF_FILE}
@@ -181,6 +193,7 @@ function configureServiceURL()
     local secureStr
     local oldPort
     local section
+    local password
 
     section="$1"
     hostname="$2"
@@ -188,6 +201,7 @@ function configureServiceURL()
     secure="$4"
     secureStr=""
     port="$5"
+    password=""
 
     if [ $secure -eq 1 ]; then
         secureStr="s"
@@ -203,6 +217,27 @@ function configureServiceURL()
         -v replacePattern="$replacePattern" ${NEW_CD_CONF_FILE} > ${NEW_CD_CONF_FILE}.tmp
     if [[ $? -eq 0 ]]; then
         mv ${NEW_CD_CONF_FILE}.tmp ${NEW_CD_CONF_FILE}
+    fi
+    if [ "$urlType" == "jmx" ]; then
+        # we always remove it so we don't have dups and if someone updates the 
+        # jmx password file we will get the new values
+        awk -f ${AWKLIBPATH}/removeJmxLoginDetail.awk -v tag="$1" ${NEW_CD_CONF_FILE} > ${NEW_CD_CONF_FILE}.tmp
+        if [[ $? -eq 0 ]]; then
+            mv ${NEW_CD_CONF_FILE}.tmp ${NEW_CD_CONF_FILE}
+        fi
+        if [ $secure -eq 1 ]; then
+
+            if [ -f "$JMX_REMOTE_PASSWORD_FILE" ]; then
+                password=$(fgrep mapr $JMX_REMOTE_PASSWORD_FILE | cut -d' ' -f2)
+            else
+                logWarn "collectd - no jmx remote password file found"
+            fi
+            awk -f ${AWKLIBPATH}/addJmxLoginDetail.awk -v tag="$1" -v password="$password" \
+                ${NEW_CD_CONF_FILE} > ${NEW_CD_CONF_FILE}.tmp
+            if [[ $? -eq 0 ]]; then
+                mv ${NEW_CD_CONF_FILE}.tmp ${NEW_CD_CONF_FILE}
+            fi
+        fi
     fi
 }
 
@@ -317,22 +352,35 @@ function pluginEnable() {
 }
 
 #############################################################################
+# Function to disable plugin
+#
+# $1 is the name of the plugin
+#############################################################################
+function pluginDisable() {
+    sed -i -e "s/\(^LoadPlugin $1\)/#\1/;" ${NEW_CD_CONF_FILE}
+}
+
+#############################################################################
 # Function to configure mapr streams plugin
 #############################################################################
 function configuremaprstreamsplugin()
 { 
-    # first enable the plugin   
-    pluginEnable write_maprstreams
+    if [ $useStreams -eq 1 ]; then
+        # first enable the plugin   
+        pluginEnable write_maprstreams
 
-    # configure maprstreams
-    # <plugin write_maprstreams>
-    #     <node>
-    # 		Path "/var/mapr/mapr.monitoring/streams"
-    #           StreamsCount 64
-    #	        HostTags "clusterid=$clusterId clustername=$clusterName"
-    #     </Node>
-    # </Plugin>
-    enableSection MAPR_CONF_STREAMS_TAG
+        # configure maprstreams
+        # <plugin write_maprstreams>
+        #     <node>
+        # 		Path "/var/mapr/mapr.monitoring/streams"
+        #           HostTags "clusterid=$clusterId clustername=$clusterName"
+        #     </Node>
+        # </Plugin>
+        enableSection MAPR_CONF_STREAMS_TAG
+    else
+        pluginDisable write_maprstreams
+        disableSection MAPR_CONF_STREAMS_TAG
+    fi
     return 0
 }
 
@@ -343,31 +391,36 @@ function configuremaprstreamsplugin()
 #############################################################################
 function configureopentsdbplugin()
 {
-    # first enable the plugin
+    if [ $useStreams -eq 0 ]; then
+        # first enable the plugin
 
-    pluginEnable write_tsdb
+        pluginEnable write_tsdb
 
-    # configure opentsdb connections
-    # <plugin write_tsdb>
-    #     <node>
-    #             host "spy-98.qa.lab"
-    #             port "4242"
-    #             storerates false
-    #             AlwaysAppendDS false
-    #     </Node>
-    # </Plugin>
-    local tsdbhost
-    local nodesList=""
-    for i in $(echo $nodelist | sed "s/,/ /g"); do
-        tsdbhost=${i%%:*}
-        nodesList=$nodesList","$tsdbhost
-    done
-    nodesList=${nodesList:1}
-    enableSection MAPR_CONF_OT_TAG
-    awk -v hostname=$nodesList -v port=$nodeport -v plugin=write_tsdb \
-        -f ${AWKLIBPATH}/configurePlugin.awk ${NEW_CD_CONF_FILE} > ${NEW_CD_CONF_FILE}.tmp
-    if [[ $? -eq 0 ]]; then
-        mv ${NEW_CD_CONF_FILE}.tmp ${NEW_CD_CONF_FILE}
+        # configure opentsdb connections
+        # <plugin write_tsdb>
+        #     <node>
+        #             host "spy-98.qa.lab"
+        #             port "4242"
+        #             storerates false
+        #             AlwaysAppendDS false
+        #     </Node>
+        # </Plugin>
+        local tsdbhost
+        local nodesList=""
+        for i in $(echo $nodelist | sed "s/,/ /g"); do
+            tsdbhost=${i%%:*}
+            nodesList=$nodesList","$tsdbhost
+        done
+        nodesList=${nodesList:1}
+        enableSection MAPR_CONF_OT_TAG
+        awk -v hostname=$nodesList -v port=$nodeport -v plugin=write_tsdb \
+            -f ${AWKLIBPATH}/configurePlugin.awk ${NEW_CD_CONF_FILE} > ${NEW_CD_CONF_FILE}.tmp
+        if [[ $? -eq 0 ]]; then
+            mv ${NEW_CD_CONF_FILE}.tmp ${NEW_CD_CONF_FILE}
+        fi
+    else
+        pluginDisable write_tsdb
+        disableSection MAPR_CONF_OT_TAG
     fi
 
     return 0
@@ -528,44 +581,77 @@ function createFastJMXLink() {
 function configureHadoopJMX() {
     local rc1
     local rc2
+    local jmxAlreadyEnabled=0
+    local jmxSecured=0
+    local securityChanged=0
     # Enable JMX for RM and NM only if they are installed
     if [ ${CD_RM_ROLE} -eq 1 -o ${CD_NM_ROLE} -eq 1 ]; then
-        # only change the script once
-        if ! grep "^#Enable JMX for MaprMonitoring" ${YARN_BIN} > /dev/null 2>&1; then
-            cp -p ${YARN_BIN} ${YARN_BIN}.prejmx
+        if grep "^#Enable JMX for MaprMonitoring" ${YARN_BIN} > /dev/null 2>&1; then
+            jmxAlreadyEnabled=1
+        fi
+        if grep "^JMX_OPTS=" ${YARN_BIN} | grep "jmxremote.authenticate=true"> /dev/null 2>&1; then
+            jmxSecured=1
+        fi
+        if [ \( ${secureCluster} -eq 0 -a $jmxSecured -eq 1 \) -o \( ${secureCluster} -eq 1 -a $jmxSecured -eq 0 \) ]; then
+            securityChanged=1
+        fi
+
+        # only change the script once or when security config changed
+        if [ $jmxAlreadyEnabled -eq 0 -o \( $jmxAlreadyEnabled -eq 1 -a $securityChanged -eq 1 \) ]; then
+            # save backup copy fist time only
+            if [ $jmxAlreadyEnabled -eq 0 ]; then
+                cp -p ${YARN_BIN} ${YARN_BIN}.prejmx
+            fi
             if [ ${secureCluster} -eq 1 ]; then
                 if [ -f ${MAPR_HOME}/conf/jmxremote.password -a -f ${MAPR_HOME}/conf/jmxremote.access ]; then
-                    JMX_INSERT_STRING=$SECURE_JMX_INSERT
+                    JMX_INSERT_STRING=${HADOOP_JMX_INSERT/.jmxremote.authenticate=false/.jmxremote.authenticate=true}
                 else
-                    JMX_INSERT_STRING=$JMX_INSERT
+                    JMX_INSERT_STRING=$HADOOP_JMX_INSERT
                     logMsg "WARNING: Failed to enable secure jmx for NM/RM - see ${YARN_BIN}.tmp.tmp"
                 fi
             else
-                JMX_INSERT_STRING=$JMX_INSERT
+                JMX_INSERT_STRING=$HADOOP_JMX_INSERT
             fi
-            awk -v jmx_ins_after='JAVA_HEAP_MAX' -v jmx_insert="$JMX_INSERT_STRING" \
-                -v jmx_opts_pattern='"\\$COMMAND" = "resourcemanager"' \
-                -v yarn_opts="$YARN_JMX_RM_OPT_STR" \
-                -f ${AWKLIBPATH}/configureYarnJmx.awk ${YARN_BIN} > ${YARN_BIN}.tmp
-            rc1=$?
-    
-            awk  -v jmx_opts_pattern='"\\$COMMAND" = "nodemanager"' \
-                 -v yarn_opts="$YARN_JMX_NM_OPT_STR" \
-                 -f ${AWKLIBPATH}/configureYarnJmx.awk ${YARN_BIN}.tmp > ${YARN_BIN}.tmp.tmp
-            rc2=$?
-            if [ $rc1 -eq 0 -a $rc2 -eq 0 ]; then
-                mv ${YARN_BIN}.tmp.tmp ${YARN_BIN}
-                chmod a+x ${YARN_BIN}
+            if [ $jmxAlreadyEnabled -eq 0 ]; then
+                awk -v jmx_ins_after='JAVA_HEAP_MAX' -v jmx_insert="$JMX_INSERT_STRING" \
+                    -v jmx_opts_pattern='"\\$COMMAND" = "resourcemanager"' \
+                    -v yarn_opts="$YARN_JMX_RM_OPT_STR" \
+                    -f ${AWKLIBPATH}/configureYarnJmx.awk ${YARN_BIN} > ${YARN_BIN}.tmp
+                rc1=$?
+        
+                awk  -v jmx_opts_pattern='"\\$COMMAND" = "nodemanager"' \
+                     -v yarn_opts="$YARN_JMX_NM_OPT_STR" \
+                     -f ${AWKLIBPATH}/configureYarnJmx.awk ${YARN_BIN}.tmp > ${YARN_BIN}.tmp.tmp
+                rc2=$?
+                if [ $rc1 -eq 0 -a $rc2 -eq 0 ]; then
+                    mv ${YARN_BIN}.tmp.tmp ${YARN_BIN}
+                    chmod a+x ${YARN_BIN}
+                    if [ ${CD_RM_ROLE} -eq 1 ]; then
+                        CD_RESTART_SVC_LIST="$CD_RESTART_SVC_LIST resourcemanager"
+                    fi
+                    if [ ${CD_NM_ROLE} -eq 1 ]; then
+                        CD_RESTART_SVC_LIST="$CD_RESTART_SVC_LIST nodemanager"
+                    fi
+                else
+                    logWarn "Failed to enable jmx for NM/RM - see ${YARN_BIN}.tmp.tmp"
+                fi
+                rm -f ${YARN_BIN}.tmp
+            else
+                if [ $jmxSecured -eq 1 ]; then
+                    cur_auth_val="true"
+                    new_auth_val="false"
+                else
+                    cur_auth_val="false"
+                    new_auth_val="true"
+                fi
+                sed -i -e "s/\.jmxremote\.authenticate=$cur_auth_val/\.jmxremote\.authenticate=$new_auth_val/" ${YARN_BIN}
                 if [ ${CD_RM_ROLE} -eq 1 ]; then
                     CD_RESTART_SVC_LIST="$CD_RESTART_SVC_LIST resourcemanager"
                 fi
                 if [ ${CD_NM_ROLE} -eq 1 ]; then
                     CD_RESTART_SVC_LIST="$CD_RESTART_SVC_LIST nodemanager"
                 fi
-            else
-                logWarn "Failed to enable jmx for NM/RM - see ${YARN_BIN}.tmp.tmp"
             fi
-            rm -f ${YARN_BIN}.tmp
         fi
     fi
 }
@@ -617,6 +703,9 @@ function configureDrillBitsJMX() {
     local rc1
     local DRILL_VER
     local DRILL_ENV
+    local jmxAlreadyEnabled=0
+    local jmxSecured=0
+    local securityChanged=0
 
     # Enable JMX for Drill server only if they are installed
     # DRILL_JMX_OPTS="-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.port=6090"
@@ -639,18 +728,47 @@ function configureDrillBitsJMX() {
             DRILL_TAG="HADOOP_HOME="
             DRILL_AWK_SCRIPT=configureDrill18Jmx.awk
         fi
-        if ! grep "^#Enable JMX for MaprMonitoring" ${DRILL_ENV} > /dev/null 2>&1; then
-            cp -p ${DRILL_ENV} ${DRILL_ENV}.prejmx
+        if grep "^#Enable JMX for MaprMonitoring" ${DRILL_ENV} > /dev/null 2>&1; then
+            jmxAlreadyEnabled=1
+        fi
+        if grep "^DRILL_JMX_OPTS=" ${DRILL_ENV} | grep "jmxremote.authenticate=true"> /dev/null 2>&1; then
+            jmxSecured=1
+        fi
+        if [ \( ${secureCluster} -eq 0 -a $jmxSecured -eq 1 \) -o \( ${secureCluster} -eq 1 -a $jmxSecured -eq 0 \) ]; then
+            securityChanged=1
+        fi
+
+        # only change the script once or when security config changed
+        if [ $jmxAlreadyEnabled -eq 0 -o \( $jmxAlreadyEnabled -eq 1 -a $securityChanged -eq 1 \) ]; then
+            # save backup copy fist time only
+            if [ $jmxAlreadyEnabled -eq 0 ]; then
+                cp -p ${DRILL_ENV} ${DRILL_ENV}.prejmx
     
-            awk -v jmx_insert_after="$DRILL_TAG" \
-                -f ${AWKLIBPATH}/${DRILL_AWK_SCRIPT} ${DRILL_ENV} > ${DRILL_ENV}.tmp
-            rc1=$?
-            if [ $rc1 -eq 0 ]; then
-                mv ${DRILL_ENV}.tmp ${DRILL_ENV}
-                chmod a+x ${DRILL_ENV}
-                CD_RESTART_SVC_LIST="$CD_RESTART_SVC_LIST drill-bits"
+                DRILL_SECURE_JMX="false"
+                if [ $secureCluster -eq 1 ]; then
+                    DRILL_SECURE_JMX="true"
+                fi
+        
+                awk -v jmx_insert_after="$DRILL_TAG" \
+                    -f ${AWKLIBPATH}/${DRILL_AWK_SCRIPT} -vmapr_home=${MAPR_HOME} -vdrillport=$DRILLBITS_JMX_PORT -vsecurejmx=$DRILL_SECURE_JMX ${DRILL_ENV} > ${DRILL_ENV}.tmp
+                rc1=$?
+                if [ $rc1 -eq 0 ]; then
+                    mv ${DRILL_ENV}.tmp ${DRILL_ENV}
+                    chmod a+x ${DRILL_ENV}
+                    CD_RESTART_SVC_LIST="$CD_RESTART_SVC_LIST drill-bits"
+                else
+                    logWarn "Failed to enable jmx for Drill Server - see ${DRILL_ENV}.tmp"
+                fi
             else
-                logWarn "Failed to enable jmx for Drill Server - see ${DRILL_ENV}.tmp"
+                if [ $jmxSecured -eq 1 ]; then
+                    cur_auth_val="true"
+                    new_auth_val="false"
+                else
+                    cur_auth_val="false"
+                    new_auth_val="true"
+                fi
+                sed -i -e "s/\.jmxremote\.authenticate=$cur_auth_val/\.jmxremote\.authenticate=$new_auth_val/" ${DRILL_ENV}
+                CD_RESTART_SVC_LIST="$CD_RESTART_SVC_LIST drill-bits"
             fi
         fi
     fi
@@ -662,18 +780,49 @@ function configureDrillBitsJMX() {
 # uses global CD_OOZIE_ROLE
 #############################################################################
 function configureOozieJMX() {
+    local oozie_restart=0
+    local rc0=0
+    local rc1=0
 
     if [ ${CD_OOZIE_ROLE} -eq 1 ]; then
         OOZIE_VER=$( cat $MAPR_HOME/oozie/oozieversion )
         OOZIE_HOME="$MAPR_HOME/oozie/oozie-$OOZIE_VER"
+        OOZIE_ENV="$OOZIE_HOME/conf/oozie-env.sh"
         if ! fgrep org.apache.oozie.service.MetricsInstrumentationService \
             $OOZIE_HOME/conf/oozie-site.xml  > /dev/null 2>&1 ; then
 
             cp $OOZIE_HOME/conf/oozie-site.xml $OOZIE_HOME/conf/oozie-site.xml.$CD_NOW
             sed -i -e 's/<\/configuration>/    <property>\n        <name>oozie.services.ext<\/name>\n        <value>\n            org.apache.oozie.service.MetricsInstrumentationService\n        <\/value>\n    <\/property>\n\n<\/configuration>/' \
-                $OOZIE_HOME/conf/oozie-site.xml
-            CD_RESTART_SVC_LIST="$CD_RESTART_SVC_LIST oozie"
-       fi
+               $OOZIE_HOME/conf/oozie-site.xml
+            rc0=$?
+            if [ $rc1 -eq 0 ]; then
+                oozie_restart=1
+            fi
+        fi
+        if ! grep "^export CATALINA_OPTS" ${OOZIE_ENV} | grep jmxremote.authenticate > /dev/null 2>&1; then
+            cp -p ${OOZIE_ENV} ${OOZIE_ENV}.prejmx
+
+            sed -i -e '/export CATALINA_OPTS/a export CATALINA_OPTS=\"\$CATALINA_OPTS '"${OOZIE_JMX_INSERT//\$MAPR_HOME/$MAPR_HOME}" $OOZIE_ENV
+            rc1=$?
+            if [ $rc1 -eq 0 ]; then
+                oozie_restart=1
+            fi
+         fi
+         if [ $rc0 -ne 0 -o $rc1 -ne 0 ]; then
+             logWarn "Failed to enable jmx for Oozie Server - see ${OOZIE_ENV}.tmp"
+         fi
+         if [ $secureCluster -eq 1 ]; then
+            secureVal="true"
+            oldSecureVal="false"
+         else
+            secureVal="false"
+            oldSecureVal="true"
+         fi
+         sed -i -e "s/\(jmxremote.authenticate=\)$oldSecureVal/\1$secureVal/" $OOZIE_ENV
+         oozie_restart=1
+    fi
+    if [ $oozie_restart -eq 1 ]; then
+        CD_RESTART_SVC_LIST="$CD_RESTART_SVC_LIST oozie"
     fi
 }
 
@@ -767,12 +916,12 @@ function createCustomConfDirectory()
 #############################################################################
 function installWardenConfFile()
 {
-    if  ! [ -d ${MAPR_CONF_DIR} ]; then
-        mkdir -p ${MAPR_CONF_DIR} > /dev/null 2>&1
+    if  ! [ -d ${MAPR_CONF_DIR}/conf.d ]; then
+        mkdir -p ${MAPR_CONF_DIR}/conf.d > /dev/null 2>&1
     fi
 
-    cp ${COLLECTD_HOME}/etc/conf/warden.collectd.conf ${MAPR_CONF_DIR}/
-    chown $MAPR_USER:$MAPR_GROUP ${MAPR_CONF_DIR}/warden.collectd.conf
+    cp ${COLLECTD_HOME}/etc/conf/warden.collectd.conf ${MAPR_CONF_DIR}/conf.d/
+    chown $MAPR_USER:$MAPR_GROUP ${MAPR_CONF_DIR}/conf.d/warden.collectd.conf
 }
 
 #############################################################################
@@ -798,35 +947,44 @@ function cleanupOldConfFiles
 #
 #sets MAPR_USER/MAPR_GROUP/logfile
 initCfgEnv
+JMX_REMOTE_PASSWORD_FILE="${MAPR_CONF_DIR}/jmxremote.password"
 
-usage="usage: $0 [-nodeCount <cnt>] [-nodePort <port>] [-noStreams] [-EC <commonEcoOpts>] [--secure] [--customSecure] [--unsecure]  [-R] [-OS] [-OT \"ip:port,ip1:port,\"] "
+usage="usage: $0 [-nodeCount <cnt>] [-nodePort <port>] [-noStreams] [-EC <commonEcoOpts>]\n\t[--secure] [--customSecure] [--unsecure] [-R] [-OS] [-OT \"ip:port,ip1:port,\"] "
 if [ ${#} -gt 1 ]; then
     # we have arguments - run as as standalone - need to get params and
     # XXX why do we need the -o to make this work?
     OPTS=`getopt -a -o h -l EC: -l nodeCount: -l nodePort: -l noStreams -l OS -l OT: -l secure -l R -l unsecure -l customSecure -- "$@"`
     if [ $? != 0 ]; then
-        echo ${usage}
+        echo -e ${usage}
         return 2 2>/dev/null || exit 2
     fi
     eval set -- "$OPTS"
 
-    while true; do
-        case "$1" in
+    for i in "$@" ; do
+        case "$i" in
             --EC)
                 #Parse Common options
                 #Ingore ones we don't care about
+                ecOpts=($2)
                 shift 2
-                restOpts="$*"
-                eval set -- "$2 --"
-                while true ; do
-                    case "$1" in
+                restOpts="$@"
+                eval set -- "${ecOpts[@]} --"
+                for j in "$@" ; do
+                    case "$j" in
                         --OT|-OT)
                             nodelist="$2"
                             shift 2;;
+                        --R|-R)
+                            CD_CONF_ASSUME_RUNNING_CORE=1
+                            shift 1
+                            ;;
+                        --noStreams|-noStreams)
+                            useStreams=0;
+                            shift 1;;
                         --) shift
                             break;;
                         *)
-                            #Ignoring common option $1"
+                            #echo "Ignoring common option $j"
                             shift 1;;
                     esac
                 done
@@ -873,7 +1031,7 @@ if [ ${#} -gt 1 ]; then
                 secureCluster=0;
                 shift 1;;
             -h)
-                echo ${usage}
+                echo -e ${usage}
                 return 2 2>/dev/null || exit 2
                 ;;
             --)
@@ -883,13 +1041,13 @@ if [ ${#} -gt 1 ]; then
     done
 
 else
-    echo "${usage}"
+    echo -e "${usage}"
     return 2 2>/dev/null || exit 2
 fi
 
 if [ -z "$nodelist" -a $useStreams -eq 0 ]; then
     echo "-OT or -OS is required"
-    echo "${usage}"
+    echo -e "${usage}"
     return 2 2>/dev/null || exit 2
 fi
 # Make a copy, the script will work on the copy
@@ -902,11 +1060,8 @@ cp ${CD_CONF_FILE} ${NEW_CD_CONF_FILE}
 #configurezookeeperconfig
 adjustOwnership
 getRoles
-if [ $useStreams -eq 1 ]; then
-    configuremaprstreamsplugin  # this ucomments everything between the MAPR_CONF_TAGs
-else
-    configureopentsdbplugin  # this ucomments everything between the MAPR_CONF_TAGs
-fi
+configuremaprstreamsplugin  # this ucomments everything between the MAPR_CONF_TAGs
+configureopentsdbplugin  # this ucomments everything between the MAPR_CONF_TAGs
 configurejavajmxplugin
 #createFastJMXLink
 configureHadoopJMX
@@ -914,8 +1069,10 @@ configureHbaseJMX
 configureDrillBitsJMX
 configureOozieJMX
 if [ $CD_CONF_ASSUME_RUNNING_CORE -eq 1 ]; then
-    waitForCLDB
-    restartServices
+    if safeToRunMaprCLI ; then
+        waitForCLDB
+        restartServices
+    fi
 fi
 
 cp -p ${CD_CONF_FILE} ${CD_CONF_FILE}.${CD_NOW}
