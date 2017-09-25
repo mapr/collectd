@@ -170,7 +170,7 @@ case "$(uname -m)" in
 esac
 
 
-MAXSTREAMS=64
+MAXSTREAMS=2
 STREAMSROOT="/var/mapr/mapr.monitoring/streams"
 DEFAULTSTREAMSPARTITIONS=5
 
