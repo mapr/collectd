@@ -588,7 +588,7 @@ static int wt_send_message (const char* key, const char* value,
       nDigits = floor(log10(abs(hashCode))) + 1;
     }
 
-    char *stream_name = (char *) malloc( strlen(ctx->path) + nDigits + 1 );
+    char *stream_name = (char *) malloc( strlen(ctx->path) + nDigits + 2 );
     strcpy(stream_name,ctx->path);
     strcat(stream_name,"/");
     char append[nDigits];
@@ -599,7 +599,7 @@ static int wt_send_message (const char* key, const char* value,
 
     // Allocate enough space for the topic name -- "<streamname>:<fqdn>_<metric name>"
     //char *temp_topic_name = (char *) malloc( strlen(ctx->clusterId) + strlen(ctx->stream) + strlen(host) + strlen(key) + 4 );
-    char *temp_topic_name = (char *) malloc( strlen(ctx->stream) + strlen(host) + strlen(key) + 3 );
+    char *temp_topic_name = (char *) malloc( strlen(ctx->stream) + strlen(host) + strlen(key) + 4 );
     strcpy(temp_topic_name,ctx->stream);
     strcat(temp_topic_name,":");
     //strcat(temp_topic_name,ctx->clusterId);
@@ -673,10 +673,10 @@ static int wt_send_message (const char* key, const char* value,
     rd_kafka_poll(ctx->kafka,10);
     INFO("write_maprstreams plugin: PRINT message %s sent to topic %s",message,rd_kafka_topic_name(ctx->topic));
     // Free the space allocated for temp topic name and stream name
-    free(temp_topic_name);
-    free(stream_name);
+    //free(temp_topic_name);
+    //free(stream_name);
     // Set topic name and topic to null so a new topic conf is created for each messages based on the metric key
-    ctx->topic_name = NULL;
+    //ctx->topic_name = NULL;
     if (ctx->topic != NULL)
       rd_kafka_topic_destroy(ctx->topic);
     ctx->topic = NULL;
