@@ -75,6 +75,29 @@
 #define WINDOW_MINUTE_MS (60*1000)
 #define MAX_RECORDS_PER_ITER (10*1000)
 
+int log_level = 0;
+int log_file_set = 0;
+char log_conf[PATH_MAX+1];
+time_t log_mtime;
+
+#define TraceOrError(fmt, ...)  \
+  do {                          \
+    if (log_level > 1) {        \
+      ERROR(fmt, ## __VA_ARGS__); \
+     } else {                    \
+      DEBUG(fmt, ## __VA_ARGS__);\
+    }                           \
+  } while(0);
+
+#define InfoOrError(fmt, ...)  \
+  do {                          \
+    if (log_level) {        \
+      ERROR(fmt, ## __VA_ARGS__); \
+     } else {                    \
+      INFO(fmt, ## __VA_ARGS__);\
+    }                           \
+  } while(0);
+
 /* Helpers go here */
 inline uint64_t
 murmurhash64(const void * key, int len)
@@ -264,7 +287,7 @@ typedef struct {
   VNHTEntry_t **buckets;
 
   VNHTEntry_t *freeList;
-  int fentries;
+  int aEntries;
 } VolumeNameHashTable;
 
 static int
@@ -287,7 +310,7 @@ vnhtInit(VolumeNameHashTable *tbl, int nbuckets, int limit)
   }
 
   tbl->freeList = NULL;
-  tbl->fentries = 0;
+  tbl->aEntries = 0;
 }
 
 static void
@@ -302,12 +325,12 @@ vnhtInitEntry(VNHTEntry_t *entry)
 static void
 vnhtPutEntry(VolumeNameHashTable *tbl, VNHTEntry_t *entry)
 {
-  if (tbl->fentries < 1000) {
+  if (tbl->aEntries < 1000) {
     entry->fnext = tbl->freeList;
     tbl->freeList = entry;
   } else {
     free(entry);
-    tbl->fentries--;
+    tbl->aEntries--;
   }
 }
 
@@ -323,7 +346,7 @@ vnhtGetEntry(VolumeNameHashTable *tbl)
   } else {
     entry = (VNHTEntry_t*)malloc(sizeof(VNHTEntry_t));
     vnhtInitEntry(entry);
-    tbl->fentries++;
+    tbl->aEntries++;
   }
   return entry;
 }
@@ -439,10 +462,10 @@ typedef struct TimestampHashTable_ {
   tsEntry_t **buckets;
 
   MHTEntry *freeMetricList;
-  int fMetricentries;
+  int aMetricentries;
 
   tsEntry_t *freeList;
-  int fentries;
+  int aEntries;
 } TimestampHashTable;
 
 static int
@@ -490,12 +513,12 @@ populateMHTEntry(MHTEntry *entry, uint64_t ts, int volId,
 static inline void
 mhtPutEntry(TimestampHashTable *tbl, MHTEntry *entry)
 {
-  if (tbl->fMetricentries < 10000) {
+  if (tbl->aMetricentries < 10000) {
     entry->fnext = tbl->freeMetricList;
     tbl->freeMetricList = entry;
   } else {
     free(entry);
-    tbl->fMetricentries--;
+    tbl->aMetricentries--;
   }
 }
 
@@ -512,7 +535,7 @@ mhtGetEntry(TimestampHashTable *tbl)
   } else {
     entry = (MHTEntry*)malloc(sizeof(MHTEntry));
     initMHTEntry(entry);
-    tbl->fMetricentries++;
+    tbl->aMetricentries++;
   }
   return entry;
 }
@@ -545,9 +568,9 @@ initTimestampHashTable(TimestampHashTable *tbl, int nbuckets,
     tbl->buckets[i] = NULL;
   }
 
-  tbl->fentries = 0;
+  tbl->aEntries = 0;
+  tbl->aMetricentries = 0;
   tbl->freeList = NULL;
-  tbl->fMetricentries = 0;
   tbl->freeMetricList = NULL;
 }
 
@@ -557,12 +580,12 @@ tshtPutEntry(TimestampHashTable *tbl, tsEntry_t *entry)
   MetricsHashTable *mTbl = &(entry->metricsTable);
   assert(mTbl->nentries == 0);
 
-  if (tbl->fentries < 1000) {
+  if (tbl->aEntries < 1000) {
     entry->fnext = tbl->freeList;
     tbl->freeList = entry;
   } else {
     free(entry);
-    tbl->fentries--;
+    tbl->aEntries--;
   }
 }
 
@@ -579,7 +602,7 @@ tshtGetEntry(TimestampHashTable *tbl)
     entry = (tsEntry_t*)malloc(sizeof(tsEntry_t));
     initTsEntry(entry);
     initMetricsHashTable(&entry->metricsTable, tbl->volbuckets); 
-    tbl->fentries++;
+    tbl->aEntries++;
   }
   return entry;
 }
@@ -667,7 +690,7 @@ typedef struct {
   FMHTEntry_t **buckets;
 
   FMHTEntry_t *freeList;
-  int fentries;
+  int aEntries;
 } FileMetricsHashTable;
 
 static void
@@ -686,7 +709,7 @@ fmhtInit(FileMetricsHashTable *tbl, int nbuckets, int maxlimit)
   }
 
   tbl->freeList = NULL;
-  tbl->fentries = 0;
+  tbl->aEntries = 0;
 }
 
 static void
@@ -705,12 +728,12 @@ fmhtInitEntry(FMHTEntry_t *entry)
 static void
 fmhtPutEntry(FileMetricsHashTable *tbl, FMHTEntry_t *entry)
 {
-  if (tbl->fentries < 1000) {
+  if (tbl->aEntries < 1000) {
     entry->fnext = tbl->freeList;
     tbl->freeList = entry;
   } else {
     free(entry);
-    tbl->fentries--;
+    tbl->aEntries--;
   }
 }
 
@@ -725,7 +748,7 @@ fmhtGetEntry(FileMetricsHashTable *tbl)
     entry->fnext = NULL;
   } else {
     entry = (FMHTEntry_t*)malloc(sizeof(FMHTEntry_t));
-    tbl->fentries++;
+    tbl->aEntries++;
   }
   fmhtInitEntry(entry);
   return entry;
@@ -928,7 +951,7 @@ syncOffset(hdfsFS fs, FMHTEntry_t *entry)
       return -1;
     }
 
-    INFO("Dispatched file %s offset to %lu", entry->filepath,
+    InfoOrError("Dispatched file %s offset to %lu", entry->filepath,
          entry->curOffset);
 
     entry->dispatchedOffset = entry->curOffset;
@@ -972,7 +995,7 @@ processBuffer(TimestampHashTable *tbl, char *buffer, int64_t bufLen,
   while (*buffer != '\0') {
     if (*buffer == '}') {
       if (ts != -1 && volId != -1) {
-        DEBUG("ts %lu, vid %u, RDT %u, RDL %u, RDO %u, WRT %u, WRL %u, WRO %u\n",
+        TraceOrError("ts %lu, vid %u, RDT %u, RDL %u, RDO %u, WRT %u, WRL %u, WRO %u\n",
              ts, volId, values[MetricsOpReadThroughput],
              values[MetricsOpReadLatency], values[MetricsOpReadIOps],
              values[MetricsOpWriteThroughput], values[MetricsOpWriteLatency],
@@ -1080,7 +1103,7 @@ processBuffer(TimestampHashTable *tbl, char *buffer, int64_t bufLen,
   }
 
 end:
-  INFO("minTs %lu maxTs %lu readAgain %d ret %d records %d", *minTs, *maxTs, 
+  InfoOrError("minTs %lu maxTs %lu readAgain %d ret %d records %d", *minTs, *maxTs, 
         *readAgain, ret, *records); 
   return ret;
 }
@@ -1123,7 +1146,7 @@ readMetrics(TimestampHashTable *tbl, hdfsFS fs, FMHTEntry_t *fmhtEntry,
      */
     readBytes = hdfsPread(fs, file, fmhtEntry->curOffset, buffer, READ_SIZE);
     if (readBytes <= 0) {
-      INFO("hdfsPread failed for file: %s, offset: %ld, errno %d readBytes %d",
+      InfoOrError("hdfsPread failed for file: %s, offset: %ld, errno %d readBytes %d",
            fmhtEntry->filepath, fmhtEntry->curOffset, errno, readBytes);
       if (readBytes < 0) {
         totalRead = -errno;
@@ -1161,7 +1184,7 @@ readMetrics(TimestampHashTable *tbl, hdfsFS fs, FMHTEntry_t *fmhtEntry,
       goto end;
     }
 
-    INFO("Read audit file %s curoffset %lu consumed %d readBytes %d\n",
+    InfoOrError("Read audit file %s curoffset %lu consumed %d readBytes %d\n",
          fmhtEntry->filepath, fmhtEntry->curOffset, j + ret,
          readBytes);
 
@@ -1297,7 +1320,7 @@ processAuditFiles(FileMetricsHashTable *fmht, TimestampHashTable *tsTbl,
     fmhtEntry = pickFile(fmht, fs, fileList, totalFiles, &fileid);
     if (fmhtEntry) {
       ret = readMetrics(tsTbl, fs, fmhtEntry, &fileList[fileid]);
-      INFO("Picked audit file %s for processing, curOffset %lu size %lu "
+      InfoOrError("Picked audit file %s for processing, curOffset %lu size %lu "
            "consumed %d", fileList[fileid].mName, fmhtEntry->curOffset,
            fileList[fileid].mSize, ret);
       if (ret <= 0) {
@@ -1391,7 +1414,7 @@ readAndCacheVolumeNames(hdfsFS fs, FMHTEntry_t *fmhtEntry)
         if (volName == NULL) {
           WARNING("Bad line. Volume name not found.");
         } else {
-          INFO("Adding volume %u with name %s to cache ", volId, volName);
+          InfoOrError("Adding volume %u with name %s to cache ", volId, volName);
           vnhtAdd(&vnht, volId, volName);
         }
       }
@@ -1432,7 +1455,7 @@ processLogFiles(FileMetricsHashTable *fmht, hdfsFS fs, hdfsFileInfo *fileList,
        */
       fmhtEntry = fmhtLookupOrInsert(fmht, fileList[i].mName, &created, LOG);
       if (fmhtEntry->curOffset < fileList[i].mSize) {
-        INFO("Processing log file %s offset %lu size %lu", fileList[i].mName,
+        InfoOrError("Processing log file %s offset %lu size %lu", fileList[i].mName,
               fmhtEntry->curOffset, fileList[i].mSize);
         readAndCacheVolumeNames(fs, fmhtEntry);
       }
@@ -1507,7 +1530,7 @@ getMetricsPath(char *metricsDir)
   sprintf(&metricsDir[0], "%s/%s/%s", METRICS_PATH_PREFIX, h->h_name,
            METRICS_DIRNAME);
 
-  DEBUG("Metrics path is %s ", metricsDir);
+  TraceOrError("Metrics path is %s ", metricsDir);
   return 0;
 }
 
@@ -1553,12 +1576,60 @@ compare(const void *x, const void *y)
   return a->mLastMod - b->mLastMod;
 }
 
+/* TODO: Save mtime and don't read again
+ * and again.
+ */
+int
+checkLogConfiguration(void)
+{
+  char buf[2];
+  int fd;
+  int err;
+  int ret;
+  int level;
+  struct stat stbuf;
+
+  if (log_file_set) {
+    err = stat(log_conf, &stbuf);
+    if (err) {
+      return -1;
+    }
+
+    if (log_mtime == stbuf.st_mtime) {
+      return 0;
+    }
+      
+    fd = open(log_conf, O_RDONLY);
+    if (fd == -1) {
+      return -1;
+    }
+
+    ret = read(fd, buf, 1);
+    if (ret <= 0) {
+      close(fd);
+      return -1;
+    }
+
+    buf[1] = '\0';
+    level = atoi(buf);
+    if (level < 3) {
+      log_level = level;
+    }
+
+    log_mtime = stbuf.st_mtime;
+    close(fd);
+  }
+
+  return 0;
+}
+
 static int
 vm_read(void)
 {
   char metricsDir[1024];
   int err = 0;
   int i = 0;
+  int ret = 0;
   int numEntries = 0;
 
   /* Let's make sure only one thread runs at a time */
@@ -1574,22 +1645,27 @@ vm_read(void)
     dispatch_ = false;
   }
 
+  checkLogConfiguration();
+
   /* Let's try to reuse the fs handle */
   if (!fs) {
     fs = connectCluster();
     if (!fs) {
-      return -1;
+      ret = -1;
+      goto end;
     }
   }
 
   err = getMetricsPath(metricsDir);
   if (err) {
-    return -1;
+    ret = -1;
+    goto end;
   }
 
   err = directoryExists(fs, metricsDir);
   if (err) {
-    return -1;
+    ret = -1;
+    goto end;
   }
 
   /* Volume name cache could be holding too many volume name entries
@@ -1653,8 +1729,11 @@ vm_read(void)
   }
 
   assert(head == NULL);
+  ret = 0;
+
+end:
   readInProgress_ = 0;
-  return 0;
+  return ret;
 }
 
 //TODO: can we take the aggregation time from the config? - Sriram
@@ -1662,6 +1741,25 @@ vm_read(void)
 //that meaningful client config can be read from here
 static int
 vm_config(oconfig_item_t *ci) {
+  int i;
+
+  for (i=0; i<ci->children_num; i++) {
+    oconfig_item_t *c = ci->children + i;
+    if (strcasecmp(c->key, "Log_Config_File") == 0) {
+      if ((c->values_num != 1)
+          || (OCONFIG_TYPE_STRING != c->values[0].type)) {
+        ERROR("mapr_volmetrics plugin: Config.Log set incorrectly");
+      } else {
+        INFO("mapr_volmetrics: Logging can be configured through %s",
+              c->values[0].value.string);
+        strncpy(log_conf, c->values[0].value.string, PATH_MAX);
+        log_conf[PATH_MAX-1] = '\0';
+        log_file_set = 1;
+        break;
+      }
+    }
+  }
+
   return 0;
 }
 

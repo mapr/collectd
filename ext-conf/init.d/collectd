@@ -157,6 +157,7 @@ APP_LOCK_FILE="$APP_LOCK_DIR/$APP"
 APP_LOG_FILE="$APP_LOG_DIR/$APP.log"                   # use this for apps own logging
 APP_LOG_START_FILE="$APP_LOG_DIR/${APP}_startup.log"   # use this for startup logging
 APP_PID_FILE="$APP_PID_DIR/$APP.pid"
+APP_LOG_CONF="$APP_CONF_DIR/log.conf"
 
 # CHOOSE BEHAVOR: Set to fit app
 APP_OPTS_1=" -P $APP_PID_FILE -C $APP_CONF_FILE"
@@ -438,6 +439,8 @@ start() {
     # Manage logs
     rotate_log "$APP_LOG_START_FILE"
     touch "$APP_LOG_START_FILE"
+    touch "$APP_LOG_CONF"
+    echo "0" > $APP_LOG_CONF
 
     if [ $APP_ROTATES_OWN_LOG_FILE -eq 0 ]; then
         rotate_log "$APP_LOG_FILE"
@@ -536,6 +539,7 @@ stop() {
         echo "$APP not running"
     fi
     false
+    echo "0" > $APP_LOG_CONF
 }
 
 if [ $APP_DOES_NOT_MANAGE_PID_FILE -eq 1 -a $APP_DAEMONIZES -eq 1 ]; then
