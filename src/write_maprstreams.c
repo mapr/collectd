@@ -599,7 +599,7 @@ static int wt_send_message (const char* key, const char* value,
 
     // Allocate enough space for the topic name -- "<streamname>:<fqdn>_<metric name>"
     //char *temp_topic_name = (char *) malloc( strlen(ctx->clusterId) + strlen(ctx->stream) + strlen(host) + strlen(key) + 4 );
-    char *temp_topic_name = (char *) malloc( strlen(ctx->stream) + strlen(host) + strlen(key) + 4 );
+    char *temp_topic_name = (char *) malloc( strlen(ctx->stream) + strlen(host) + strlen(key) + 3 );
     strcpy(temp_topic_name,ctx->stream);
     strcat(temp_topic_name,":");
     //strcat(temp_topic_name,ctx->clusterId);
