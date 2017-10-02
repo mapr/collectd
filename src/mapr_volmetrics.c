@@ -64,6 +64,7 @@
 #define HASH_SEED 0x7fffffff
 
 #define METRICS_PATH_PREFIX "/var/mapr/local"
+#define JSON_SUFFIX ".json"
 #define PATH_MAX 4096
 #define MAX_READ_SIZE (16*1024*1024)
 #define READ_SIZE (128*1024)
@@ -153,6 +154,18 @@ startsWith(char *src, char *pattern, int plen)
   return (i == plen);
 }
 
+int
+hasJsonSuffix(char *path)
+{
+  char *str = strstr(path, JSON_SUFFIX);
+
+  if (str && str[strlen(JSON_SUFFIX)] == '\0') {
+    return 1;
+  }
+
+  return 0;
+}
+
 static inline char*
 getNextDigit(char *record, char *end)
 {
@@ -191,7 +204,7 @@ isMetricsLogFile(hdfsFileInfo *fileInfo)
 
   char *filename = getFileName(fileInfo->mName);
   if (startsWith(filename, (char *) VOLLIST_FILE_PREFIX,
-      VOLLIST_FILE_PREFIX_LEN)) {
+      VOLLIST_FILE_PREFIX_LEN) && hasJsonSuffix(filename)) {
     return 1;
   }
 
@@ -1711,6 +1724,8 @@ vm_read(void)
         j++; 
       }
     }
+
+    assert(j == totalFiles);
 
     qsort(fileList, totalFiles, sizeof(hdfsFileInfo), compare);
     processLogFiles(&fmht, fs, fileList, totalFiles);
