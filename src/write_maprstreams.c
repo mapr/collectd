@@ -226,27 +226,14 @@ static void wt_kafka_topic_context_free(void *p) /* {{{ */
     rd_kafka_topic_destroy(ctx->topic);
   if (ctx->conf != NULL)
     rd_kafka_topic_conf_destroy(ctx->conf);
-  if (ctx->kafka_conf != NULL)
-    rd_kafka_conf_destroy(ctx->kafka_conf);
+// Bug - 25911
+//  if (ctx->kafka_conf != NULL)
+//    rd_kafka_conf_destroy(ctx->kafka_conf);
   if (ctx->kafka != NULL)
     rd_kafka_destroy(ctx->kafka);
 
     sfree(ctx);
 } /* }}} void wt_kafka_topic_context_free */
-
-//static int32_t wt_kafka_partition(const rd_kafka_topic_t *rkt,
-//                               const void *keydata, size_t keylen,
-//                               int32_t partition_cnt, void *p, void *m)
-//{
-//    uint32_t key = *((uint32_t *)keydata );
-//    uint32_t target = key % partition_cnt;
-//    int32_t   i = partition_cnt;
-//
-//    while (--i > 0 && !rd_kafka_topic_partition_available(rkt, target)) {
-//        target = (target + 1) % partition_cnt;
-//    }
-//    return target;
-//}
 
 static int wt_kafka_handle(struct wt_kafka_topic_context *ctx) /* {{{ */
 {
@@ -598,17 +585,13 @@ static int wt_send_message (const char* key, const char* value,
     INFO("write_maprstreams plugin: Stream Name is %s for key %s",ctx->stream,key);
 
     // Allocate enough space for the topic name -- "<streamname>:<fqdn>_<metric name>"
-    //char *temp_topic_name = (char *) malloc( strlen(ctx->clusterId) + strlen(ctx->stream) + strlen(host) + strlen(key) + 4 );
     char *temp_topic_name = (char *) malloc( strlen(ctx->stream) + strlen(host) + strlen(key) + 3 );
     strcpy(temp_topic_name,ctx->stream);
     strcat(temp_topic_name,":");
-    //strcat(temp_topic_name,ctx->clusterId);
-    //strcat(temp_topic_name,"_");
     strcat(temp_topic_name,host);
     strcat(temp_topic_name,"_");
     strcat(temp_topic_name, key);
     ctx->topic_name = temp_topic_name;
-    //strcpy(ctx->topic_name,temp_topic_name);
     //INFO("write_maprstreams plugin for key %s stream name %s ",key,ctx->stream);
     //INFO("write_maprstreams plugin: topic name %s ",ctx->topic_name);
     // Create conf because it gets set to NULL in wt_kafka_handle call below
@@ -620,7 +603,6 @@ static int wt_send_message (const char* key, const char* value,
     }
     // Get a handle to kafka topics and kafka conf
     status = wt_kafka_handle(ctx);
-    //pthread_mutex_unlock (&ctx->lock);
     if( status != 0 )
       return status;
     bzero(message, sizeof(message));
@@ -837,8 +819,9 @@ static int wt_config_stream(oconfig_item_t *ci)
       rd_kafka_conf_set_log_cb(tctx->kafka_conf, wt_kafka_log);
 #endif
 
-      rd_kafka_conf_destroy(tctx->kafka_conf);
-      tctx->kafka_conf = NULL;
+      // Bug - 25911
+      //rd_kafka_conf_destroy(tctx->kafka_conf);
+      //tctx->kafka_conf = NULL;
 
       INFO ("write_maprstreams plugin: created KAFKA handle : %s", rd_kafka_name(tctx->kafka));
 
@@ -869,9 +852,6 @@ static int wt_config_stream(oconfig_item_t *ci)
       clearContext(tctx);
 
     }
-    // TODO - Remove this because it is optional
-    //rd_kafka_topic_conf_set_partitioner_cb(tctx->conf, wt_kafka_partition);
-    //rd_kafka_topic_conf_set_opaque(tctx->conf, tctx);
 
     ssnprintf(callback_name, sizeof(callback_name), "write_maprstreams/%s",
         tctx->path != NULL ? tctx->path : WT_DEFAULT_PATH);
