@@ -676,7 +676,8 @@ static int wt_send_message (const char* key, const char* value,
     free(temp_topic_name);
     free(stream_name);
     // Set topic name and topic to null so a new topic conf is created for each messages based on the metric key
-    //ctx->topic_name = NULL;
+    ctx->topic_name = NULL;
+    ctx->stream = NULL;
     if (ctx->topic != NULL)
       rd_kafka_topic_destroy(ctx->topic);
     ctx->topic = NULL;
