@@ -224,8 +224,8 @@ static void wt_kafka_topic_context_free(void *p) /* {{{ */
     sfree(ctx->host_tags);
   if (ctx->topic != NULL)
     rd_kafka_topic_destroy(ctx->topic);
-  if (ctx->conf != NULL)
-    rd_kafka_topic_conf_destroy(ctx->conf);
+//  if (ctx->conf != NULL)
+//    rd_kafka_topic_conf_destroy(ctx->conf);
 // Bug - 25911
 //  if (ctx->kafka_conf != NULL)
 //    rd_kafka_conf_destroy(ctx->kafka_conf);
@@ -255,8 +255,8 @@ static int wt_kafka_handle(struct wt_kafka_topic_context *ctx) /* {{{ */
         return errno;
       }
 
-      rd_kafka_topic_conf_destroy(ctx->conf);
-      ctx->conf = NULL;
+      //rd_kafka_topic_conf_destroy(ctx->conf);
+      //ctx->conf = NULL;
 
       INFO("write_maprstreams plugin: handle created for topic : %s", rd_kafka_topic_name(ctx->topic));
     }
