@@ -229,6 +229,9 @@ static void wt_kafka_topic_context_free(void *p) /* {{{ */
 // Bug - 25911
 //  if (ctx->kafka_conf != NULL)
 //    rd_kafka_conf_destroy(ctx->kafka_conf);
+  /* Wait for messages to be delivered */
+  while (rd_kafka_outq_len(ctx->kafka) > 0)
+    rd_kafka_poll(ctx->kafka, 100);
   if (ctx->kafka != NULL)
     rd_kafka_destroy(ctx->kafka);
 
