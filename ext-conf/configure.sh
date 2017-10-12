@@ -840,6 +840,9 @@ function isMaprServiceRunning() {
    myHname=$1
    serviceNameToCheck=$2
  
+   if [ $secureCluster -eq 1 ] && [ -f "${MAPR_HOME}/conf/mapruserticket" ]; then
+       export MAPR_TICKETFILE_LOCATION="${MAPR_HOME}/conf/mapruserticket"
+   fi
 
    # using $NF with awk instead of $5 because memallocated column doesn't always
    # contain data
