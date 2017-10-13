@@ -204,7 +204,7 @@ isMetricsLogFile(hdfsFileInfo *fileInfo)
 
   char *filename = getFileName(fileInfo->mName);
   if (startsWith(filename, (char *) VOLLIST_FILE_PREFIX,
-      VOLLIST_FILE_PREFIX_LEN) && hasJsonSuffix(filename)) {
+      VOLLIST_FILE_PREFIX_LEN)) {
     return 1;
   }
 
@@ -220,7 +220,8 @@ isMetricsAuditFile(hdfsFileInfo *fileInfo)
  
   char *filename = getFileName(fileInfo->mName);
   if (startsWith(filename, (char *) METRICS_FILE_PREFIX,
-                 METRICS_FILE_PREFIX_LEN)) {
+                 METRICS_FILE_PREFIX_LEN)
+      && hasJsonSuffix(filename)) {
     return 1;
   }
 
@@ -791,6 +792,50 @@ fmhtPurgeEntries(FileMetricsHashTable *tbl, filetype_t type)
           tbl->logfiles--;
         } else {
           tbl->auditfiles--;
+        }
+      } else {
+        prev = entry;
+      }
+      entry = next;
+    }
+  }
+}
+
+static int
+shouldPurgeAuditEntries(FileMetricsHashTable *fmht, TimestampHashTable *tsTbl)
+{
+  if (fmht->auditfiles > fmht->maxlimit) {
+    return true;
+  } else if (tsTbl->metricEntries > METRICS_THRESHOLD) {
+    return true;
+  }
+  return false;
+}
+
+static void
+fmhtPurgeAuditEntries(FileMetricsHashTable *fmht)
+{
+  int i;
+  FMHTEntry_t *prev = NULL;
+  FMHTEntry_t *entry = NULL;
+  FMHTEntry_t *next = NULL;
+
+  for (i=0; i<fmht->nbuckets; i++) {
+    entry = fmht->buckets[i];
+    while (entry) {
+      next = entry->next;
+      if (entry->type == AUDIT) {
+        if (entry->dispatchedOffset == entry->curOffset) {
+          if (!prev) {
+            fmht->buckets[i] = next;
+          } else {
+            prev->next = next;
+          }
+          entry->next = NULL;
+          fmhtPutEntry(fmht, entry);
+          fmht->auditfiles--;
+        } else {
+          prev = entry;
         }
       } else {
         prev = entry;
@@ -1476,36 +1521,6 @@ processLogFiles(FileMetricsHashTable *fmht, hdfsFS fs, hdfsFileInfo *fileList,
   }
 }
 
-static int
-shouldPurgeFMHT(FileMetricsHashTable *fmht, TimestampHashTable *tsTbl)
-{
-  if (fmht->auditfiles > fmht->maxlimit) {
-    return true;
-  } else if (tsTbl->metricEntries > METRICS_THRESHOLD) {
-    return true;
-  }
-  return false;
-}
-
-static void
-PurgeFMHTCache(FileMetricsHashTable *fmht)
-{
-  int i;
-  FMHTEntry_t *entry = NULL;
-  FMHTEntry_t *next = NULL;
-
-  for (i=0; i<fmht->nbuckets; i++) {
-    entry = fmht->buckets[i];
-    while (entry) {
-      next = entry->next;
-      if (entry->dispatchedOffset == entry->curOffset) {
-        fmhtPutEntry(fmht, entry);
-      }
-      entry = next;
-    }
-  }
-}
-
 static void
 PurgeVolumeCache(void)
 {
@@ -1739,8 +1754,8 @@ vm_read(void)
     hdfsFreeFileInfo(dirList, numEntries);
   }
 
-  if (shouldPurgeFMHT(&fmht, &tsht)) {
-    PurgeFMHTCache(&fmht);
+  if (shouldPurgeAuditEntries(&fmht, &tsht)) {
+    fmhtPurgeAuditEntries(&fmht);
   }
 
   assert(head == NULL);
