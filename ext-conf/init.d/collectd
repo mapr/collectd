@@ -111,7 +111,7 @@ APP_WARDEN_DAEMON_CONF_FILE="$MAPR_HOME/conf/daemon.conf"
 MAPR_CLUSTERS_CONF="${MAPR_HOME}/conf/mapr-clusters.conf"
 MAPR_APP_PID_FILE="$MAPR_HOME/pid/$APP.pid"
 CLUSTER_ID_FILE="${MAPR_HOME}/conf/clusterid"
-MAPR_TICKETFILE_LOCATION="$MAPR_HOME/conf/mapruserticket"
+export MAPR_TICKETFILE_LOCATION="$MAPR_HOME/conf/mapruserticket"
 
 # APP_SYSTEM_PARAMS: Set to fit app
 APP_ULIMIT_MAX_OPEN_FILES=""
@@ -205,6 +205,7 @@ set_ulimit() {
                 ulimit -n $ulim_val
             else
                 echo "Must be root to alter ulimit for $ulim_msg"
+                rm -f "$APP_LOCK_FILE" "$APP_PID_FILE" "$MAPR_APP_PID_FILE" >/dev/null 2>&1
                 exit 1
             fi
         fi
@@ -305,7 +306,7 @@ createStreams() {
    local count=0
    if ! hadoop fs -stat / > /dev/null 2>&1 ; then
        echo "not starting because hdfs not available yet"
-       rm -f $APP_PID_FILE $MAPR_APP_PID_FILE $APP_LOCK_FILE
+       rm -f "$APP_LOCK_FILE" "$APP_PID_FILE" "$MAPR_APP_PID_FILE" >/dev/null 2>&1
        exit 1
    fi
       
@@ -321,6 +322,7 @@ createStreams() {
    done
    if [ $count -ge $RETRY_COUNT ]; then
        echo "Streams Volume not available yet"
+       rm -f "$APP_LOCK_FILE" "$APP_PID_FILE" "$MAPR_APP_PID_FILE" >/dev/null 2>&1
        exit 1
    fi
 
@@ -338,6 +340,7 @@ function configureClusterId() {
         return 0
     else
         echo "Cluster is not configured yet - not starting"
+        rm -f "$APP_LOCK_FILE" "$APP_PID_FILE" "$MAPR_APP_PID_FILE" >/dev/null 2>&1
         exit 1
     fi
 }
@@ -354,6 +357,7 @@ function configureClusterName() {
         return 0
     else
         echo "Cluster is not configured yet - not starting"
+        rm -f "$APP_LOCK_FILE" "$APP_PID_FILE" "$MAPR_APP_PID_FILE" >/dev/null 2>&1
         exit 1
     fi
 }
@@ -469,7 +473,7 @@ start() {
     # Verify config file
     if ! $APP_DAEMON -t -C "$APP_CONF_FILE" > $APP_LOG_DIR/$APP.config_verification 2>&1 ; then
         echo "not starting due to configuration error"
-        rm -f $APP_PID_FILE $MAPR_APP_PID_FILE $APP_LOCK_FILE
+        rm -f "$APP_LOCK_FILE" "$APP_PID_FILE" "$MAPR_APP_PID_FILE" >/dev/null 2>&1
         exit 1
     fi
 
@@ -513,7 +517,7 @@ start() {
     if [ $APP_SCRIPT_DEBUG -eq 1 ]; then
         echo "$(date): removing $APP_PID_FILE($APP_PID) and $MAPR_APP_PID_FILE" >> "$APP_SCRIPT_DEBUG_FILE"
     fi
-    rm -f $APP_PID_FILE $MAPR_APP_PID_FILE $APP_LOCK_FILE
+    rm -f "$APP_LOCK_FILE" "$APP_PID_FILE" "$MAPR_APP_PID_FILE" >/dev/null 2>&1
     false
 }
 
@@ -523,8 +527,10 @@ status() {
         true && return
     elif [ -n "$APP_PID" ]; then
         echo "$APP ($APP_PID) not running"
+        rm -f "$APP_LOCK_FILE" "$APP_PID_FILE" "$MAPR_APP_PID_FILE" >/dev/null 2>&1
     else
         echo "$APP not running"
+        rm -f "$APP_LOCK_FILE" "$APP_PID_FILE" "$MAPR_APP_PID_FILE" >/dev/null 2>&1
     fi
     false
 }
@@ -548,8 +554,10 @@ stop() {
         true && return
     elif [ -n "$APP_PID" ]; then
         echo "$APP ($APP_PID) not running"
+        rm -f "$APP_LOCK_FILE" "$APP_PID_FILE" "$MAPR_APP_PID_FILE" >/dev/null 2>&1
     else
         echo "$APP not running"
+        rm -f "$APP_LOCK_FILE" "$APP_PID_FILE" "$MAPR_APP_PID_FILE" >/dev/null 2>&1
     fi
     false
     echo "0" > $APP_LOG_CONF
