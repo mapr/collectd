@@ -777,6 +777,7 @@ fmhtPurgeEntries(FileMetricsHashTable *tbl, filetype_t type)
   FMHTEntry_t *next = NULL;
 
   for (i=0; i<tbl->nbuckets; ++i) {
+    prev = NULL;
     entry = tbl->buckets[i];
     while (entry) {
       next = entry->next;
@@ -821,6 +822,7 @@ fmhtPurgeAuditEntries(FileMetricsHashTable *fmht)
   FMHTEntry_t *next = NULL;
 
   for (i=0; i<fmht->nbuckets; i++) {
+    prev = NULL;
     entry = fmht->buckets[i];
     while (entry) {
       next = entry->next;
@@ -1474,7 +1476,11 @@ readAndCacheVolumeNames(hdfsFS fs, FMHTEntry_t *fmhtEntry)
           WARNING("Bad line. Volume name not found.");
         } else {
           InfoOrError("Adding volume %u with name %s to cache ", volId, volName);
-          vnhtAdd(&vnht, volId, volName);
+          if (strcmp(volName, "(null)")) {
+            vnhtAdd(&vnht, volId, volName);
+          } else {
+            ERROR("Found invalid volume name %s ", volName);
+          }
         }
       }
       line = strtok_r(NULL, "\n", &lineSavePtr);
