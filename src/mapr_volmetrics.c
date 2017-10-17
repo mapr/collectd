@@ -998,24 +998,25 @@ dispatchMetrics(TimestampHashTable *tsTbl, tsEntry_t *tsEntry)
 static int
 syncOffset(hdfsFS fs, FMHTEntry_t *entry)
 {
+  int err = 0;
   char buf[32];
+
   if (entry->dispatchedOffset != entry->curOffset) {
     sprintf(&buf[0], "%ld", entry->curOffset);
-    int err = hdfsSetXattr(fs, entry->filepath, XATTR_NAME,
+    err = hdfsSetXattr(fs, entry->filepath, XATTR_NAME,
                            strlen(XATTR_NAME), &buf[0], strlen(buf));
     if (err == -1) {
       WARNING("Error when setting xattr %s on %s: %s", XATTR_NAME,
-              entry->filepath, strerror(errno));
-      return -1;
+               entry->filepath, strerror(errno));
+    } else {
+      InfoOrError("Dispatched file %s offset to %lu", entry->filepath,
+                   entry->curOffset);
     }
-
-    InfoOrError("Dispatched file %s offset to %lu", entry->filepath,
-         entry->curOffset);
 
     entry->dispatchedOffset = entry->curOffset;
     entry->minTs = entry->maxTs;
   }
-  return 0;
+  return err;
 }
 
 int
