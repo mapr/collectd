@@ -204,7 +204,7 @@ isMetricsLogFile(hdfsFileInfo *fileInfo)
 
   char *filename = getFileName(fileInfo->mName);
   if (startsWith(filename, (char *) VOLLIST_FILE_PREFIX,
-      VOLLIST_FILE_PREFIX_LEN)) {
+      VOLLIST_FILE_PREFIX_LEN) && fileInfo->mSize) {
     return 1;
   }
 
@@ -221,7 +221,7 @@ isMetricsAuditFile(hdfsFileInfo *fileInfo)
   char *filename = getFileName(fileInfo->mName);
   if (startsWith(filename, (char *) METRICS_FILE_PREFIX,
                  METRICS_FILE_PREFIX_LEN)
-      && hasJsonSuffix(filename)) {
+      && hasJsonSuffix(filename) && fileInfo->mSize) {
     return 1;
   }
 
@@ -1279,6 +1279,7 @@ pickFile(FileMetricsHashTable *fmht, hdfsFS fs,
 
   *fileId = -1;
   for (i=0; i<numFiles; i++) {
+    /* IsMetricsAuditFile filters out zero sized files */
     if (isMetricsAuditFile(&fileList[i])) {
       fmhtEntry = fmhtLookupOrInsert(fmht, fileList[i].mName,
                                      &created, AUDIT);
@@ -1327,6 +1328,7 @@ getDispatchTs(hdfsFileInfo *fileList, int numFiles, FMHTEntry_t **retEntry)
 
   *retEntry = NULL;
   for (i=0; i<numFiles; i++) {
+    /* IsMetricsAuditFile filters out zero sized files */
     if (isMetricsAuditFile(&fileList[i])) {
       fmhtEntry = fmhtLookupOrInsert(&fmht, fileList[i].mName,
                                      &created, AUDIT);
@@ -1493,8 +1495,12 @@ readAndCacheVolumeNames(hdfsFS fs, FMHTEntry_t *fmhtEntry)
         break;
       }
     }
-   
     buffer[readBytes] = '\0'; 
+  
+    if (j < 0) {
+      ERROR("buffer %s doesn't end with newline", buffer); 
+    }
+
     fmhtEntry->curOffset += readBytes;
   }
 
@@ -1513,6 +1519,7 @@ processLogFiles(FileMetricsHashTable *fmht, hdfsFS fs, hdfsFileInfo *fileList,
   FMHTEntry_t *fmhtEntry = NULL;
 
   for (i=0; i<numFiles; i++) {
+    /* IsMetricsLogFile filters out zero sized files */
     if (isMetricsLogFile(&fileList[i])) {
       /* Metrics log file maintains a map of volume id to volume name.
        * Since the audit file is going to have the volume id we might to
