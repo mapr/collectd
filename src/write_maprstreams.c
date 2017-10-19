@@ -216,7 +216,7 @@ static void wt_kafka_topic_context_free(void *p) /* {{{ */
   INFO("mapr_writemaprstreams plugin: inside context free");
   if (ctx == NULL)
     return;
-  pthread_mutex_lock (&ctx->lock);
+  //pthread_mutex_lock (&ctx->lock); // Bug - 29675 - Removing the lock because this function is called by only one thread
   if (ctx->topic_name != NULL)
     sfree(ctx->topic_name);
   if (ctx->stream != NULL)
@@ -235,16 +235,44 @@ static void wt_kafka_topic_context_free(void *p) /* {{{ */
     rd_kafka_poll(ctx->kafka, 100);
   if (ctx->kafka != NULL)
     rd_kafka_destroy(ctx->kafka);
-  pthread_mutex_destroy(&ctx->lock);
+  //pthread_mutex_destroy(&ctx->lock); // Bug - 29675 - Removing the lock because this function is called by only one thread
     sfree(ctx);
 } /* }}} void wt_kafka_topic_context_free */
 
 static int wt_kafka_handle(struct wt_kafka_topic_context *ctx) /* {{{ */
 {
     rd_kafka_topic_conf_t       *topic_conf;
+    rd_kafka_conf_t *conf;
+    char                         errbuf[1024];
 
     if (ctx->kafka != NULL && ctx->topic != NULL)
         return(0);
+
+    if (ctx->kafka == NULL) {
+      if ((conf = rd_kafka_conf_dup(ctx->kafka_conf)) == NULL) {
+        ERROR("write_maprstreams plugin: cannot duplicate kafka config");
+        return(1);
+      }
+
+      rd_kafka_conf_set_dr_msg_cb(conf, msgDeliveryCB);
+
+      if ((ctx->kafka = rd_kafka_new(RD_KAFKA_PRODUCER, conf,
+           errbuf, sizeof(errbuf))) == NULL) {
+        ERROR("write_maprstreams plugin: cannot create kafka handle.");
+        return 1;
+      }
+
+#ifdef HAVE_LIBRDKAFKA_LOGGER
+   rd_kafka_conf_set_log_cb(ctx->kafka_conf, wt_kafka_log);
+#endif
+
+    // Bug - 25911
+    //rd_kafka_conf_destroy(tctx->kafka_conf);
+    //tctx->kafka_conf = NULL;
+
+      INFO ("write_maprstreams plugin: created KAFKA handle : %s", rd_kafka_name(ctx->kafka));
+
+    }
 
     if (ctx->topic == NULL ) {
       if ((topic_conf = rd_kafka_topic_conf_dup(ctx->conf)) == NULL) {
@@ -768,7 +796,6 @@ static int wt_config_stream(oconfig_item_t *ci)
     rd_kafka_conf_t *conf;
     struct wt_kafka_topic_context  *tctx;
     int status;
-    char                         errbuf[1024];
 
     int i;
     if ((conf = rd_kafka_conf_new()) == NULL) {
@@ -804,33 +831,6 @@ static int wt_config_stream(oconfig_item_t *ci)
       ERROR ("write_maprstream plugin: cannot create topic configuration.");
       return -1;
     }
-
-    if (tctx->kafka == NULL) {
-      if ((conf = rd_kafka_conf_dup(tctx->kafka_conf)) == NULL) {
-        ERROR("write_maprstreams plugin: cannot duplicate kafka config");
-        return(1);
-      }
-
-      rd_kafka_conf_set_dr_msg_cb(conf, msgDeliveryCB);
-
-      if ((tctx->kafka = rd_kafka_new(RD_KAFKA_PRODUCER, conf,
-          errbuf, sizeof(errbuf))) == NULL) {
-        ERROR("write_maprstreams plugin: cannot create kafka handle.");
-        return 1;
-      }
-
-#ifdef HAVE_LIBRDKAFKA_LOGGER
-      rd_kafka_conf_set_log_cb(tctx->kafka_conf, wt_kafka_log);
-#endif
-
-      // Bug - 25911
-      //rd_kafka_conf_destroy(tctx->kafka_conf);
-      //tctx->kafka_conf = NULL;
-
-      INFO ("write_maprstreams plugin: created KAFKA handle : %s", rd_kafka_name(tctx->kafka));
-
-    }
-
 
     for (i = 0; i < ci->children_num; i++)
     {
