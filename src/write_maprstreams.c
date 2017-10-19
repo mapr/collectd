@@ -216,7 +216,7 @@ static void wt_kafka_topic_context_free(void *p) /* {{{ */
   INFO("mapr_writemaprstreams plugin: inside context free");
   if (ctx == NULL)
     return;
-  pthread_mutex_lock (&ctx->lock);
+  //pthread_mutex_lock (&ctx->lock); // Bug - 29675 - Removing the lock because this function is called by only one thread
   if (ctx->topic_name != NULL)
     sfree(ctx->topic_name);
   if (ctx->stream != NULL)
@@ -235,7 +235,7 @@ static void wt_kafka_topic_context_free(void *p) /* {{{ */
     rd_kafka_poll(ctx->kafka, 100);
   if (ctx->kafka != NULL)
     rd_kafka_destroy(ctx->kafka);
-  pthread_mutex_destroy(&ctx->lock);
+  //pthread_mutex_destroy(&ctx->lock); // Bug - 29675 - Removing the lock because this function is called by only one thread
     sfree(ctx);
 } /* }}} void wt_kafka_topic_context_free */
 
