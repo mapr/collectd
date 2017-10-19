@@ -1080,6 +1080,7 @@ fi
 
 cp -p ${CD_CONF_FILE} ${CD_CONF_FILE}.${CD_NOW}
 cp ${NEW_CD_CONF_FILE} ${CD_CONF_FILE}
+chmod 640 ${CD_CONF_FILE}
 installWardenConfFile
 # remove state file
 if [ -f "$COLLECTD_HOME/etc/.not_configured_yet" ]; then
