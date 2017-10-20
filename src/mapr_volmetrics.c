@@ -76,6 +76,8 @@
 #define WINDOW_MINUTE_MS (60*1000)
 #define MAX_RECORDS_PER_ITER (10*1000)
 
+#define MAPR_HOSTNAME_FILE "/opt/mapr/hostname"
+
 int log_level = 0;
 int log_file_set = 0;
 char log_conf[PATH_MAX+1];
@@ -1560,16 +1562,75 @@ directoryExists(hdfsFS fs, char *metricsDir)
   return 0;
 }
 
+int
+getMapRHostName(char *buf, int len)
+{
+  int i;
+  int fd;
+  int err;
+  int ret;
+  struct stat stbuf;
+  char mapr_home[PATH_MAX]; 
+  char *env_str;
+
+  env_str = getenv("MAPR_HOME");
+  if (env_str) {
+    snprintf(mapr_home, PATH_MAX-1, "%s/%s", env_str, "hostname");
+    err = stat(mapr_home, &stbuf);
+    TraceOrError("MAPR_HOME is set to %s ", mapr_home);
+  }
+
+  if (!env_str || (env_str && err)) {
+    TraceOrError("MAPR_HOME not found.");
+    snprintf(mapr_home, PATH_MAX-1, "%s", MAPR_HOSTNAME_FILE);
+    err = stat(mapr_home, &stbuf);
+    if (err) {
+      return errno;
+    }
+  }
+
+  fd = open(mapr_home, O_RDONLY);
+  if (fd == -1) {
+    return errno; 
+  }
+
+  ret = read(fd, buf, len-1);
+  if (ret < 0) {
+    close(fd);
+    return errno;
+  }
+
+  for (i=ret-1; i>=0; i--) {
+    if (buf[i] == '\n') {
+      ret = i;
+      break;
+    }
+  }
+
+  buf[ret] = '\0';
+  close(fd);
+  TraceOrError("MAPR_HOSTNAME : %s:", buf);
+  return 0;
+}
+
 static inline int
 getMetricsPath(char *metricsDir)
 {
+  int err;
   char hostname[1024];
+  
+  err = getMapRHostName(hostname, 1023);
+  if (err) {
+    err = gethostname(hostname, 1023);
+    if (err) {
+      WARNING("Could not get hostname, error %d", errno);
+      return -1;
+    }
+    TraceOrError("hostname (syscall) is %s ", hostname);
+  }
   hostname[1023] = '\0';
-  gethostname(hostname, 1023);
-  struct hostent *h;
-  h = gethostbyname(hostname);
 
-  sprintf(&metricsDir[0], "%s/%s/%s", METRICS_PATH_PREFIX, h->h_name,
+  sprintf(&metricsDir[0], "%s/%s/%s", METRICS_PATH_PREFIX, hostname,
            METRICS_DIRNAME);
 
   TraceOrError("Metrics path is %s ", metricsDir);
@@ -1679,6 +1740,8 @@ vm_read(void)
     return 0;
   }
 
+  TraceOrError("vm_read : start");
+
   currentTimeMillis();
   if (mins_ != getMins()) {
     mins_ = getMins();
@@ -1706,6 +1769,7 @@ vm_read(void)
 
   err = directoryExists(fs, metricsDir);
   if (err) {
+    TraceOrError("Metrics directory %s not found", metricsDir);
     ret = -1;
     goto end;
   }
@@ -1777,6 +1841,7 @@ vm_read(void)
 
 end:
   readInProgress_ = 0;
+  TraceOrError("vm_read : end");
   return ret;
 }
 
