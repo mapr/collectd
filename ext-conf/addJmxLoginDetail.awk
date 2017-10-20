@@ -5,7 +5,7 @@ $0 ~ tag            { addJmxUserInfo=1
                     }
 $0 ~ "<Connection>" { if (addJmxUserInfo == 1) {
                         print $0
-                        print "      user \"mapr\""
+                        print "      user \""user"\""
                         print "      password \""password"\""
                         next
                       }
