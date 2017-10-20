@@ -194,6 +194,7 @@ function configureServiceURL()
     local oldPort
     local section
     local password
+    local user
 
     section="$1"
     hostname="$2"
@@ -202,6 +203,7 @@ function configureServiceURL()
     secureStr=""
     port="$5"
     password=""
+    user=""
 
     if [ $secure -eq 1 ]; then
         secureStr="s"
@@ -232,7 +234,7 @@ function configureServiceURL()
             else
                 logWarn "collectd - no jmx remote password file found"
             fi
-            awk -f ${AWKLIBPATH}/addJmxLoginDetail.awk -v tag="$1" -v password="$password" \
+            awk -f ${AWKLIBPATH}/addJmxLoginDetail.awk -v tag="$1" -v user="$MAPR_USER" -v password="$password" \
                 ${NEW_CD_CONF_FILE} > ${NEW_CD_CONF_FILE}.tmp
             if [[ $? -eq 0 ]]; then
                 mv ${NEW_CD_CONF_FILE}.tmp ${NEW_CD_CONF_FILE}
@@ -607,7 +609,7 @@ function configureHadoopJMX() {
                     JMX_INSERT_STRING=${HADOOP_JMX_INSERT/.jmxremote.authenticate=false/.jmxremote.authenticate=true}
                 else
                     JMX_INSERT_STRING=$HADOOP_JMX_INSERT
-                    logMsg "WARNING: Failed to enable secure jmx for NM/RM - see ${YARN_BIN}.tmp.tmp"
+                    logWarn "WARNING: Failed to enable secure jmx for NM/RM - see ${YARN_BIN}.tmp.tmp"
                 fi
             else
                 JMX_INSERT_STRING=$HADOOP_JMX_INSERT
