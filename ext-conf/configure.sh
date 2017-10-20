@@ -230,7 +230,7 @@ function configureServiceURL()
         if [ $secure -eq 1 ]; then
 
             if [ -f "$JMX_REMOTE_PASSWORD_FILE" ]; then
-                password=$(fgrep mapr $JMX_REMOTE_PASSWORD_FILE | cut -d' ' -f2)
+                password=$(fgrep $MAPR_USER $JMX_REMOTE_PASSWORD_FILE | cut -d' ' -f2)
             else
                 logWarn "collectd - no jmx remote password file found"
             fi
