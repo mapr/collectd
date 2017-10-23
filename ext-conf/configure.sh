@@ -954,27 +954,27 @@ function cleanupOldConfFiles
 initCfgEnv
 JMX_REMOTE_PASSWORD_FILE="${MAPR_CONF_DIR}/jmxremote.password"
 
-usage="usage: $0 [-nodeCount <cnt>] [-nodePort <port>] [-noStreams] [-EC <commonEcoOpts>]\n\t[--secure] [--customSecure] [--unsecure] [-R] [-OS] [-OT \"ip:port,ip1:port,\"] "
+usage="usage: $0 [-help] [-nodeCount <cnt>] [-nodePort <port>] [-noStreams] [-EC <commonEcoOpts>]\n\t[--secure] [--customSecure] [--unsecure] [-R] [-OS] [-OT \"ip:port,ip1:port,\"] "
 if [ ${#} -gt 1 ]; then
     # we have arguments - run as as standalone - need to get params and
-    OPTS=`getopt -a -l EC: -l help -l nodeCount: -l nodePort: -l noStreams -l OS -l OT: -l secure -l R -l unsecure -l customSecure -- "$@"`
+    OPTS=$(getopt -a -o chn:suE:NO:P:RS -l EC: -l help -l nodeCount: -l nodePort: -l noStreams -l OS -l OT: -l secure -l R -l unsecure -l customSecure -- "$@")
     if [ $? != 0 ]; then
         echo -e ${usage}
         return 2 2>/dev/null || exit 2
     fi
     eval set -- "$OPTS"
 
-    for i in "$@" ; do
-        case "$i" in
-            --EC)
+    while (( $# )); do
+        case "$1" in
+            --EC|-E)
                 #Parse Common options
                 #Ingore ones we don't care about
                 ecOpts=($2)
                 shift 2
                 restOpts="$@"
                 eval set -- "${ecOpts[@]} --"
-                for j in "$@" ; do
-                    case "$j" in
+                while (( $# )) ; do
+                    case "$1" in
                         --OT|-OT)
                             nodelist="$2"
                             shift 2;;
@@ -986,7 +986,7 @@ if [ ${#} -gt 1 ]; then
                             useStreams=0;
                             shift 1;;
                         --) shift
-                            break;;
+                            ;;
                         *)
                             #echo "Ignoring common option $j"
                             shift 1;;
@@ -995,25 +995,25 @@ if [ ${#} -gt 1 ]; then
                 shift 2 
                 eval set -- "$restOpts"
                 ;;
-            --OS)
+            --OS|-S)
                 useStreams=1;
                 shift 1;;
-            --OT)
+            --OT|-O)
                 nodelist="$2";
                 shift 2;;
-            --R)
+            --R|-R)
                 CD_CONF_ASSUME_RUNNING_CORE=1
                 shift 1;;
-            --nodeCount)
+            --nodeCount|-n)
                 nodecount="$2";
                 shift 2;;
-            --nodePort)
+            --nodePort|-P)
                 nodeport="$2";
                 shift 2;;
-            --noStreams)
+            --noStreams|-N)
                 useStreams=0;
                 shift 1;;
-            --customSecure)
+            --customSecure|-c)
                 if [ -f "$COLLECTD_HOME/etc/.not_configured_yet" ]; then
                     # collectd added after secure 5.x cluster upgraded to customSecure
                     # 6.0 cluster. Deal with this by assuming a regular --secure path
@@ -1028,22 +1028,26 @@ if [ ${#} -gt 1 ]; then
                 fi
                 secureCluster=1;
                 shift 1;;
-            --secure)
+            --secure|-s)
                 secureCluster=1;
                 shift 1;;
-            --unsecure)
+            --unsecure|-u)
                 secureCluster=0;
                 shift 1;;
-            --help)
+            --help|-h)
                 echo -e ${usage}
                 return 2 2>/dev/null || exit 2
                 ;;
             --)
                 shift
-                break;;
+                ;;
+            *)
+                echo "Unknown option $1"
+                echo -e ${usage}
+                return 2 2>/dev/null || exit 2
+                ;;
         esac
     done
-
 else
     echo -e "${usage}"
     return 2 2>/dev/null || exit 2
@@ -1054,6 +1058,7 @@ if [ -z "$nodelist" -a $useStreams -eq 0 ]; then
     echo -e "${usage}"
     return 2 2>/dev/null || exit 2
 fi
+
 # Make a copy, the script will work on the copy
 cp ${CD_CONF_FILE} ${NEW_CD_CONF_FILE}
 
