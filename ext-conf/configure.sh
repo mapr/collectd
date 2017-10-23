@@ -957,8 +957,7 @@ JMX_REMOTE_PASSWORD_FILE="${MAPR_CONF_DIR}/jmxremote.password"
 usage="usage: $0 [-nodeCount <cnt>] [-nodePort <port>] [-noStreams] [-EC <commonEcoOpts>]\n\t[--secure] [--customSecure] [--unsecure] [-R] [-OS] [-OT \"ip:port,ip1:port,\"] "
 if [ ${#} -gt 1 ]; then
     # we have arguments - run as as standalone - need to get params and
-    # XXX why do we need the -o to make this work?
-    OPTS=`getopt -a -o h -l EC: -l nodeCount: -l nodePort: -l noStreams -l OS -l OT: -l secure -l R -l unsecure -l customSecure -- "$@"`
+    OPTS=`getopt -a -l EC: -l help -l nodeCount: -l nodePort: -l noStreams -l OS -l OT: -l secure -l R -l unsecure -l customSecure -- "$@"`
     if [ $? != 0 ]; then
         echo -e ${usage}
         return 2 2>/dev/null || exit 2
@@ -1035,7 +1034,7 @@ if [ ${#} -gt 1 ]; then
             --unsecure)
                 secureCluster=0;
                 shift 1;;
-            -h)
+            --help)
                 echo -e ${usage}
                 return 2 2>/dev/null || exit 2
                 ;;
