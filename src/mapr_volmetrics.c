@@ -71,6 +71,7 @@
 #define VOLUME_NAME_MAX 256
 #define METRICS_THRESHOLD (100*1024)
 
+#define KB (1024)
 #define WINDOW_SIZE_SECONDS (60)
 #define WINDOW_SIZE_MS (WINDOW_SIZE_SECONDS*1000)
 #define WINDOW_MINUTE_MS (60*1000)
@@ -953,7 +954,7 @@ dispatchMetrics(TimestampHashTable *tsTbl, tsEntry_t *tsEntry)
           switch(j) {
             case MetricsOpReadThroughput:
               type = "read_throughput";
-              value = entry->values[j] / (double) WINDOW_SIZE_MS;
+              value = entry->values[j] / (double) KB;
               break;
             case MetricsOpReadLatency:
               type = "read_latency";
@@ -965,7 +966,7 @@ dispatchMetrics(TimestampHashTable *tsTbl, tsEntry_t *tsEntry)
               break;
             case MetricsOpWriteThroughput:
               type = "write_throughput";
-              value = entry->values[j] / (double) WINDOW_SIZE_MS;
+              value = entry->values[j] / (double) KB;
               break;
             case MetricsOpWriteLatency:
               type = "write_latency";
