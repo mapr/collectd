@@ -212,7 +212,7 @@ function configureServiceURL()
         findPattern="ServiceURL \"service:jmx:rmi:///jndi/rmi://.*:[0-9]+/"
         replacePattern="ServiceURL \"service:jmx:rmi:///jndi/rmi://$hostname:$port/"
     else
-        findPattern="ServiceURL \"http://.*:[0-9]+/"
+        findPattern="ServiceURL \"http[s]*://.*:[0-9]+/"
         replacePattern="ServiceURL \"http$secureStr://$hostname:$port/"
     fi
     awk -f ${AWKLIBPATH}/substituteWithinSection.awk -v tag="$1" -v findPattern="$findPattern" \
@@ -475,7 +475,8 @@ function configurejavajmxplugin()
         host_name=$(hostname) # some aws machine reports an empty string with hostname -f
     fi
     if [ ${CD_RM_ROLE} -eq 1  -o ${CD_NM_ROLE} -eq 1  -o ${CD_CLDB_ROLE} -eq 1 -o\
-         ${CD_HBASE_MASTER_ROLE} -eq 1 -o ${CD_HBASE_REGION_SERVER_ROLE} -eq 1 -o ${CD_DRILLBITS_ROLE} -eq 1 ]; then
+         ${CD_HBASE_MASTER_ROLE} -eq 1 -o ${CD_HBASE_REGION_SERVER_ROLE} -eq 1 -o\
+         ${CD_DRILLBITS_ROLE} -eq 1 -o ${CD_OOZIE_ROLE} -eq 1 ]; then
         enableSection MAPR_CONF_JMX_TAG
         sed -i 's@${fastjmx_prefix}@'$COLLECTD_HOME'@g' ${NEW_CD_CONF_FILE}
         if [ ${CD_RM_ROLE} -eq 1 -o ${CD_OOZIE_ROLE} -eq 1 -o ${CD_OT_ROLE} -eq 1 ]; then
@@ -841,10 +842,6 @@ function isMaprServiceRunning() {
    
    myHname=$1
    serviceNameToCheck=$2
- 
-   if [ $secureCluster -eq 1 ] && [ -f "${MAPR_HOME}/conf/mapruserticket" ]; then
-       export MAPR_TICKETFILE_LOCATION="${MAPR_HOME}/conf/mapruserticket"
-   fi
 
    # using $NF with awk instead of $5 because memallocated column doesn't always
    # contain data
@@ -1057,6 +1054,10 @@ if [ -z "$nodelist" -a $useStreams -eq 0 ]; then
     echo "-OT or -OS is required"
     echo -e "${usage}"
     return 2 2>/dev/null || exit 2
+fi
+
+if [ $secureCluster -eq 1 ] && [ -f "${MAPR_HOME}/conf/mapruserticket" ]; then
+    export MAPR_TICKETFILE_LOCATION="${MAPR_HOME}/conf/mapruserticket"
 fi
 
 # Make a copy, the script will work on the copy
