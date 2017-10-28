@@ -952,7 +952,7 @@ initCfgEnv
 JMX_REMOTE_PASSWORD_FILE="${MAPR_CONF_DIR}/jmxremote.password"
 
 usage="usage: $0 [-help] [-nodeCount <cnt>] [-nodePort <port>] [-noStreams] [-EC <commonEcoOpts>]\n\t[--secure] [--customSecure] [--unsecure] [-R] [-OS] [-OT \"ip:port,ip1:port,\"] "
-if [ ${#} -gt 1 ]; then
+if [ ${#} -gt 0 ]; then
     # we have arguments - run as as standalone - need to get params and
     OPTS=$(getopt -a -o chn:suC:NO:P:RS -l EC: -l help -l nodeCount: -l nodePort: -l noStreams -l OS -l OT: -l secure -l R -l unsecure -l customSecure -- "$@")
     if [ $? != 0 ]; then
@@ -1045,13 +1045,10 @@ if [ ${#} -gt 1 ]; then
                 ;;
         esac
     done
-else
-    echo -e "${usage}"
-    return 2 2>/dev/null || exit 2
 fi
 
 if [ -z "$nodelist" -a $useStreams -eq 0 ]; then
-    echo "-OT or -OS is required"
+    echo "-OT is required when not using streams"
     echo -e "${usage}"
     return 2 2>/dev/null || exit 2
 fi
