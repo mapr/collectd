@@ -4786,6 +4786,7 @@ AC_SUBST(BUILD_WITH_LIBRABBITMQ_LIBS)
 
 # }}}
 
+
 # --with-librdkafka {{{
 AC_ARG_WITH([librdkafka],
   [AS_HELP_STRING([--with-librdkafka@<:@=PREFIX@:>@], [Path to librdkafka.])],
@@ -6238,6 +6239,7 @@ plugin_zone="no"
 plugin_zookeeper="no"
 
 # Linux
+
 if test "x$ac_system" = "xLinux"; then
   plugin_battery="yes"
   plugin_cgroups="yes"
@@ -6263,6 +6265,7 @@ if test "x$ac_system" = "xLinux"; then
   plugin_processes="yes"
   plugin_mapr_process="yes"
   plugin_mapr_volmetrics="yes"
+  plugin_mapr_tblmetrics="yes"
   plugin_protocols="yes"
   plugin_serial="yes"
   plugin_swap="yes"
@@ -6291,6 +6294,50 @@ if test "x$ac_system" = "xLinux"; then
     plugin_ovs_events="yes"
     plugin_ovs_stats="yes"
   fi
+fi
+
+if test "x$plugin_mapr_tblmetrics" = "xyes"; then
+
+  AC_MSG_CHECKING([whether protobufs are present and $CXX accepts -std=c++11])
+
+  AC_LANG_PUSH(C++)
+  SAVE_CPPFLAGS="$CPPFLAGS"
+  SAVE_LDFLAGS="$LDFLAGS"
+  SAVE_LIBS="$LIBS"
+
+  CPPFLAGS="-std=c++11 $CPPFLAGS"
+  LIBS="-lprotobuf $LIBS"
+  AC_LINK_IFELSE(
+    [
+      AC_LANG_PROGRAM(
+        [[#include <google/protobuf/io/zero_copy_stream_impl_lite.h>]],
+        [[static_assert(true, "");]]
+        [[auto a = [](){};]]
+      )
+    ],
+  [plugin_mapr_tblmetrics="yes"],
+  [plugin_mapr_tblmetrics="no (compile error)"]
+  )
+
+  CPPFLAGS="$SAVE_CPPFLAGS"
+  LDFLAGS="$SAVE_LDFLAGS"
+  LIBS="$SAVE_LIBS"
+  AC_LANG_POP(C++)
+
+  if test "x$plugin_mapr_tblmetrics" = "xyes"; then
+    AC_MSG_RESULT("yes")
+    BUILD_MAPR_TABLE_METRICS_CPPFLAGS="-std=c++11"
+    BUILD_MAPR_TABLE_METRICS_LIBS="-lprotobuf"
+  fi
+
+  if test "x$plugin_mapr_tblmetrics" != "xyes"; then
+    AC_MSG_RESULT("no")
+    BUILD_MAPR_TABLE_METRICS_CPPFLAGS="badger badger"
+    BUILD_MAPR_TABLE_METRICS_LIBS="mushroom mushroom"
+  fi
+
+  AC_SUBST(BUILD_MAPR_TABLE_METRICS_CPPFLAGS)
+  AC_SUBST(BUILD_MAPR_TABLE_METRICS_LIBS)
 fi
 
 if test "x$ac_system" = "xOpenBSD"; then
@@ -6625,6 +6672,7 @@ AC_PLUGIN([lvm],                 [$with_liblvm2app],        [LVM statistics])
 AC_PLUGIN([madwifi],             [$have_linux_wireless_h],  [Madwifi wireless statistics])
 AC_PLUGIN([mapr_process],        [$plugin_mapr_process],    [MapR Process statistics])
 AC_PLUGIN([mapr_volmetrics],     [$plugin_mapr_volmetrics], [MapR Volume metrics])
+AC_PLUGIN([mapr_tblmetrics],     [$plugin_mapr_tblmetrics], [MapR Table metrics])
 AC_PLUGIN([match_empty_counter], [yes],                     [The empty counter match])
 AC_PLUGIN([match_hashed],        [yes],                     [The hashed match])
 AC_PLUGIN([match_regex],         [yes],                     [The regex match])
@@ -7048,6 +7096,7 @@ AC_MSG_RESULT([    lvm . . . . . . . . . $enable_lvm])
 AC_MSG_RESULT([    madwifi . . . . . . . $enable_madwifi])
 AC_MSG_RESULT([    mapr_process  . . . . $enable_mapr_process])
 AC_MSG_RESULT([    mapr_volmetrics . . . $enable_mapr_volmetrics])
+AC_MSG_RESULT([    mapr_tblmetrics . . . $enable_mapr_tblmetrics])
 AC_MSG_RESULT([    match_empty_counter . $enable_match_empty_counter])
 AC_MSG_RESULT([    match_hashed  . . . . $enable_match_hashed])
 AC_MSG_RESULT([    match_regex . . . . . $enable_match_regex])

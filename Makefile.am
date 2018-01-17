@@ -1448,6 +1448,23 @@ mapr_volmetrics_la_LDFLAGS = $(PLUGIN_LDFLAGS) $(BUILD_WITH_LIBRDKAFKA_JVM_LDFLA
 mapr_volmetrics_la_LIBADD = $(BUILD_WITH_LIBRDKAFKA_JVM_LIBS)
 endif
 
+if BUILD_PLUGIN_MAPR_TBLMETRICS
+
+BUILT_SOURCES += src/mapr_table_metrics.pb.cc src/mapr_table_metrics.pb.h
+
+src/mapr_table_metrics.pb.cc src/mapr_table_metrics.pb.h : src/mapr_table_metrics.proto
+	protoc --cpp_out=. src/mapr_table_metrics.proto
+
+pkglib_LTLIBRARIES += mapr_tblmetrics.la
+mapr_tblmetrics_la_SOURCES = src/mapr_table_metrics.cc
+nodist_mapr_tblmetrics_la_SOURCES = \
+	src/mapr_table_metrics.pb.cc \
+	src/mapr_table_metrics.pb.h
+mapr_tblmetrics_la_CPPFLAGS = $(AM_CPPFLAGS) $(HDFS_CPPFLAGS) $(BUILD_WITH_LIBRDKAFKA_JVM_CPPFLAGS) $(BUILD_MAPR_TABLE_METRICS_CPPFLAGS)
+mapr_tblmetrics_la_LDFLAGS = $(PLUGIN_LDFLAGS) $(BUILD_WITH_LIBRDKAFKA_JVM_LDFLAGS)
+mapr_tblmetrics_la_LIBADD = $(BUILD_WITH_LIBRDKAFKA_JVM_LIBS) $(BUILD_MAPR_TABLE_METRICS_LIBS)
+endif
+
 if BUILD_PLUGIN_PROTOCOLS
 pkglib_LTLIBRARIES += protocols.la
 protocols_la_SOURCES = src/protocols.c

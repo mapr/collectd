@@ -279,6 +279,10 @@ vs_threads              value:GAUGE:0:65535
 #
 #
 
+# MapR Table Metrics
+rpc_count value:COUNTER:0:U
+max_latency value:GAUGE:0:U
+
 # MapR Volume Metrics
 read_latency value:GAUGE:0:U
 read_ops value:GAUGE:0:U
