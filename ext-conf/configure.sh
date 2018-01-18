@@ -100,7 +100,7 @@ function adjustOwnership() {
     sed -i -e 's/\(#* *Exec *\)"[a-zA-Z0-9]*:[a-zA-Z0-9]*"/\1 "'"$MAPR_USER:$MAPR_GROUP\"/" ${NEW_CD_CONF_FILE}
     # in case we could not do it from the package
     chown -R "$MAPR_USER":"$MAPR_GROUP" $COLLECTD_HOME
-    chmod 750 $COLLECTD_HOME
+    chmod -R 750 $COLLECTD_HOME
  }
 
 #############################################################################
