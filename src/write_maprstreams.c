@@ -591,7 +591,7 @@ static int wt_send_message (const char* key, const char* value,
     int nDigits;
     char *temp = NULL;
     char *tags = "";
-    char message[8192];
+    char message[4096];
     char *host_tags = ctx->host_tags ? ctx->host_tags : "";
     const char *meta_tsdb = "tsdb_tags";
     const char* host = vl->host;
@@ -681,11 +681,11 @@ static int wt_send_message (const char* key, const char* value,
     partition_key = rand();
     // Send the message to topic
     rd_kafka_produce(ctx->topic, RD_KAFKA_PARTITION_UA,
-        RD_KAFKA_MSG_F_COPY, message, sizeof(message),
+        RD_KAFKA_MSG_F_COPY, message, message_len,
         &partition_key, sizeof(partition_key), NULL);
 
     rd_kafka_poll(ctx->kafka,10);
-    INFO("write_maprstreams plugin: PRINT message %s sent to topic %s",message,rd_kafka_topic_name(ctx->topic));
+    INFO("write_maprstreams plugin: PRINT message %s of size %d sent to topic %s",message, message_len, rd_kafka_topic_name(ctx->topic));
     // Free the space allocated for temp topic name and stream name
     free(temp_topic_name);
     free(stream_name);
