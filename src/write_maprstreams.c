@@ -591,12 +591,11 @@ static int wt_send_message (const char* key, const char* value,
     int nDigits;
     char *temp = NULL;
     char *tags = "";
-    char message[4096];
+    char message[8192];
     char *host_tags = ctx->host_tags ? ctx->host_tags : "";
     const char *meta_tsdb = "tsdb_tags";
     const char* host = vl->host;
     meta_data_t *md = vl->meta;
-    uint32_t  partition_key;
 
     pthread_mutex_lock (&ctx->lock);
     // Generate a hash between 0 and M for the metric
@@ -678,11 +677,10 @@ static int wt_send_message (const char* key, const char* value,
 
     //pthread_mutex_lock(&ctx->lock);
 
-    partition_key = rand();
     // Send the message to topic
     rd_kafka_produce(ctx->topic, RD_KAFKA_PARTITION_UA,
         RD_KAFKA_MSG_F_COPY, message, message_len,
-        &partition_key, sizeof(partition_key), NULL);
+        NULL, 0, NULL);
 
     rd_kafka_poll(ctx->kafka,10);
     INFO("write_maprstreams plugin: PRINT message %s of size %d sent to topic %s",message, message_len, rd_kafka_topic_name(ctx->topic));
