@@ -289,8 +289,8 @@ static int wt_kafka_handle(struct wt_kafka_topic_context *ctx) /* {{{ */
 
       rd_kafka_topic_conf_destroy(ctx->conf);
       ctx->conf = NULL;
-
-      INFO("write_maprstreams plugin: handle created for topic : %s", rd_kafka_topic_name(ctx->topic));
+      // Uncomment this line once bug 30736 is fixed
+      //INFO("write_maprstreams plugin: handle created for topic : %s", rd_kafka_topic_name(ctx->topic));
     }
 
     return(0);
@@ -683,7 +683,9 @@ static int wt_send_message (const char* key, const char* value,
         NULL, 0, NULL);
 
     rd_kafka_poll(ctx->kafka,10);
-    INFO("write_maprstreams plugin: PRINT message %s of size %d sent to topic %s",message, message_len, rd_kafka_topic_name(ctx->topic));
+
+    // Uncomment this line once bug 30736 is fixed
+    //INFO("write_maprstreams plugin: PRINT message %s of size %d sent to topic %s",message, message_len, rd_kafka_topic_name(ctx->topic));
     // Free the space allocated for temp topic name and stream name
     free(temp_topic_name);
     free(stream_name);
