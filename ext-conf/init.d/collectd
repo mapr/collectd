@@ -381,6 +381,7 @@ createDirectoriesAndFiles() {
                 fi
                 chmod $APP_DATA_DIR_PERM "$APP_DATA_DIR"
             fi
+            chmod -R o-rwx "$APP_LOG_DIR"
     esac
 }
 
