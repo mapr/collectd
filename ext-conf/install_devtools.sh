@@ -1,6 +1,6 @@
 #!/bin/bash
 set -x 
-MEPVER=${MEPVER:-4.0.0}
+MEPVER=${MEPVER:-5.0.0}
 COREVER=${COREVER:-6.0.0}
 MEPREPO=http://artifactory.devops.lab/artifactory/prestage/releases-dev/MEP/MEP-${MEPVER}
 COREREPO=http://artifactory.devops.lab/artifactory/prestage/releases-dev/v${COREVER}
