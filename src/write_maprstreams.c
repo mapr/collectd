@@ -813,6 +813,7 @@ static int wt_config_stream(oconfig_item_t *ci)
     tctx->stream = NULL;
     tctx->host_tags = NULL;
     tctx->topic_name = NULL;
+    tctx->topic = NULL;
     tctx->kafka = NULL;
 
     if ((tctx->kafka_conf = rd_kafka_conf_dup(conf)) == NULL) {
