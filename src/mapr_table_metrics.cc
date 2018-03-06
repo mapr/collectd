@@ -975,6 +975,18 @@ class tableMetrics {
           val.get() = 0;
         }
       }
+
+      // HACK HACK
+
+      value_t histo[11];
+      for (auto i = 0; i < 11; ++i) {
+        histo[i].gauge = i;
+      }
+      vl.values = histo;
+      vl.values_len = 11;
+      strcpy(vl.type, "latency_hist");
+      plugin_dispatch_values(&vl);
+
     }
 
     return 0;

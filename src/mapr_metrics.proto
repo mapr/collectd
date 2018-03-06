@@ -1,0 +1,36 @@
+syntax="proto2";
+
+// ("table_name", "/user1/table2")
+message Tag {
+  optional string  name  = 1;
+  optional string value  = 2;
+}
+
+// (100, 200, 50) means 50 ops that took >= 100 and < 200 milliseconds
+message HistoBucket {
+  optional uint64 start   = 1;
+  optional uint64 end     = 2;
+  optional uint64 number  = 3;
+}
+
+// either a number or a histogram. If both happen to be populated, 
+// behavior is unspecified.
+message metricValue {
+  optional uint64 number        = 1;
+  repeated HistoBucket buckets  = 2;
+}
+
+// ("mapr.db.table.rpcs", time_t, {("table_name", "/user1/table2")}, (100))
+message Metric {
+  optional string name        = 1;
+  optional uint64 time        = 2;
+  repeated Tag tags           = 3;
+  optional metricValue value  = 4;
+}
+
+// if same set of tag values applies to all metrics, they can be stuck into
+// commonTags
+message Metrics {
+  repeated Tag commonTags  = 1;
+  repeated Metric metrics  = 2;
+}
