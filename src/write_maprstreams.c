@@ -290,7 +290,7 @@ static int wt_kafka_handle(struct wt_kafka_topic_context *ctx) /* {{{ */
       rd_kafka_topic_conf_destroy(ctx->conf);
       ctx->conf = NULL;
       // Uncomment this line once bug 30736 is fixed
-      //INFO("write_maprstreams plugin: handle created for topic : %s", rd_kafka_topic_name(ctx->topic));
+      INFO("write_maprstreams plugin: handle created for topic : %s", rd_kafka_topic_name(ctx->topic));
     }
 
     return(0);
@@ -599,7 +599,7 @@ static int wt_send_message (const char* key, const char* value,
 
     pthread_mutex_lock (&ctx->lock);
     // Generate a hash between 0 and M for the metric
-    hashCode = hash(key,ctx->streamsCount);
+    hashCode = hash(host,ctx->streamsCount);
     if (hashCode == 0) {
        nDigits = 1;
     } else {
@@ -615,13 +615,12 @@ static int wt_send_message (const char* key, const char* value,
     ctx->stream = stream_name;
     INFO("write_maprstreams plugin: Stream Name is %s for key %s",ctx->stream,key);
 
-    // Allocate enough space for the topic name -- "<streamname>:<fqdn>_<metric name>"
-    char *temp_topic_name = (char *) malloc( strlen(ctx->stream) + strlen(host) + strlen(key) + 3 );
+    // Allocate enough space for the topic name -- "<streamname>:<fqdn>"
+    char *temp_topic_name = (char *) malloc( strlen(ctx->stream) + strlen(host) + 2 );
     strcpy(temp_topic_name,ctx->stream);
     strcat(temp_topic_name,":");
     strcat(temp_topic_name,host);
-    strcat(temp_topic_name,"_");
-    strcat(temp_topic_name, key);
+
     ctx->topic_name = temp_topic_name;
     //INFO("write_maprstreams plugin for key %s stream name %s ",key,ctx->stream);
     //INFO("write_maprstreams plugin: topic name %s ",ctx->topic_name);
@@ -658,9 +657,8 @@ static int wt_send_message (const char* key, const char* value,
 
     message_len = ssnprintf (message,
                              sizeof(message),
-                             "put %s %.0f %s fqdn=%s %s %s %s\r\n",
+                             "%s %s fqdn=%s %s %s %s\r\n",
                              key,
-                             CDTIME_T_TO_DOUBLE(time),
                              value,
                              host,
                              value_tags,
@@ -675,17 +673,26 @@ static int wt_send_message (const char* key, const char* value,
         return -1;
     }
 
+    // Send the message to topic
+    rd_kafka_producev (ctx->kafka,
+                          RD_KAFKA_V_RKT(ctx->topic),
+                          RD_KAFKA_V_VALUE(value, message_len),
+                          RD_KAFKA_V_MSGFLAGS (RD_KAFKA_MSG_F_COPY),
+                          RD_KAFKA_V_TIMESTAMP(CDTIME_T_TO_MS(time)),
+                          RD_KAFKA_V_END);
     //pthread_mutex_lock(&ctx->lock);
 
-    // Send the message to topic
-    rd_kafka_produce(ctx->topic, RD_KAFKA_PARTITION_UA,
-        RD_KAFKA_MSG_F_COPY, message, message_len,
-        NULL, 0, NULL);
+ /**
+  * Changing the produce call to include timestamp in message instead of payload
+  */
+//    rd_kafka_produce(ctx->topic, RD_KAFKA_PARTITION_UA,
+//        RD_KAFKA_MSG_F_COPY, message, message_len,
+//        NULL, 0, NULL);
 
     rd_kafka_poll(ctx->kafka,10);
 
     // Uncomment this line once bug 30736 is fixed
-    //INFO("write_maprstreams plugin: PRINT message %s of size %d sent to topic %s",message, message_len, rd_kafka_topic_name(ctx->topic));
+    INFO("write_maprstreams plugin: PRINT message %s of size %d sent to topic %s",message, message_len, rd_kafka_topic_name(ctx->topic));
     // Free the space allocated for temp topic name and stream name
     free(temp_topic_name);
     free(stream_name);
