@@ -4683,9 +4683,9 @@ then
 	BUILD_WITH_LIBRDKAFKA_LDFLAGS="$with_librdkafka_ldflags"
 	if test "x$with_librdkafka_rpath" != "x"
 	then
-		BUILD_WITH_LIBRDKAFKA_LIBS="-Wl,-rpath,$with_librdkafka_rpath -lrdkafka"
+		BUILD_WITH_LIBRDKAFKA_LIBS="-Wl,-rpath,$with_librdkafka_rpath -lrdkafka -lMapRClient"
 	else
-		BUILD_WITH_LIBRDKAFKA_LIBS="-lrdkafka"
+		BUILD_WITH_LIBRDKAFKA_LIBS="-lrdkafka -lMapRClient"
 	fi
 	AC_SUBST(BUILD_WITH_LIBRDKAFKA_CPPFLAGS)
 	AC_SUBST(BUILD_WITH_LIBRDKAFKA_LDFLAGS)
