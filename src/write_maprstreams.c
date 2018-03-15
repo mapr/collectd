@@ -586,7 +586,7 @@ static int wt_send_message (const char* key, const char* value,
                             const value_list_t *vl)
 {
     int status;
-    int message_len;
+    //int message_len;
     int hashCode;
     int nDigits;
     char *temp = NULL;
@@ -596,6 +596,9 @@ static int wt_send_message (const char* key, const char* value,
     const char *meta_tsdb = "tsdb_tags";
     const char* host = vl->host;
     meta_data_t *md = vl->meta;
+    size_t mfree = sizeof(message);
+    size_t mfill = 0;
+    size_t mlen = 0;
 
     pthread_mutex_lock (&ctx->lock);
     // Generate a hash between 0 and M for the metric
@@ -635,7 +638,7 @@ static int wt_send_message (const char* key, const char* value,
     status = wt_kafka_handle(ctx);
     if( status != 0 )
       return status;
-    bzero(message, sizeof(message));
+    //bzero(message, sizeof(message));
 
     /* skip if value is NaN */
     if (value[0] == 'n')
@@ -651,32 +654,39 @@ static int wt_send_message (const char* key, const char* value,
             pthread_mutex_unlock(&ctx->lock);
             return status;
         } else {
+            INFO("write_maprstreams plugin: metadata found %s ", tags);
             tags = temp;
         }
     }
 
-    message_len = ssnprintf (message,
-                             sizeof(message),
-                             "%s %s fqdn=%s %s %s %s\r\n",
-                             key,
-                             value,
-                             host,
-                             value_tags,
-                             tags,
-                             host_tags);
+    format_json_initialize(message, &mfill, &mfree);
+    format_json_mapr_data(message, &mfill, &mfree, key, value, host, value_tags, tags, host_tags);
+    format_json_finalize(message, &mfill, &mfree);
+    mlen = strlen(message);
+    INFO("write_maprstreams plugin: json message %s of size %zu",message,mlen);
+
+//    message_len = ssnprintf (message,
+//                             sizeof(message),
+//                             "%s %s fqdn=%s %s %s %s\r\n",
+//                             key,
+//                             value,
+//                             host,
+//                             value_tags,
+//                             tags,
+//                             host_tags);
 
     sfree(temp);
 
-    if (message_len >= sizeof(message)) {
-        ERROR("write_maprstreams plugin: message buffer too small: "
-              "Need %d bytes.", message_len + 1);
-        return -1;
-    }
+//    if (message_len >= sizeof(message)) {
+//        ERROR("write_maprstreams plugin: message buffer too small: "
+//              "Need %d bytes.", message_len + 1);
+//        return -1;
+//    }
 
     // Send the message to topic
     rd_kafka_producev (ctx->kafka,
                           RD_KAFKA_V_RKT(ctx->topic),
-                          RD_KAFKA_V_VALUE(value, message_len),
+                          RD_KAFKA_V_VALUE(message, mlen),
                           RD_KAFKA_V_MSGFLAGS (RD_KAFKA_MSG_F_COPY),
                           RD_KAFKA_V_TIMESTAMP(CDTIME_T_TO_MS(time)),
                           RD_KAFKA_V_END);
@@ -692,7 +702,7 @@ static int wt_send_message (const char* key, const char* value,
     rd_kafka_poll(ctx->kafka,10);
 
     // Uncomment this line once bug 30736 is fixed
-    INFO("write_maprstreams plugin: PRINT message %s of size %d sent to topic %s",message, message_len, rd_kafka_topic_name(ctx->topic));
+    INFO("write_maprstreams plugin: PRINT message %s of size %zu sent to topic %s",message, mlen, rd_kafka_topic_name(ctx->topic));
     // Free the space allocated for temp topic name and stream name
     free(temp_topic_name);
     free(stream_name);
