@@ -41,9 +41,19 @@ extern "C" {
 #include <unistd.h>
 }
 
-// proto
-#include "mapr_table_metrics.pb.h"
+#include <vector>
+
+// proto api 
 #include <google/protobuf/io/zero_copy_stream_impl_lite.h>
+
+// input proto
+#include "mapr_table_metrics.pb.h"
+
+// output proto
+#include "mapr_metrics.pb.h"
+
+// opaque buffer management
+#include "mapr_metrics.h"
 
 // hdfsEverything
 #include "hdfs.h"
@@ -57,13 +67,13 @@ extern "C" {
 #include <unordered_map>
 #include <map>
 #include <algorithm>
-#include <vector>
 #include <cstdlib>
 #include <cstdio>
 #include <atomic>
 #include <chrono>
 #include <thread>
 #include <functional>
+
 
 //static int log_level = 3;
 
@@ -76,7 +86,7 @@ extern "C" {
 #define LOG(fmt, ...) plugin_log(LOG_INFO, \
   __FILE__ "::%s@" STRINGIFY(__LINE__) ": " fmt, __FUNCTION__, ## __VA_ARGS__)
 
-#define ERR(fmt, ...) plugin_log(LOG_ERROR, \
+#define ERR(fmt, ...) plugin_log(LOG_ERR, \
   "%s@" STRINGIFY(__LINE__) ": " fmt, __PRETTY_FUNCTION__, ## __VA_ARGS__)
 
 
@@ -205,7 +215,7 @@ struct maprCluster {
       mSize(info.mSize)
       {}
   };
-
+  
   std::vector<listingFileInfo> tableMetricsFiles_;
 
   bool connected()
@@ -638,6 +648,18 @@ class tableMetrics {
       if (perRpc.has_wsizebytes()) {
         metric.write_bytes += perRpc.wsizebytes();
       }
+
+      for (auto &histoBar : perRpc.latencyhisto()) {
+        if (!histoBar.has_index()) {
+          continue;
+        }
+
+        if (!histoBar.has_frequency()) {
+          continue;
+        }
+
+        metric.histo[histoBar.index()] += histoBar.frequency();
+      }
     }
 
     return protobufBufferSize + lengthBytes;
@@ -693,7 +715,7 @@ class tableMetrics {
 //    get_valuecache_hits,
   };
 
-  const char *to_c_str(metricId metric)
+  static const char *to_c_str(metricId metric)
   {
     switch (metric)
     {
@@ -716,6 +738,8 @@ class tableMetrics {
     int64_t write_bytes = 0;
     int64_t read_bytes = 0;
 
+    std::array<int64_t, IndexOfLastTableMetricsBucket> histo;
+
     std::array<std::pair<const metricId, std::reference_wrapper<int64_t>>, 6> enumerate()
     {
       #define TABLE_METRIX_NAME_AND_VALUE(name) \
@@ -730,7 +754,40 @@ class tableMetrics {
       }};
       #undef TABLE_METRIX_NAME_AND_VALUE
     }
+
+    const std::array<std::pair<metricId, int64_t>, 6> enumerate() const
+    {
+      #define TABLE_METRIX_NAME_AND_VALUE2(name) \
+        std::make_pair(metricId::name, name)
+      return { {
+        TABLE_METRIX_NAME_AND_VALUE2(rpcs),
+        TABLE_METRIX_NAME_AND_VALUE2(write_rows),
+        TABLE_METRIX_NAME_AND_VALUE2(resp_rows),
+        TABLE_METRIX_NAME_AND_VALUE2(read_rows),
+        TABLE_METRIX_NAME_AND_VALUE2(write_bytes),
+        TABLE_METRIX_NAME_AND_VALUE2(read_bytes),
+      }};
+      #undef TABLE_METRIX_NAME_AND_VALUE2
+    }
   };
+
+  static constexpr auto buckets = 
+    std::array<std::pair<int64_t, int64_t>, IndexOfLastTableMetricsBucket>
+     {{
+      {std::numeric_limits<int64_t>::min(), bucket0},
+      {bucket1, bucket2},
+      {bucket2, bucket3},
+      {bucket3, bucket4},
+      {bucket4, bucket5},
+      {bucket5, bucket6},
+      {bucket6, bucket7},
+      {bucket7, bucket8},
+      {bucket8, bucket9},
+      {bucket9, bucket10},
+      {bucket10, bucket11},
+      {bucket11, bucket12},
+      {bucket12, std::numeric_limits<int64_t>::max()}
+    }};
 
   struct perTable {
     static const int kNumberOfRpcs = 7;
@@ -759,14 +816,13 @@ class tableMetrics {
 
     bool operator <(const Fid &r) const
     {
-      auto enumL = std::initializer_list<uint32_t>{cid_, cinum_, uniq_};
-      auto enumR = std::initializer_list<uint32_t>{r.cid_, r.cinum_, r.uniq_};
+      const std::initializer_list<uint32_t> enumL {cid_, cinum_, uniq_};
+      const std::initializer_list<uint32_t> enumR {r.cid_, r.cinum_, r.uniq_};
 
       return std::lexicographical_compare(
         enumL.begin(), enumL.end(),
         enumR.begin(), enumR.end());
     }
-
 
   };
 
@@ -899,6 +955,136 @@ class tableMetrics {
     // no. No need to do anything.
   }
 
+  void flush() const
+  {
+    value_list_t vl = { 0 };
+    value_t dispatchedValue;
+    vl.values = &dispatchedValue;
+    vl.values_len = 1;
+    vl.interval = 10000;
+
+    // strcpy(vl.host, "my.host.name");
+
+    strcpy(vl.plugin, "mapr.db.table");
+
+    for (auto &t : unflushedMetrics_) {
+      auto &perTableData = t.second;
+     vl.time = MS_TO_CDTIME_T(perTableData.timestamp);
+
+      strcpy(vl.plugin_instance, t.first.c_str());
+      for (auto index = 0; index < perTableData.kNumberOfRpcs; ++index) {
+        strcpy(vl.type_instance, rpcIndexTo_c_str(index));
+        for (auto &metric : perTableData.perRpc[index].enumerate()) {
+          auto &val = metric.second;
+          strcpy(vl.type, to_c_str(metric.first));
+          dispatchedValue.gauge = val;
+          LOG("pdv %s %ld @%.3f", vl.type, val, CDTIME_T_TO_DOUBLE(vl.time));
+          plugin_dispatch_values(&vl);
+        }
+      }
+    }
+  }
+
+  void reset()
+  {
+    for (auto &t : unflushedMetrics_) {
+      auto &perTableData = t.second;
+      perTableData.timestamp = INT64_MAX;
+      for (auto index = 0; index < perTableData.kNumberOfRpcs; ++index) {
+        for (auto &metric : perTableData.perRpc[index].enumerate()) {
+          metric.second.get() = 0;
+        }
+      }
+      
+    }
+  }
+
+
+  void flush2() const
+  {
+    Metrics message;
+    for (auto &t : unflushedMetrics_) {
+      auto &perTableData = t.second;
+      for (auto index = 0; index < perTableData.kNumberOfRpcs; ++index) {
+        // for each RPC we have a bunch of metrics
+        for (auto &metric : perTableData.perRpc[index].enumerate()) {
+          auto m = message.add_metrics();
+
+          metricValue number;
+          number.set_number(metric.second);
+          *m->mutable_value() = number;
+
+          m->set_name(to_c_str(metric.first));
+          m->set_time(perTableData.timestamp);
+
+          auto tag_fid = m->add_tags();
+          tag_fid->set_name("table_fid");
+          tag_fid->set_value(t.first.c_str());
+
+          auto tag_rpc = m->add_tags();
+          tag_rpc->set_name("rpc_type");
+          tag_rpc->set_value(rpcIndexTo_c_str(index));
+        }
+
+        // and a histogram. Histogram has several buckets:
+        static_assert(decltype(perTableData.perRpc[index].histo){}.size() == 
+          IndexOfLastTableMetricsBucket, "");
+        static_assert(buckets.size() == IndexOfLastTableMetricsBucket, "");
+
+        auto mHisto = message.add_metrics();
+        auto histo = mHisto->mutable_value();
+
+        for (size_t bkt = 0; bkt < buckets.size(); ++bkt) {
+          auto countInBucket = perTableData.perRpc[index].histo[bkt];
+          if (countInBucket == 0) {
+            continue;
+          }
+          auto bucket = histo->add_buckets();
+          bucket->set_start(buckets[bkt].first);
+          bucket->set_end(buckets[bkt].second);
+          bucket->set_number(countInBucket);
+        }
+
+
+        mHisto->set_name("histo");
+        mHisto->set_time(perTableData.timestamp);
+
+        auto tag_fid = mHisto->add_tags();
+        tag_fid->set_name("table_fid");
+        tag_fid->set_value(t.first.c_str());
+
+        auto tag_rpc = mHisto->add_tags();
+        tag_rpc->set_name("rpc_type");
+        tag_rpc->set_value(rpcIndexTo_c_str(index));
+      }
+    }
+
+    auto cb = message.ByteSize();
+    auto buffer = AllocateMetricsPointer(cb);
+    namespace pb = google::protobuf::io;
+
+    google::protobuf::io::ArrayOutputStream output(buffer->data, cb);
+    
+    auto bMustSucceed = message.SerializeToZeroCopyStream(&output);
+    if (!bMustSucceed) {
+      ERR("Failed to serialize the opaque message for writer, %d bytes.", cb);
+      return;
+    }
+
+    value_list_t vl;
+    value_t dummy;
+    dummy.counter = 12345;
+    vl.values = &dummy;
+    strcpy(vl.plugin, "mapr.db.table");
+    vl.interval = 0;
+    vl.time = cdtime();
+    vl.values_len = 1;
+    EncodeMetricsPointer(&vl, buffer);
+    plugin_dispatch_values(&vl);
+
+  }
+
+
   int read()
   {
     // documentation advises that read() doesn't have to be reentrant-safe
@@ -944,50 +1130,9 @@ class tableMetrics {
       cluster_.setDispatchedOffset(name, details.bytesProcessed);
       details.storedDispatchedOffset = details.bytesProcessed;
     }
-
-    value_list_t vl = { 0 };
-    value_t dispatchedValue;
-    vl.values = &dispatchedValue;
-    vl.values_len = 1;
-    vl.interval = 10000;
-
-    // strcpy(vl.host, "my.host.name");
-
-    strcpy(vl.plugin, "mapr.db.table");
-
-    for (auto &t : unflushedMetrics_) {
-      auto &perTableData = t.second;
-
-      vl.time = MS_TO_CDTIME_T(perTableData.timestamp);
-      perTableData.timestamp = INT64_MAX;
-      strcpy(vl.plugin_instance, t.first.c_str());
-      for (auto index = 0; index < perTableData.kNumberOfRpcs; ++index) {
-        strcpy(vl.type_instance, rpcIndexTo_c_str(index));
-        for (auto &metric : perTableData.perRpc[index].enumerate()) {
-          auto &val = metric.second;
-          if (val.get() == 0) {
-            continue;
-          }
-          strcpy(vl.type, to_c_str(metric.first));
-          dispatchedValue.gauge = val;
-          LOG("pdv %s %ld @%.3f", vl.type, val.get(), CDTIME_T_TO_DOUBLE(vl.time));
-          plugin_dispatch_values(&vl);
-          val.get() = 0;
-        }
-      }
-
-      // HACK HACK
-
-      value_t histo[11];
-      for (auto i = 0; i < 11; ++i) {
-        histo[i].gauge = i;
-      }
-      vl.values = histo;
-      vl.values_len = 11;
-      strcpy(vl.type, "latency_hist");
-      plugin_dispatch_values(&vl);
-
-    }
+    flush();
+    flush2();
+    reset();
 
     return 0;
   }

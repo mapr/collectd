@@ -106,6 +106,36 @@ enum DBProg {
 
 // copied from mapr-core/src/fs/proto/dbserver.proto
 
+// latency histogram layout.
+// buckets are [0-1), [1-2), ..., [10000-inf):
+enum HistoBucketBoundary {
+  bucket0  =     1;
+  bucket1  =     2;
+  bucket2  =     5;
+  bucket3  =    10;
+  bucket4  =    25;
+  bucket5  =    50;
+  bucket6  =   100;
+  bucket7  =   250;
+  bucket8  =   500;
+  bucket9  =  1000;
+  bucket10 =  2500;
+  bucket11 =  5000;
+  bucket12 = 10000;
+}
+
+enum MetricsConstants {
+  IndexOfLastTableMetricsBucket = 13;
+  // we will have IndexOfLastTableMetricsBucket + 2 buckets:
+  // imagine there is only ONE bucket (with cutoff k). Its index, zero based, 
+  // is going to be zero. But we certainly have two buckets: [0 -- k) and
+  // [k -- inf). QED.
+}
+
+message HistoBar {
+  optional uint64 index = 1;
+  optional uint64 frequency = 2;
+}
 // Metrics that are collected per RPC
 message TableMetricsAuditRpcMetricProto {
   optional DBProg prog = 1;
@@ -115,7 +145,7 @@ message TableMetricsAuditRpcMetricProto {
   optional uint64 writeRows = 5;
   optional uint64 respRows = 6;
   optional uint64 readRows = 7;
-  // TODO latency
+  repeated HistoBar latencyHisto = 8;
 }
 
 // The per table metrics structure that will be used only when audit wants to
