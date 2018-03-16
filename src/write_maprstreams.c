@@ -665,23 +665,7 @@ static int wt_send_message (const char* key, const char* value,
     mlen = strlen(message);
     INFO("write_maprstreams plugin: json message %s of size %zu",message,mlen);
 
-//    message_len = ssnprintf (message,
-//                             sizeof(message),
-//                             "%s %s fqdn=%s %s %s %s\r\n",
-//                             key,
-//                             value,
-//                             host,
-//                             value_tags,
-//                             tags,
-//                             host_tags);
-
     sfree(temp);
-
-//    if (message_len >= sizeof(message)) {
-//        ERROR("write_maprstreams plugin: message buffer too small: "
-//              "Need %d bytes.", message_len + 1);
-//        return -1;
-//    }
 
     // Send the message to topic
     rd_kafka_producev (ctx->kafka,
@@ -690,18 +674,9 @@ static int wt_send_message (const char* key, const char* value,
                           RD_KAFKA_V_MSGFLAGS (RD_KAFKA_MSG_F_COPY),
                           RD_KAFKA_V_TIMESTAMP(CDTIME_T_TO_MS(time)),
                           RD_KAFKA_V_END);
-    //pthread_mutex_lock(&ctx->lock);
-
- /**
-  * Changing the produce call to include timestamp in message instead of payload
-  */
-//    rd_kafka_produce(ctx->topic, RD_KAFKA_PARTITION_UA,
-//        RD_KAFKA_MSG_F_COPY, message, message_len,
-//        NULL, 0, NULL);
 
     rd_kafka_poll(ctx->kafka,10);
 
-    // Uncomment this line once bug 30736 is fixed
     INFO("write_maprstreams plugin: PRINT message %s of size %zu sent to topic %s",message, mlen, rd_kafka_topic_name(ctx->topic));
     // Free the space allocated for temp topic name and stream name
     free(temp_topic_name);
