@@ -644,7 +644,7 @@ int format_json_mapr_data(char *buffer, /* {{{ */
 
   return (format_json_mapr_data_nocheck(buffer, ret_buffer_fill,
                                          ret_buffer_free, metric, value, host,
-                                         tags, meta_tags, host_tags, (*ret_buffer_free) - 6));
+                                         tags, meta_tags, host_tags, (*ret_buffer_free) - 2));
 } /* }}} int format_json_mapr_data */
 
 #if HAVE_LIBYAJL
