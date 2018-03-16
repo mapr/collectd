@@ -580,25 +580,11 @@ static int wt_format_name(char *ret, int ret_len,
     return 0;
 }
 
-static int wt_send_message (const char* key, const char* value,
-                            const char* value_tags,
-                            cdtime_t time, struct wt_kafka_topic_context *ctx,
-                            const value_list_t *vl)
+static int wt_send_message (char *message, size_t mlen, cdtime_t time, const char* host, struct wt_kafka_topic_context *ctx)
 {
     int status;
-    //int message_len;
     int hashCode;
     int nDigits;
-    char *temp = NULL;
-    char *tags = "";
-    char message[8192];
-    char *host_tags = ctx->host_tags ? ctx->host_tags : "";
-    const char *meta_tsdb = "tsdb_tags";
-    const char* host = vl->host;
-    meta_data_t *md = vl->meta;
-    size_t mfree = sizeof(message);
-    size_t mfill = 0;
-    size_t mlen = 0;
 
     pthread_mutex_lock (&ctx->lock);
     // Generate a hash between 0 and M for the metric
@@ -616,7 +602,7 @@ static int wt_send_message (const char* key, const char* value,
     sprintf(append,"%d",hashCode);
     strcat(stream_name,append);
     ctx->stream = stream_name;
-    INFO("write_maprstreams plugin: Stream Name is %s for key %s",ctx->stream,key);
+    INFO("write_maprstreams plugin: Stream Name is %s for message %s",ctx->stream, message);
 
     // Allocate enough space for the topic name -- "<streamname>:<fqdn>"
     char *temp_topic_name = (char *) malloc( strlen(ctx->stream) + strlen(host) + 2 );
@@ -638,34 +624,6 @@ static int wt_send_message (const char* key, const char* value,
     status = wt_kafka_handle(ctx);
     if( status != 0 )
       return status;
-    //bzero(message, sizeof(message));
-
-    /* skip if value is NaN */
-    if (value[0] == 'n')
-        return 0;
-
-    if (md) {
-        status = meta_data_get_string(md, meta_tsdb, &temp);
-        if (status == -ENOENT) {
-            /* defaults to empty string */
-        } else if (status < 0) {
-            ERROR("write_maprstreams plugin: tags metadata get failure");
-            sfree(temp);
-            pthread_mutex_unlock(&ctx->lock);
-            return status;
-        } else {
-            INFO("write_maprstreams plugin: metadata found %s ", tags);
-            tags = temp;
-        }
-    }
-
-    format_json_initialize(message, &mfill, &mfree);
-    format_json_mapr_data(message, &mfill, &mfree, key, value, host, value_tags, tags, host_tags);
-    format_json_finalize(message, &mfill, &mfree);
-    mlen = strlen(message);
-    INFO("write_maprstreams plugin: json message %s of size %zu",message,mlen);
-
-    sfree(temp);
 
     // Send the message to topic
     rd_kafka_producev (ctx->kafka,
@@ -691,6 +649,55 @@ static int wt_send_message (const char* key, const char* value,
 
     return 0;
 }
+
+static int wt_make_send_message (const char* key, const char* value,
+                            const char* value_tags,
+                            cdtime_t time, struct wt_kafka_topic_context *ctx,
+                            const value_list_t *vl)
+{
+    int status;
+    char *temp = NULL;
+    char *tags = "";
+    char message[8192];
+    char *host_tags = ctx->host_tags ? ctx->host_tags : "";
+    const char *meta_tsdb = "tsdb_tags";
+    const char* host = vl->host;
+    meta_data_t *md = vl->meta;
+    size_t mfree = sizeof(message);
+    size_t mfill = 0;
+    size_t mlen = 0;
+
+    /* skip if value is NaN */
+    if (value[0] == 'n')
+        return 0;
+
+    if (md) {
+        status = meta_data_get_string(md, meta_tsdb, &temp);
+        if (status == -ENOENT) {
+            /* defaults to empty string */
+        } else if (status < 0) {
+            ERROR("write_maprstreams plugin: tags metadata get failure");
+            sfree(temp);
+            pthread_mutex_unlock(&ctx->lock);
+            return status;
+        } else {
+            INFO("write_maprstreams plugin: metadata found %s ", tags);
+            tags = temp;
+        }
+    }
+
+    format_json_initialize(message, &mfill, &mfree);
+    format_json_mapr_data(message, &mfill, &mfree, key, value, host, value_tags, tags, host_tags);
+    format_json_finalize(message, &mfill, &mfree);
+    mlen = strlen(message);
+    INFO("write_maprstreams plugin: json message %s of size %zu",message,mlen);
+    sfree(temp);
+    status = wt_send_message(message, mlen, time, host, ctx);
+    if (status != 0) return status;
+    return 0;
+}
+
+
 
 static int wt_write_messages(const data_set_t *ds, const value_list_t *vl,
                              struct wt_kafka_topic_context *cb)
@@ -745,8 +752,8 @@ static int wt_write_messages(const data_set_t *ds, const value_list_t *vl,
         }
 
 
-        /* Send the message to MapR Streams */
-        status = wt_send_message(key, values, tags, vl->time, cb, vl);
+        /* Create the JSON message and send it to MapR streams*/
+        status = wt_make_send_message(key, values, tags, vl->time, cb, vl);
         if (status != 0)
         {
             ERROR("write_maprstreams plugin: error with "
