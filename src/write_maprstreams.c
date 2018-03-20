@@ -162,6 +162,7 @@ struct wt_kafka_topic_context {
     char                         escape_char;
     char                        *topic_name;
     char                        *host_tags;
+    char                        *preprocessed_host_tags;
     char                        *stream;
     char						*path;
     int 						 streamsCount;
@@ -625,6 +626,7 @@ static int wt_send_message (char *message, size_t mlen, cdtime_t time, const cha
       return -1;
     }
     // Get a handle to kafka topics and kafka conf
+
     status = wt_kafka_handle(ctx);
     if( status != 0 )
       return status;
@@ -711,6 +713,8 @@ typedef struct mapr_metrics_context_s {
     struct _Tag **tags2;
     int number_of_tags2;
 
+    const char *preprocessed_host_tags;
+
     struct {
         int use_histo;
         uint64_t value;
@@ -729,7 +733,7 @@ char *dump_tags_to_json(
 {
     char *p = dump_at;
     for (int i = 0; i < ntags; ++i) {
-        sprintf(p, "\n\"%s\": \"%s\",", tags[i]->name, tags[i]->value);
+        sprintf(p, "\"%s\": \"%s\",", tags[i]->name, tags[i]->value);
         p = &p[strlen(p)];
     }
     return p;
@@ -741,18 +745,9 @@ char *mapr_dump_to_json(
     const mapr_metrics_context *ctx)
 {
     char *p = dump_at;
-    sprintf(p, "{\n\"metric\": \"%s\",\n", ctx->metric_name);
+    sprintf(p, "[{\"metric\": \"%s\",", ctx->metric_name);
     p = &p[strlen(p)];
 
-    if (ctx->number_of_tags1 + ctx->number_of_tags2 > 0) {
-        strcpy(p, "\"tags\": {");
-        p = &p[strlen(p)];
-        p = dump_tags_to_json(p, ctx->number_of_tags1, ctx->tags1);
-        p = dump_tags_to_json(p, ctx->number_of_tags2, ctx->tags2);
-        --p; // to eat the comma
-        strcpy(p, "\n},\n");
-        p = &p[strlen(p)];
-    }
 
     if (ctx->data.use_histo) {
         strcpy(p, "\"buckets\": {");
@@ -760,14 +755,29 @@ char *mapr_dump_to_json(
         for (int i = 0; i < ctx->data.histo.number_of_buckets; ++i) {
             const HistoBucket *bucket = ctx->data.histo.buckets[i];
             sprintf(
-                p, "\n\"%" PRId64 ",%" PRId64 "\": %" PRId64 ",",
+                p, "\"%" PRId64 ",%" PRId64 "\": %" PRId64 ",",
                 bucket->start, bucket->end, bucket->number);
             p = &p[strlen(p)];
         }
         --p; // comma again
-        strcpy(p, "\n}\n}\n");
+        strcpy(p, "}");
     } else {
-        sprintf(p, "\"value\": %" PRId64 "\n}\n", ctx->data.value);
+        sprintf(p, "\"value\": %" PRId64, ctx->data.value);
+    }
+    p = &p[strlen(p)];
+
+    if ((ctx->number_of_tags1 + ctx->number_of_tags2 > 0) ||
+        (ctx->preprocessed_host_tags[0] != '\0')) {
+        strcpy(p, ",\"tags\": {");
+        p = &p[strlen(p)];
+        p = dump_tags_to_json(p, ctx->number_of_tags1, ctx->tags1);
+        p = dump_tags_to_json(p, ctx->number_of_tags2, ctx->tags2);
+        strcpy(p, ctx->preprocessed_host_tags);
+        p = &p[strlen(p)];
+        --p; // to eat the comma
+        strcpy(p, "}}]");
+    } else {
+        strcpy(p, "}]");
     }
     return &p[strlen(p)];
 }
@@ -775,13 +785,15 @@ char *mapr_dump_to_json(
 
 void wt_process_and_write_unpacked_metrics(
     const Metrics *metrics,
-    struct wt_kafka_topic_context *cb)
+    const char *host_from_vl, 
+    struct wt_kafka_topic_context *ctx)
 {
     mapr_metrics_context staging_context;
     char staging_buffer[512000];
     char *staging_pointer = &staging_buffer[0];
 
     // 1. stage everything into staging_context:
+    staging_context.preprocessed_host_tags = ctx->preprocessed_host_tags;
 
     // validate and stage common tags:
     INFO("validating 0n%" PRId64 " common tags", metrics->n_commontags);
@@ -921,16 +933,20 @@ void wt_process_and_write_unpacked_metrics(
         }
 
         // INFO("Dumping one metric to buffer at 0x%p", staging_pointer);
-        char * temp = mapr_dump_to_json(staging_pointer, &staging_context);
-        INFO("jsoned metric: %s", staging_pointer);
-        staging_pointer = temp;
+        char *temp = mapr_dump_to_json(staging_pointer, &staging_context);
+        DEBUG("jsoned metric: %s", staging_pointer);
+        (void)wt_send_message(
+            staging_pointer, temp - staging_pointer, 
+             MS_TO_CDTIME_T(staging_context.time), host_from_vl, ctx);
+
     }
 }
 
 
 void wt_process_and_write_opaque_buffer(
     const MetricsBuffer *ptr,
-    struct wt_kafka_topic_context *cb)
+    const char *host_from_value_list, 
+    struct wt_kafka_topic_context *ctx)
 {
     assert(ptr != NULL);
     if (!ptr) {
@@ -945,7 +961,8 @@ void wt_process_and_write_opaque_buffer(
     }
     INFO("Unpacked metrics at %p", metrics);
 
-    wt_process_and_write_unpacked_metrics(metrics, cb);
+
+    wt_process_and_write_unpacked_metrics(metrics, host_from_value_list, ctx);
 
     metrics__free_unpacked(metrics, NULL);
 
@@ -963,7 +980,7 @@ static int wt_write_messages(const data_set_t *ds, const value_list_t *vl,
 
     MetricsBuffer *ptr = DecodeMetricsPointer(vl);
     if (ptr != NULL) {
-        wt_process_and_write_opaque_buffer(ptr, cb);
+        wt_process_and_write_opaque_buffer(ptr, vl->host, cb);
         ReleaseMetricsPointer(ptr);
         return 0;
     }
@@ -1048,6 +1065,35 @@ static void clearContext(struct wt_kafka_topic_context  *tctx) {
   sfree(tctx);
 }
 
+static void convert_host_tags_to_json(const char *source, char **json)
+{
+    assert(source);
+    assert(json);
+    char *temp = strdup(source);
+    char *ret = (char *) malloc(strlen(source) * 2);
+    ret[0] = '\0';
+    char *pos = ret;
+    char *name = NULL;
+    char *tok = strtok(temp, "= ");
+
+    for (int counter = 1; tok != NULL; ++counter) {
+        if (counter % 2) { // name
+            name = tok;
+        } else { // value
+            sprintf(pos, "\"%s\" : \"%s\",", name, tok);
+            pos = &pos[strlen(pos)];
+        }
+
+        tok = strtok(NULL, "= ");
+    }
+
+    free(temp);
+
+    INFO ("preprocessed host tags: %s", ret);
+    *json = ret;
+}
+
+
 static int wt_config_stream(oconfig_item_t *ci)
 {
     user_data_t user_data;
@@ -1098,9 +1144,10 @@ static int wt_config_stream(oconfig_item_t *ci)
 
       if (strcasecmp("Path", child->key) == 0)
         cf_util_get_string(child, &tctx->path);
-      else if (strcasecmp("HostTags", child->key) == 0)
+      else if (strcasecmp("HostTags", child->key) == 0) {
         cf_util_get_string(child, &tctx->host_tags);
-      else if (strcasecmp("StreamsCount", child->key) == 0)
+        convert_host_tags_to_json(tctx->host_tags, &tctx->preprocessed_host_tags);
+      }  else if (strcasecmp("StreamsCount", child->key) == 0)
         cf_util_get_int(child, &tctx->streamsCount);
       else
       {
