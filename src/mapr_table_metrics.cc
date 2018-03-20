@@ -1014,6 +1014,9 @@ class tableMetrics {
   {
     for (auto &t : unflushedMetrics_) {
       auto &perTableData = t.second;
+      if (perTableData.timestamp == INT64_MAX) {
+        continue;
+      }
       perTableData.timestamp = INT64_MAX;
       for (auto index = 0; index < perTableData.kNumberOfRpcs; ++index) {
         for (auto &metric : perTableData.perRpc[index].enumerate()) {
@@ -1189,7 +1192,6 @@ class tableMetrics {
       cluster_.setDispatchedOffset(name, details.bytesProcessed);
       details.storedDispatchedOffset = details.bytesProcessed;
     }
-    flush();
     flush2();
 
     reset();
