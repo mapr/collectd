@@ -1,0 +1,15 @@
+Build instructions for collectd:
+
+sh build.sh   # builds configure
+configure --prefix=/opt/mapr/collectd/collectd-5.5.0/ `cat ext-conf/enable_modules_[rpm|deb].txt`
+make
+
+
+Then there are a few files that has to get moved to the right place
+ext-conf/collectd.conf -> /opt/mapr/collectd/collectd-5.5.0/etc/collectd.conf.mapr
+ext-conf/configure.sh -> /opt/mapr/collectd/collectd-5.5.0/bin
+ext-conf/*.awk -> /opt/mapr/collectd/collectd-5.5.0/lib/awk
+contrib/[unbuntu*|redhat]/collectd.init.d /opt/mapr/collectd/collectd-5.5.0/etc/init.d/collectd
+
+
+
