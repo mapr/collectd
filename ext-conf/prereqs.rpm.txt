@@ -1,0 +1,5 @@
+yum install liblvm2-dev
+yum install libcurl4-openssl-dev
+yum install libatasmart-dev
+yum install libsensors4-dev
+yum install libmysqlclient-dev
