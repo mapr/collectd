@@ -526,7 +526,7 @@ static int wt_format_tags(char *ret, int ret_len,
         const char *k = (key); \
         const char *v = (value); \
         if(k[0] != '\0' && v[0] != '\0') { \
-            n = ssnprintf(ptr, remaining_len, " %s=%s", k, v); \
+            n = snprintf(ptr, remaining_len, " %s=%s", k, v); \
             if(n >= remaining_len) { \
                 ptr[0] = '\0'; \
             } else { \
@@ -580,7 +580,7 @@ static int wt_format_tags(char *ret, int ret_len,
                 sfree(temp);
             }
             if(temp[0] != '\0') {
-                n = ssnprintf(ptr, remaining_len, " %s", temp);
+                n = snprintf(ptr, remaining_len, " %s", temp);
                 if(n >= remaining_len) {
                     ptr[0] = '\0';
                 } else {
@@ -691,7 +691,7 @@ static int wt_format_name(char *ret, int ret_len,
         }
     }
     if(tsdb_id) {
-        ssnprintf(ret, ret_len, "%s%s", prefix?prefix:"", tsdb_id);
+        snprintf(ret, ret_len, "%s%s", prefix?prefix:"", tsdb_id);
     } else {
 #define TSDB_STRING_APPEND_STRING(string) do { \
     const char *str = (string); \
@@ -796,7 +796,7 @@ static int wt_send_message (const char* key, const char* value,
         }
     }
 
-    message_len = ssnprintf (message,
+    message_len = snprintf (message,
                              sizeof(message),
                              "put %s %.0f %s fqdn=%s %s %s %s\r\n",
                              key,

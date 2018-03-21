@@ -586,7 +586,7 @@ static procstat_t *ps_read_tasks_status (int pid, procstat_t *ps)
   //char statBuffer[1024];
 
 
-  ssnprintf (dirname, sizeof (dirname), "/proc/%i/task", pid);
+  snprintf (dirname, sizeof (dirname), "/proc/%i/task", pid);
 
   if ((dh = opendir (dirname)) == NULL)
   {
@@ -603,7 +603,7 @@ static procstat_t *ps_read_tasks_status (int pid, procstat_t *ps)
 
     tpid = ent->d_name;
 
-    ssnprintf (filename, sizeof (filename), "/proc/%i/task/%s/status", pid, tpid);
+    snprintf (filename, sizeof (filename), "/proc/%i/task/%s/status", pid, tpid);
     if ((fh = fopen (filename, "r")) == NULL)
     {
       ERROR ("Failed to open file `%s'", filename);
@@ -648,7 +648,7 @@ static procstat_t *ps_read_tasks_status (int pid, procstat_t *ps)
     }
 
 //    // Read /proc/pid/task/taskid/stat file
-//    ssnprintf (filename, sizeof (filename), "/proc/%i/task/%s/stat", pid, tpid);
+//    snprintf (filename, sizeof (filename), "/proc/%i/task/%s/stat", pid, tpid);
 //    INFO ("mapr_process plugin: Reading task %s file for process %s", tpid, ps->name);
 //    status = read_file_contents (filename, statBuffer, sizeof(statBuffer) - 1);
 //    if (status <= 0)
@@ -720,7 +720,7 @@ static procstat_t *ps_read_status (int pid, procstat_t *ps)
   char *fields[8];
   int numfields;
 
-  ssnprintf (filename, sizeof (filename), "/proc/%i/status", pid);
+  snprintf (filename, sizeof (filename), "/proc/%i/status", pid);
   if ((fh = fopen (filename, "r")) == NULL)
     return (NULL);
 
@@ -787,7 +787,7 @@ static procstat_t *ps_read_io (int pid, procstat_t *ps)
   char *fields[8];
   int numfields;
 
-  ssnprintf (filename, sizeof (filename), "/proc/%i/io", pid);
+  snprintf (filename, sizeof (filename), "/proc/%i/io", pid);
   if ((fh = fopen (filename, "r")) == NULL)
     return (NULL);
 
@@ -913,7 +913,7 @@ int ps_read_process (int pid, procstat_t *ps, char *state)
 
   memset (ps, 0, sizeof (procstat_t));
 
-  ssnprintf (filename, sizeof (filename), "/proc/%i/stat", pid);
+  snprintf (filename, sizeof (filename), "/proc/%i/stat", pid);
 
   status = read_file_contents (filename, buffer, sizeof(buffer) - 1);
   if (status <= 0)
