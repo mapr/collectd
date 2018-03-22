@@ -1995,7 +1995,7 @@ endif
 # mapr template..
 all-local: check-conf-changes
 
-check-conf-changes: $(srcdir)/collectd.conf
+check-conf-changes:
 	if ! diff -q $(srcdir)/collectd.conf.in $(srcdir)/../ext-conf/collectd.conf.in.change_detect  ; \
 	then \
 		echo "Collectd.conf has changes - update the mapr version accordingly"; \
