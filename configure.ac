@@ -4843,9 +4843,9 @@ if test "x$with_librdkafka" = "xyes"; then
   BUILD_WITH_LIBRDKAFKA_LDFLAGS="$with_librdkafka_ldflags"
 
   if test "x$with_librdkafka_rpath" != "x"; then
-    BUILD_WITH_LIBRDKAFKA_LIBS="-Wl,-rpath,$with_librdkafka_rpath -lrdkafka -lMapRClient"
+    BUILD_WITH_LIBRDKAFKA_LIBS="-Wl,-rpath,$with_librdkafka_rpath -lrdkafka"
   else
-    BUILD_WITH_LIBRDKAFKA_LIBS="-lrdkafka -lMapRClient"
+    BUILD_WITH_LIBRDKAFKA_LIBS="-lrdkafka"
   fi
 
   if test "x$with_librdkafka_log_cb" = "xyes"; then
@@ -4860,6 +4860,71 @@ AC_SUBST([BUILD_WITH_LIBRDKAFKA_LDFLAGS])
 AC_SUBST([BUILD_WITH_LIBRDKAFKA_LIBS])
 # }}}
 
+# --with-librdkafka_jvm {{{
+AC_ARG_WITH(librdkafka_jvm, [AS_HELP_STRING([--with-librdkafka_jvm@<:@=PREFIX@:>@], [Path to librdkafka_jvm.])],
+[
+  if test "x$withval" != "xno" && test "x$withval" != "xyes"
+  then
+    with_librdkafka_jvm_cppflags="-I$withval/include"
+    with_librdkafka_jvm_ldflags="-L$withval/lib"
+    with_librdkafka_jvm_rpath="$withval/lib"
+    with_librdkafka_jvm="yes"
+  else
+    with_librdkafka_jvm="$withval"
+  fi
+],
+[
+  with_librdkafka_jvm="yes"
+])
+SAVE_CPPFLAGS="$CPPFLAGS"
+SAVE_LDFLAGS="$LDFLAGS"
+
+CPPFLAGS="$CPPFLAGS $with_librdkafka_jvm_cppflags"
+if test "x$with_librdkafka_jvm_rpath" != "x"
+then
+    LDFLAGS="$LDFLAGS $JAVA_LDFLAGS $with_librdkafka_jvm_ldflags -Wl,-rpath,$with_librdkafka_jvm_rpath"
+else
+    LDFLAGS="$LDFLAGS $with_librdkafka_jvm_ldflags"
+fi
+
+if test "x$with_librdkafka_jvm" = "xyes"
+then
+	AC_CHECK_HEADERS(librdkafka/rdkafka.h, [with_librdkafka_jvm="yes"], [with_librdkafka_jvm="no (librdkafka/rdkafka.h not found)"])
+fi
+
+if test "x$with_librdkafka_jvm" = "xyes"
+then
+	AC_CHECK_LIB(rdkafka_jvm, rd_kafka_new, [with_librdkafka_jvm="yes"], [with_librdkafka_jvm="no (Symbol 'rd_kafka_new' not found)"])
+  AC_CHECK_LIB(rdkafka_jvm, rd_kafka_conf_set_log_cb, [with_librdkafka_jvm_log_cb="yes"], [with_librdkafka_jvm_log_cb="no"])
+  AC_CHECK_LIB(rdkafka_jvm, rd_kafka_set_logger, [with_librdkafka_jvm_logger="yes"], [with_librdkafka_jvm_logger="no"])
+fi
+if test "x$with_librdkafka_jvm" = "xyes"
+then
+	BUILD_WITH_LIBRDKAFKA_JVM_CPPFLAGS="$with_librdkafka_jvm_cppflags"
+	BUILD_WITH_LIBRDKAFKA_JVM_LDFLAGS="$with_librdkafka_jvm_ldflags"
+	if test "x$with_librdkafka_jvm_rpath" != "x"
+	then
+		BUILD_WITH_LIBRDKAFKA_JVM_LIBS="-Wl,-rpath,$with_librdkafka_jvm_rpath -lrdkafka_jvm -lMapRClient"
+	else
+		BUILD_WITH_LIBRDKAFKA_JVM_LIBS="-lrdkafka_jvm_jvm -lMapRClient"
+	fi
+	AC_SUBST(BUILD_WITH_LIBRDKAFKA_JVM_CPPFLAGS)
+	AC_SUBST(BUILD_WITH_LIBRDKAFKA_JVM_LDFLAGS)
+	AC_SUBST(BUILD_WITH_LIBRDKAFKA_JVM_LIBS)
+	AC_DEFINE(HAVE_LIBRDKAFKA_JVM, 1, [Define if librdkafka is present and usable.])
+  if test "x$with_librdkafka_jvm_log_cb" = "xyes"
+  then
+        AC_DEFINE(HAVE_LIBRDKAFKA_JVM_LOG_CB, 1, [Define if librdkafka log facility is present and usable.])
+  else if test "x$with_librdkafka_jvm_logger" = "xyes"
+  then
+        AC_DEFINE(HAVE_LIBRDKAFKA_JVM_LOGGER, 1, [Define if librdkafka log facility is present and usable.])
+  fi; fi
+fi
+CPPFLAGS="$SAVE_CPPFLAGS"
+LDFLAGS="$SAVE_LDFLAGS"
+AM_CONDITIONAL(BUILD_WITH_LIBRDKAFKA_JVM, test "x$with_librdkafka_jvm" = "xyes")
+
+# }}}
 # --with-librouteros {{{
 AC_ARG_WITH([librouteros],
   [AS_HELP_STRING([--with-librouteros@<:@=PREFIX@:>@], [Path to librouteros.])],
@@ -6647,7 +6712,7 @@ AC_PLUGIN([write_http],          [$with_libcurl],           [HTTP output plugin]
 AC_PLUGIN([write_kafka],         [$with_librdkafka],        [Kafka output plugin])
 AC_PLUGIN([write_log],           [yes],                     [Log output plugin])
 AC_PLUGIN([write_mongodb],       [$with_libmongoc],         [MongoDB output plugin])
-AC_PLUGIN([write_maprstreams],   [$with_librdkafka],        [MapR Streams output plugin])
+AC_PLUGIN([write_maprstreams],   [$with_librdkafka_jvm],    [MapR Streams output plugin])
 AC_PLUGIN([write_prometheus],    [$plugin_write_prometheus], [Prometheus write plugin])
 AC_PLUGIN([write_redis],         [$with_libhiredis],        [Redis output plugin])
 AC_PLUGIN([write_riemann],       [$with_libriemann_client], [Riemann output plugin])
@@ -6896,6 +6961,7 @@ AC_MSG_RESULT([    libpython . . . . . . $with_libpython])
 AC_MSG_RESULT([    librabbitmq . . . . . $with_librabbitmq])
 AC_MSG_RESULT([    libriemann-client . . $with_libriemann_client])
 AC_MSG_RESULT([    librdkafka  . . . . . $with_librdkafka])
+AC_MSG_RESULT([    librdkafka_jvm  . . . $with_librdkafka_jvm])
 AC_MSG_RESULT([    librouteros . . . . . $with_librouteros])
 AC_MSG_RESULT([    librrd  . . . . . . . $with_librrd])
 AC_MSG_RESULT([    libsensors  . . . . . $with_libsensors])
