@@ -104,6 +104,14 @@ function adjustOwnership() {
  }
 
 #############################################################################
+# Function to update MAPR_CORE_VERSION in config file
+#############################################################################
+function updateCoreVersion()
+{
+    sed -i -e 's/MAPR_CORE_VERSION/'"$MAPR_CORE_VERSION"'/' ${NEW_CD_CONF_FILE}
+}
+
+#############################################################################
 # Function to uncomment a section
 # $1 is the sectionTag prefix we will use to determine section to uncomment
 #############################################################################
@@ -118,7 +126,7 @@ function enableSection()
 }
 
 #############################################################################
-# Function to comment a section if it isn't already
+# Function to comment out a section if it isn't already
 # $1 is the sectionTag prefix we will use to determine section to comment out
 #############################################################################
 function disableSection()
