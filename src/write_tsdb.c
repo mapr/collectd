@@ -593,45 +593,8 @@ static int wt_format_tags(char *ret, int ret_len,
             sfree(temp);
         }
 
-<<<<<<< HEAD
-  if (ds_name != NULL) {
-    if (vl->plugin_instance[0] == '\0') {
-      if (vl->type_instance[0] == '\0') {
-        snprintf(ret, ret_len, "%s%s.%s.%s", prefix, vl->plugin, vl->type,
-                 ds_name);
-      } else {
-        snprintf(ret, ret_len, "%s%s.%s.%s.%s", prefix, vl->plugin, vl->type,
-                 vl->type_instance, ds_name);
-      }
-    } else { /* vl->plugin_instance != "" */
-      if (vl->type_instance[0] == '\0') {
-        snprintf(ret, ret_len, "%s%s.%s.%s.%s", prefix, vl->plugin,
-                 vl->plugin_instance, vl->type, ds_name);
-      } else {
-        snprintf(ret, ret_len, "%s%s.%s.%s.%s.%s", prefix, vl->plugin,
-                 vl->plugin_instance, vl->type, vl->type_instance, ds_name);
-      }
-    }
-  } else { /* ds_name == NULL */
-    if (vl->plugin_instance[0] == '\0') {
-      if (vl->type_instance[0] == '\0') {
-        snprintf(ret, ret_len, "%s%s.%s", prefix, vl->plugin, vl->type);
-      } else {
-        snprintf(ret, ret_len, "%s%s.%s.%s", prefix, vl->plugin,
-                 vl->type_instance, vl->type);
-      }
-    } else { /* vl->plugin_instance != "" */
-      if (vl->type_instance[0] == '\0') {
-        snprintf(ret, ret_len, "%s%s.%s.%s", prefix, vl->plugin,
-                 vl->plugin_instance, vl->type);
-      } else {
-        snprintf(ret, ret_len, "%s%s.%s.%s.%s", prefix, vl->plugin,
-                 vl->plugin_instance, vl->type, vl->type_instance);
-      }
-=======
     } else {
         ret[0] = '\0';
->>>>>>> mapr-v5.7.2
     }
 
 #undef TSDB_META_DATA_GET_STRING
@@ -748,20 +711,10 @@ static int wt_format_name(char *ret, int ret_len,
 #undef TSDB_STRING_APPEND_DOT
     }
 
-<<<<<<< HEAD
-  status =
-      snprintf(message, sizeof(message), "put %s %.0f %s fqdn=%s %s %s\r\n",
-               key, CDTIME_T_TO_DOUBLE(time), value, host, tags, host_tags);
-  sfree(temp);
-  if (status < 0)
-    return -1;
-  message_len = (size_t)status;
-=======
     sfree(tsdb_id);
     sfree(prefix);
     return 0;
 }
->>>>>>> mapr-v5.7.2
 
 static int wt_send_message (const char* key, const char* value,
                             const char* value_tags,
