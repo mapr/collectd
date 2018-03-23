@@ -108,7 +108,7 @@ function adjustOwnership() {
 #############################################################################
 function updateCoreVersion()
 {
-    sed -i -e 's/MAPR_CORE_VERSION/'"$MAPR_CORE_VERSION"'/' ${NEW_CD_CONF_FILE}
+    sed -i -e 's/\(maprfs-\)[0-9]\([0-9]\)*\.[0-9]\([0-9]\)*\.[0-9]\([0-9]\)*-mapr/\1'"$MAPR_CORE_VERSION"'-mapr/' ${NEW_CD_CONF_FILE}
 }
 
 #############################################################################
@@ -1076,6 +1076,7 @@ cp ${CD_CONF_FILE} ${NEW_CD_CONF_FILE}
 #configurezookeeperconfig
 adjustOwnership
 getRoles
+updateCoreVersion
 configuremaprstreamsplugin  # this ucomments everything between the MAPR_CONF_TAGs
 configureopentsdbplugin  # this ucomments everything between the MAPR_CONF_TAGs
 configurejavajmxplugin
