@@ -236,43 +236,31 @@ static int tags_to_json(char *buffer, size_t buffer_size, /* {{{ */
   } while (0)
 
   char *dupString = strdup(tags);
-  char *assignPart;
-  char **tupleArray  = NULL;
-  char *tuple = strtok (dupString, " ");
-  int n_spaces = 0, i, count;
+  char *str1, *str2;
+  char *saveptr1, *saveptr2;
+  char *token;
+  char *subtoken;
+  int i, count;
 
   /* split string and append tokens to tupleArray */
-  while (tuple) {
-    tupleArray = realloc (tupleArray, sizeof (char*) * ++n_spaces);
-    if (tupleArray == NULL) {
-      ERROR ("Memory allocation failed while allocating space for tuples");
-      return (-1); /* memory allocation failed */
-    }
-    tupleArray[n_spaces-1] = tuple;
-    tuple = strtok (NULL, " ");
-  }
-  free(tuple);
-
-  /* realloc one extra element for the last NULL */
-  tupleArray = realloc (tupleArray, sizeof (char*) * (n_spaces+1));
-  tupleArray[n_spaces] = 0;
-
-  /* split the tuples again */
-  for (i = 0; i < n_spaces; ++i) {
-    DEBUG ("tupleArray[%d] = %s\n", i, tupleArray[i]);
+  for (i = 1, str1 = dupString; ; i++, str1 = NULL) {
+    token = strtok_r(str1," ", &saveptr1);
+    if (token == NULL)
+      break;
+    DEBUG("token %d: %s\n", i, token);
     count = 0;
-    assignPart = strtok(tupleArray[i], "=");
-    while (assignPart != NULL) {
+    for (str2 = token; ; str2 = NULL) {
+      subtoken = strtok_r(str2,"=", &saveptr2);
+      if (subtoken == NULL)
+        break;
       if (count == 0) BUFFER_ADD(",");
       if (count > 0) BUFFER_ADD(":");
-      BUFFER_ADD("\"%s\"", assignPart);
+      BUFFER_ADD("\"%s\"", subtoken);
       count++;
-      assignPart = strtok(NULL, "=");
+      DEBUG("sub token %s\n", subtoken);
     }
-    free(assignPart);
   }
 
-  free(tupleArray);
   free(dupString);
 
 #undef BUFFER_ADD
