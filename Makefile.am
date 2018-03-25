@@ -1443,9 +1443,9 @@ endif
 if BUILD_PLUGIN_MAPR_VOLMETRICS
 pkglib_LTLIBRARIES += mapr_volmetrics.la
 mapr_volmetrics_la_SOURCES = src/mapr_volmetrics.c
-mapr_volmetrics_la_CPPFLAGS = $(AM_CPPFLAGS) $(HDFS_CPPFLAGS) $(BUILD_WITH_LIBRDKAFKA_CPPFLAGS)
-mapr_volmetrics_la_LDFLAGS = $(PLUGIN_LDFLAGS) $(BUILD_WITH_LIBRDKAFKA_LDFLAGS)
-mapr_volmetrics_la_LIBADD = $(BUILD_WITH_LIBRDKAFKA_LIBS)
+mapr_volmetrics_la_CPPFLAGS = $(AM_CPPFLAGS) $(HDFS_CPPFLAGS) $(BUILD_WITH_LIBRDKAFKA_JVM_CPPFLAGS)
+mapr_volmetrics_la_LDFLAGS = $(PLUGIN_LDFLAGS) $(BUILD_WITH_LIBRDKAFKA_JVM_LDFLAGS)
+mapr_volmetrics_la_LIBADD = $(BUILD_WITH_LIBRDKAFKA_JVM_LIBS)
 endif
 
 if BUILD_PLUGIN_PROTOCOLS
@@ -1891,10 +1891,10 @@ write_maprstreams_la_SOURCES = \
         src/write_maprstreams.c \
         src/utils_crc32.c \
         src/utils_crc32.h
-write_maprstreams_la_CPPFLAGS = $(AM_CPPFLAGS) $(BUILD_WITH_LIBRDKAFKA_CPPFLAGS)
-write_maprstreams_la_LDFLAGS = $(PLUGIN_LDFLAGS) $(BUILD_WITH_LIBRDKAFKA_LDFLAGS) \
+write_maprstreams_la_CPPFLAGS = $(AM_CPPFLAGS) $(BUILD_WITH_LIBRDKAFKA_JVM_CPPFLAGS)
+write_maprstreams_la_LDFLAGS = $(PLUGIN_LDFLAGS) $(BUILD_WITH_LIBRDKAFKA_JVM_LDFLAGS) \
                                libformat_graphite.la libformat_json.la libcmds.la
-write_maprstreams_la_LIBADD = $(BUILD_WITH_LIBRDKAFKA_LIBS)
+write_maprstreams_la_LIBADD = $(BUILD_WITH_LIBRDKAFKA_JVM_LIBS)
 endif
 
 if BUILD_PLUGIN_XMMS
