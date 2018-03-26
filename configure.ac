@@ -4904,9 +4904,9 @@ then
 	BUILD_WITH_LIBRDKAFKA_JVM_LDFLAGS="$with_librdkafka_jvm_ldflags"
 	if test "x$with_librdkafka_jvm_rpath" != "x"
 	then
-		BUILD_WITH_LIBRDKAFKA_JVM_LIBS="-Wl,-rpath,$with_librdkafka_jvm_rpath -lrdkafka_jvm -lMapRClient"
+		BUILD_WITH_LIBRDKAFKA_JVM_LIBS="-Wl,-rpath,$with_librdkafka_jvm_rpath -lrdkafka_jvm -lMapRClient -ljvm"
 	else
-		BUILD_WITH_LIBRDKAFKA_JVM_LIBS="-lrdkafka_jvm -lMapRClient"
+		BUILD_WITH_LIBRDKAFKA_JVM_LIBS="-lrdkafka_jvm -lMapRClient -ljvm"
 	fi
 	AC_SUBST(BUILD_WITH_LIBRDKAFKA_JVM_CPPFLAGS)
 	AC_SUBST(BUILD_WITH_LIBRDKAFKA_JVM_LDFLAGS)
