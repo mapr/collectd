@@ -4902,11 +4902,12 @@ if test "x$with_librdkafka_jvm" = "xyes"
 then
 	BUILD_WITH_LIBRDKAFKA_JVM_CPPFLAGS="$with_librdkafka_jvm_cppflags"
 	BUILD_WITH_LIBRDKAFKA_JVM_LDFLAGS="$with_librdkafka_jvm_ldflags"
+        TMPVAR=`find -L "$with_java_home" -type f \( -name libjvm.so -o -name libjvm.dylib \) -exec 'dirname' '{}' ';' 2>/dev/null | LC_ALL=C sort | head -n 1`
 	if test "x$with_librdkafka_jvm_rpath" != "x"
 	then
-		BUILD_WITH_LIBRDKAFKA_JVM_LIBS="-Wl,-rpath,$with_librdkafka_jvm_rpath -lrdkafka_jvm -lMapRClient -ljvm"
+		BUILD_WITH_LIBRDKAFKA_JVM_LIBS="-Wl,-rpath,$with_librdkafka_jvm_rpath -lrdkafka_jvm -lMapRClient -L$TMPVAR -Wl,-rpath -Wl,$TMPVAR -ljvm"
 	else
-		BUILD_WITH_LIBRDKAFKA_JVM_LIBS="-lrdkafka_jvm -lMapRClient -ljvm"
+		BUILD_WITH_LIBRDKAFKA_JVM_LIBS="-lrdkafka_jvm -lMapRClient -L$TMPVAR -ljvm"
 	fi
 	AC_SUBST(BUILD_WITH_LIBRDKAFKA_JVM_CPPFLAGS)
 	AC_SUBST(BUILD_WITH_LIBRDKAFKA_JVM_LDFLAGS)
