@@ -226,7 +226,7 @@ static int tags_to_json(char *buffer, size_t buffer_size, /* {{{ */
 #define BUFFER_ADD(...)                                                        \
   do {                                                                         \
     int status;                                                                \
-    status = ssnprintf(buffer + offset, buffer_size - offset, __VA_ARGS__);    \
+    status = snprintf(buffer + offset, buffer_size - offset, __VA_ARGS__);    \
     if (status < 1)                                                            \
       return (-1);                                                             \
     else if (((size_t)status) >= (buffer_size - offset))                       \
@@ -259,9 +259,10 @@ static int tags_to_json(char *buffer, size_t buffer_size, /* {{{ */
       count++;
       DEBUG("sub token %s\n", subtoken);
     }
+    sfree(subtoken);
   }
-
-  free(dupString);
+  sfree(token);
+  sfree(dupString);
 
 #undef BUFFER_ADD
 
@@ -439,7 +440,7 @@ static int mapr_data_to_json(char *buffer, size_t buffer_size, /* {{{ */
                               const char *key, const char *value,
 							  const char *host, const char *tags,
 							  const char *meta_tags, const char *host_tags) {
-  char temp[1024];
+  char temp[4096];
   size_t offset = 0;
   int status;
   memset(buffer, 0, buffer_size);
