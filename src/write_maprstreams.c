@@ -290,7 +290,7 @@ static int wt_kafka_handle(struct wt_kafka_topic_context *ctx) /* {{{ */
       rd_kafka_topic_conf_destroy(ctx->conf);
       ctx->conf = NULL;
       // Uncomment this line once bug 30736 is fixed
-      //INFO("write_maprstreams plugin: handle created for topic : %s", rd_kafka_topic_name(ctx->topic));
+      INFO("write_maprstreams plugin: handle created for topic : %s", rd_kafka_topic_name(ctx->topic));
     }
 
     return(0);
@@ -580,26 +580,15 @@ static int wt_format_name(char *ret, int ret_len,
     return 0;
 }
 
-static int wt_send_message (const char* key, const char* value,
-                            const char* value_tags,
-                            cdtime_t time, struct wt_kafka_topic_context *ctx,
-                            const value_list_t *vl)
+static int wt_send_message (char *message, size_t mlen, cdtime_t time, const char* host, struct wt_kafka_topic_context *ctx)
 {
     int status;
-    int message_len;
     int hashCode;
     int nDigits;
-    char *temp = NULL;
-    char *tags = "";
-    char message[8192];
-    char *host_tags = ctx->host_tags ? ctx->host_tags : "";
-    const char *meta_tsdb = "tsdb_tags";
-    const char* host = vl->host;
-    meta_data_t *md = vl->meta;
 
     pthread_mutex_lock (&ctx->lock);
     // Generate a hash between 0 and M for the metric
-    hashCode = hash(key,ctx->streamsCount);
+    hashCode = hash(host,ctx->streamsCount);
     if (hashCode == 0) {
        nDigits = 1;
     } else {
@@ -613,15 +602,14 @@ static int wt_send_message (const char* key, const char* value,
     sprintf(append,"%d",hashCode);
     strcat(stream_name,append);
     ctx->stream = stream_name;
-    INFO("write_maprstreams plugin: Stream Name is %s for key %s",ctx->stream,key);
+    INFO("write_maprstreams plugin: Stream Name is %s for message %s",ctx->stream, message);
 
-    // Allocate enough space for the topic name -- "<streamname>:<fqdn>_<metric name>"
-    char *temp_topic_name = (char *) malloc( strlen(ctx->stream) + strlen(host) + strlen(key) + 3 );
+    // Allocate enough space for the topic name -- "<streamname>:<fqdn>"
+    char *temp_topic_name = (char *) malloc( strlen(ctx->stream) + strlen(host) + 2 );
     strcpy(temp_topic_name,ctx->stream);
     strcat(temp_topic_name,":");
     strcat(temp_topic_name,host);
-    strcat(temp_topic_name,"_");
-    strcat(temp_topic_name, key);
+
     ctx->topic_name = temp_topic_name;
     //INFO("write_maprstreams plugin for key %s stream name %s ",key,ctx->stream);
     //INFO("write_maprstreams plugin: topic name %s ",ctx->topic_name);
@@ -636,7 +624,48 @@ static int wt_send_message (const char* key, const char* value,
     status = wt_kafka_handle(ctx);
     if( status != 0 )
       return status;
-    bzero(message, sizeof(message));
+
+    // Send the message to topic
+    rd_kafka_producev (ctx->kafka,
+                          RD_KAFKA_V_RKT(ctx->topic),
+                          RD_KAFKA_V_VALUE(message, mlen),
+                          RD_KAFKA_V_MSGFLAGS (RD_KAFKA_MSG_F_COPY),
+                          RD_KAFKA_V_TIMESTAMP(CDTIME_T_TO_MS(time)),
+                          RD_KAFKA_V_END);
+
+    rd_kafka_poll(ctx->kafka,10);
+
+    INFO("write_maprstreams plugin: PRINT message %s of size %zu sent to topic %s",message, mlen, rd_kafka_topic_name(ctx->topic));
+    // Free the space allocated for temp topic name and stream name
+    free(temp_topic_name);
+    free(stream_name);
+    // Set topic name and topic to null so a new topic conf is created for each messages based on the metric key
+    ctx->topic_name = NULL;
+    ctx->stream = NULL;
+    if (ctx->topic != NULL)
+      rd_kafka_topic_destroy(ctx->topic);
+    ctx->topic = NULL;
+    pthread_mutex_unlock(&ctx->lock);
+
+    return 0;
+}
+
+static int wt_make_send_message (const char* key, const char* value,
+                            const char* value_tags,
+                            cdtime_t time, struct wt_kafka_topic_context *ctx,
+                            const value_list_t *vl)
+{
+    int status;
+    char *temp = NULL;
+    char *tags = "";
+    char message[8192];
+    char *host_tags = ctx->host_tags ? ctx->host_tags : "";
+    const char *meta_tsdb = "tsdb_tags";
+    const char* host = vl->host;
+    meta_data_t *md = vl->meta;
+    size_t mfree = sizeof(message);
+    size_t mfill = 0;
+    size_t mlen = 0;
 
     /* skip if value is NaN */
     if (value[0] == 'n')
@@ -652,53 +681,23 @@ static int wt_send_message (const char* key, const char* value,
             pthread_mutex_unlock(&ctx->lock);
             return status;
         } else {
+            INFO("write_maprstreams plugin: metadata found %s ", tags);
             tags = temp;
         }
     }
 
-    message_len = snprintf (message,
-                             sizeof(message),
-                             "put %s %.0f %s fqdn=%s %s %s %s\r\n",
-                             key,
-                             CDTIME_T_TO_DOUBLE(time),
-                             value,
-                             host,
-                             value_tags,
-                             tags,
-                             host_tags);
-
+    format_json_initialize(message, &mfill, &mfree);
+    format_json_mapr_data(message, &mfill, &mfree, key, value, host, value_tags, tags, host_tags);
+    format_json_finalize(message, &mfill, &mfree);
+    mlen = strlen(message);
+    INFO("write_maprstreams plugin: json message %s of size %zu",message,mlen);
     sfree(temp);
-
-    if (message_len >= sizeof(message)) {
-        ERROR("write_maprstreams plugin: message buffer too small: "
-              "Need %d bytes.", message_len + 1);
-        return -1;
-    }
-
-    //pthread_mutex_lock(&ctx->lock);
-
-    // Send the message to topic
-    rd_kafka_produce(ctx->topic, RD_KAFKA_PARTITION_UA,
-        RD_KAFKA_MSG_F_COPY, message, message_len,
-        NULL, 0, NULL);
-
-    rd_kafka_poll(ctx->kafka,10);
-
-    // Uncomment this line once bug 30736 is fixed
-    //INFO("write_maprstreams plugin: PRINT message %s of size %d sent to topic %s",message, message_len, rd_kafka_topic_name(ctx->topic));
-    // Free the space allocated for temp topic name and stream name
-    free(temp_topic_name);
-    free(stream_name);
-    // Set topic name and topic to null so a new topic conf is created for each messages based on the metric key
-    ctx->topic_name = NULL;
-    ctx->stream = NULL;
-    if (ctx->topic != NULL)
-      rd_kafka_topic_destroy(ctx->topic);
-    ctx->topic = NULL;
-    pthread_mutex_unlock(&ctx->lock);
-
+    status = wt_send_message(message, mlen, time, host, ctx);
+    if (status != 0) return status;
     return 0;
 }
+
+
 
 static int wt_write_messages(const data_set_t *ds, const value_list_t *vl,
                              struct wt_kafka_topic_context *cb)
@@ -753,8 +752,8 @@ static int wt_write_messages(const data_set_t *ds, const value_list_t *vl,
         }
 
 
-        /* Send the message to MapR Streams */
-        status = wt_send_message(key, values, tags, vl->time, cb, vl);
+        /* Create the JSON message and send it to MapR streams*/
+        status = wt_make_send_message(key, values, tags, vl->time, cb, vl);
         if (status != 0)
         {
             ERROR("write_maprstreams plugin: error with "

@@ -171,9 +171,10 @@ case "$(uname -m)" in
 esac
 
 
-MAXSTREAMS=2
-STREAMSROOT="/var/mapr/mapr.monitoring/streams"
-DEFAULTSTREAMSPARTITIONS=5
+MAXSTREAMS=1
+STREAMSROOT="/var/mapr/mapr.monitoring/metricstreams"
+DEFAULTSTREAMSPARTITIONS=12
+DEFAULTTTL=86400
 RETRY_COUNT=24
 RETRY_DLY=5
 
@@ -327,7 +328,7 @@ createStreams() {
    fi
 
    # Create streams
-   java -cp `mapr classpath`:$APP_HOME_DIR/lib/fast-jmx-1.1.jar org.collectd.CreateStreams $STREAMSROOT $MAXSTREAMS $DEFAULTSTREAMSPARTITIONS >> "$APP_LOG_START_FILE"
+   java -cp `mapr classpath`:$APP_HOME_DIR/lib/fast-jmx-1.1.jar org.collectd.CreateStreams $STREAMSROOT $MAXSTREAMS $DEFAULTSTREAMSPARTITIONS $DEFAULTTTL>> "$APP_LOG_START_FILE"
 }
 
 function configureClusterId() {

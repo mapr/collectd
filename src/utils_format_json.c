@@ -218,6 +218,59 @@ static int dsnames_to_json(char *buffer, size_t buffer_size, /* {{{ */
   return 0;
 } /* }}} int dsnames_to_json */
 
+static int tags_to_json(char *buffer, size_t buffer_size, /* {{{ */
+                           const char *tags) {
+  size_t offset = 0;
+  memset(buffer, 0, buffer_size);
+
+#define BUFFER_ADD(...)                                                        \
+  do {                                                                         \
+    int status;                                                                \
+    status = snprintf(buffer + offset, buffer_size - offset, __VA_ARGS__);    \
+    if (status < 1)                                                            \
+      return (-1);                                                             \
+    else if (((size_t)status) >= (buffer_size - offset))                       \
+      return (-ENOMEM);                                                        \
+    else                                                                       \
+      offset += ((size_t)status);                                              \
+  } while (0)
+
+  char *dupString = strdup(tags);
+  char *str1, *str2;
+  char *saveptr1, *saveptr2;
+  char *token;
+  char *subtoken;
+  int i, count;
+
+  /* split string and append tokens to tupleArray */
+  for (i = 1, str1 = dupString; ; i++, str1 = NULL) {
+    token = strtok_r(str1," ", &saveptr1);
+    if (token == NULL)
+      break;
+    DEBUG("token %d: %s\n", i, token);
+    count = 0;
+    for (str2 = token; ; str2 = NULL) {
+      subtoken = strtok_r(str2,"=", &saveptr2);
+      if (subtoken == NULL)
+        break;
+      if (count == 0) BUFFER_ADD(",");
+      if (count > 0) BUFFER_ADD(":");
+      BUFFER_ADD("\"%s\"", subtoken);
+      count++;
+      DEBUG("sub token %s\n", subtoken);
+    }
+    sfree(subtoken);
+  }
+  sfree(token);
+  sfree(dupString);
+
+#undef BUFFER_ADD
+
+  DEBUG("format_json: tags_to_json: buffer = %s", buffer);
+
+  return (0);
+} /* }}} int tags_to_json */
+
 static int meta_data_keys_to_json(char *buffer, size_t buffer_size, /* {{{ */
                                   meta_data_t *meta, char **keys,
                                   size_t keys_num) {
@@ -383,6 +436,77 @@ static int value_list_to_json(char *buffer, size_t buffer_size, /* {{{ */
   return 0;
 } /* }}} int value_list_to_json */
 
+static int mapr_data_to_json(char *buffer, size_t buffer_size, /* {{{ */
+                              const char *key, const char *value,
+							  const char *host, const char *tags,
+							  const char *meta_tags, const char *host_tags) {
+  char temp[4096];
+  size_t offset = 0;
+  int status;
+  memset(buffer, 0, buffer_size);
+
+  DEBUG("key %s size %zu", key, strlen(key));
+  DEBUG("value %s size %zu", value, strlen(value));
+  DEBUG("host %s size %zu", host, strlen(host));
+  DEBUG("tags %s size %zu", tags, strlen(tags));
+  DEBUG("meta_tags %s size %zu", meta_tags, strlen(meta_tags));
+  DEBUG("host_tags %s size %zu", host_tags, strlen(host_tags));
+
+#define BUFFER_ADD(...)                                                        \
+  do {                                                                         \
+    status = ssnprintf(buffer + offset, buffer_size - offset, __VA_ARGS__);    \
+    if (status < 1)                                                            \
+      return (-1);                                                             \
+    else if (((size_t)status) >= (buffer_size - offset))                       \
+      return (-ENOMEM);                                                        \
+    else                                                                       \
+      offset += ((size_t)status);                                              \
+  } while (0)
+
+  /* All value lists have a leading comma. The first one will be replaced with
+   * a square bracket in `format_json_finalize'. */
+  BUFFER_ADD(",{");
+  BUFFER_ADD("\"metric\":\"%s\"", key);
+  BUFFER_ADD(",\"value\":%s", value);
+  BUFFER_ADD(",\"tags\":%s", "{");
+#define BUFFER_ADD_KEYVAL(key, value)                                          \
+  do {                                                                         \
+    status = json_escape_string(temp, sizeof(temp), (value));                  \
+    if (status != 0)                                                           \
+      return (status);                                                         \
+    BUFFER_ADD("\"%s\":%s", (key), temp);                                     \
+  } while (0)
+
+  BUFFER_ADD_KEYVAL("fqdn", host);
+  if (strlen(tags) > 0) {
+    status = tags_to_json(temp, sizeof(temp), tags);
+    if (status != 0)
+      return (status);
+    BUFFER_ADD("%s", temp);
+  }
+  if (strlen(meta_tags) > 0) {
+	status = tags_to_json(temp, sizeof(temp), meta_tags);
+	if (status != 0)
+	  return (status);
+	BUFFER_ADD("%s", temp);
+  }
+  if (strlen(host_tags) > 0) {
+	status = tags_to_json(temp, sizeof(temp), host_tags);
+	if (status != 0)
+	  return (status);
+	BUFFER_ADD("%s", temp);
+  }
+  BUFFER_ADD("}");
+  BUFFER_ADD("}");
+
+#undef BUFFER_ADD_KEYVAL
+#undef BUFFER_ADD
+
+  DEBUG("format_json: mapr_data_to_json: buffer = %s;", buffer);
+
+  return (0);
+} /* }}} int value_list_to_json */
+
 static int format_json_value_list_nocheck(char *buffer, /* {{{ */
                                           size_t *ret_buffer_fill,
                                           size_t *ret_buffer_free,
@@ -403,6 +527,30 @@ static int format_json_value_list_nocheck(char *buffer, /* {{{ */
 
   return 0;
 } /* }}} int format_json_value_list_nocheck */
+
+static int format_json_mapr_data_nocheck(char *buffer, /* {{{ */
+                                          size_t *ret_buffer_fill,
+                                          size_t *ret_buffer_free,
+                                          const char *key,
+                                          const char *value,
+										  const char *host,
+										  const char *tags,
+										  const char *meta_tags,
+										  const char *host_tags,
+                                          size_t temp_size) {
+  char temp[temp_size];
+  int status;
+  status = mapr_data_to_json(temp, sizeof(temp), key, value, host, tags, meta_tags, host_tags);
+  if (status != 0)
+    return (status);
+  temp_size = strlen(temp);
+
+  memcpy(buffer + (*ret_buffer_fill), temp, temp_size + 1);
+  (*ret_buffer_fill) += temp_size;
+  (*ret_buffer_free) -= temp_size;
+
+  return (0);
+} /* }}} int format_json_mapr_data_nocheck */
 
 int format_json_initialize(char *buffer, /* {{{ */
                            size_t *ret_buffer_fill, size_t *ret_buffer_free) {
@@ -471,6 +619,22 @@ int format_json_value_list(char *buffer, /* {{{ */
                                         ret_buffer_free, ds, vl, store_rates,
                                         (*ret_buffer_free) - 2);
 } /* }}} int format_json_value_list */
+
+int format_json_mapr_data(char *buffer, /* {{{ */
+                           size_t *ret_buffer_fill, size_t *ret_buffer_free,
+                           const char *metric, const char* value, const char *host,
+                           const char *tags, const char *meta_tags, const char *host_tags) {
+  if ((buffer == NULL) || (ret_buffer_fill == NULL) ||
+      (ret_buffer_free == NULL) || (metric == NULL) || (value == NULL) || (host == NULL) || (tags == NULL) || (meta_tags == NULL) || (host_tags == NULL))
+    return (-EINVAL);
+
+  if (*ret_buffer_free < 6)
+    return (-ENOMEM);
+
+  return (format_json_mapr_data_nocheck(buffer, ret_buffer_fill,
+                                         ret_buffer_free, metric, value, host,
+                                         tags, meta_tags, host_tags, (*ret_buffer_free) - 2));
+} /* }}} int format_json_mapr_data */
 
 #if HAVE_LIBYAJL
 static int json_add_string(yajl_gen g, char const *str) /* {{{ */

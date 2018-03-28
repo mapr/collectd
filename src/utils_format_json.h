@@ -40,6 +40,10 @@ int format_json_initialize(char *buffer, size_t *ret_buffer_fill,
 int format_json_value_list(char *buffer, size_t *ret_buffer_fill,
                            size_t *ret_buffer_free, const data_set_t *ds,
                            const value_list_t *vl, int store_rates);
+int format_json_mapr_data(char *buffer, size_t *ret_buffer_fill,
+                           size_t *ret_buffer_free, const char *key,
+                           const char *value, const char *host,
+						   const char *tags, const char *meta_tags, const char *host_tags);
 int format_json_finalize(char *buffer, size_t *ret_buffer_fill,
                          size_t *ret_buffer_free);
 int format_json_notification(char *buffer, size_t buffer_size,
