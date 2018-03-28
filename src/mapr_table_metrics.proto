@@ -1,5 +1,7 @@
 syntax="proto2";
 
+option optimize_for = LITE_RUNTIME;
+
 // this file must be kept in sync with appropriate proto files in
 // mapr-core repository.
 

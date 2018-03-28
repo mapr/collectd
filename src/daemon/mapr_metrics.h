@@ -11,7 +11,7 @@ typedef struct value_list_s value_list_t;
 typedef struct MetricsBuffer {
   int32_t bytes;
   int32_t refcount;
-  char data[0];
+  uint8_t data[0];
 } MetricsBuffer;
 
 // given a value_list_t *, decodes a MetricsBuffer * value stored in

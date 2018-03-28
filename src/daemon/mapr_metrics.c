@@ -3,7 +3,7 @@
 
 #include <stdlib.h>
 
-const char kOpaqueMetricName[] = "mapr.opaque";
+const char kOpaqueMetricName[] = "mapr_opaque";
 
 static MetricsBuffer *Decoder(const char *encoded)
 {
@@ -73,7 +73,6 @@ void EncodeMetricsPointer(value_list_t *vl, MetricsBuffer *ptr)
     value = value >> 4;
   }
 
-  *position = 0;
   strcpy(vl->type, kOpaqueMetricName);
 }
 

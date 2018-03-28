@@ -112,6 +112,10 @@
 #include <errno.h>
 #include "utils_cache.h"
 #include <sys/socket.h>
+#include <assert.h>
+
+#include "mapr_metrics.h"
+#include "mapr_metrics.pb-c.h"
 
 
 #ifndef WT_DEFAULT_PATH
@@ -698,6 +702,255 @@ static int wt_make_send_message (const char* key, const char* value,
 }
 
 
+typedef struct mapr_metrics_context_s {
+    char *metric_name;
+    int64_t time;
+
+    struct _Tag **tags1;
+    int number_of_tags1;
+    struct _Tag **tags2;
+    int number_of_tags2;
+
+    struct {
+        int use_histo;
+        uint64_t value;
+        struct {
+            int number_of_buckets;
+            HistoBucket **buckets;
+        } histo;
+    } data;
+} mapr_metrics_context;
+
+
+char *dump_tags_to_json(
+    char *dump_at,
+    int ntags,
+    struct _Tag **const tags)
+{
+    char *p = dump_at;
+    for (int i = 0; i < ntags; ++i) {
+        sprintf(p, "\n\"%s\": \"%s\",", tags[i]->name, tags[i]->value);
+        p = &p[strlen(p)];
+    }
+    return p;
+}
+
+
+char *mapr_dump_to_json(
+    char *dump_at,
+    const mapr_metrics_context *ctx)
+{
+    char *p = dump_at;
+    sprintf(p, "{\n\"metric\": \"%s\",\n", ctx->metric_name);
+    p = &p[strlen(p)];
+
+    if (ctx->number_of_tags1 + ctx->number_of_tags2 > 0) {
+        strcpy(p, "\"tags\": {");
+        p = &p[strlen(p)];
+        p = dump_tags_to_json(p, ctx->number_of_tags1, ctx->tags1);
+        p = dump_tags_to_json(p, ctx->number_of_tags2, ctx->tags2);
+        --p; // to eat the comma
+        strcpy(p, "\n},\n");
+        p = &p[strlen(p)];
+    }
+
+    if (ctx->data.use_histo) {
+        strcpy(p, "\"buckets\": {");
+        p = &p[strlen(p)];
+        for (int i = 0; i < ctx->data.histo.number_of_buckets; ++i) {
+            const HistoBucket *bucket = ctx->data.histo.buckets[i];
+            sprintf(
+                p, "\n\"%" PRId64 ",%" PRId64 "\": %" PRId64 ",",
+                bucket->start, bucket->end, bucket->number);
+            p = &p[strlen(p)];
+        }
+        --p; // comma again
+        strcpy(p, "\n}\n}\n");
+    } else {
+        sprintf(p, "\"value\": %" PRId64 "\n}\n", ctx->data.value);
+    }
+    return &p[strlen(p)];
+}
+
+
+void wt_process_and_write_unpacked_metrics(
+    const Metrics *metrics,
+    struct wt_kafka_topic_context *cb)
+{
+    mapr_metrics_context staging_context;
+    char staging_buffer[512000];
+    char *staging_pointer = &staging_buffer[0];
+
+    // 1. stage everything into staging_context:
+
+    // validate and stage common tags:
+    INFO("validating 0n%" PRId64 " common tags", metrics->n_commontags);
+    for (size_t i = 0; i < metrics->n_commontags; ++i) {
+        struct _Tag* common_tag = metrics->commontags[i];
+        assert(common_tag);
+        if (common_tag == NULL) {
+            // bug in library
+            ERROR("common tag[%" PRId64 "] == NULL", i);
+            return;
+        }
+
+        if (common_tag->name == NULL) {
+            // bug in producer.
+            ERROR("common tag[%" PRId64 "]->name == NULL", i);
+            return;
+        }
+
+        if (common_tag->value == NULL) {
+            ERROR("common tag[%" PRId64 "]->value == NULL", i);
+            return;
+        }
+    }
+    INFO("validated 0n%" PRId64 " common tags", metrics->n_commontags);
+
+    staging_context.number_of_tags1 = metrics->n_commontags;
+    staging_context.tags1 = metrics->commontags;
+
+    for (size_t i = 0; i < metrics->n_metrics; ++i) {
+        // each metric will produce one record.
+        Metric *one_metric = metrics->metrics[i];
+        MetricValue *value = NULL;
+        assert(one_metric);
+        if (one_metric == NULL) {
+            // unexpected, bug in library
+            return;
+        }
+        assert(one_metric->has_time);
+        if (!one_metric->has_time) {
+            // malformed protobuf, bug in producer
+            return;
+        }
+        assert(one_metric->name);
+        if (one_metric->name == NULL) {
+            // malformed protobuf, bug in producer
+            return;
+        }
+        staging_context.metric_name = one_metric->name;
+        staging_context.time = one_metric->time;
+        DEBUG("validated name %s and time %" PRIu64 ".",
+          staging_context.metric_name, staging_context.time);
+
+        for (size_t tag_index = 0; tag_index < one_metric->n_tags; ++tag_index) {
+            struct _Tag *metric_tag = one_metric->tags[tag_index];
+            assert((metric_tag != NULL)
+                && (metric_tag->name != NULL)
+                && (metric_tag->value != NULL));
+
+            if (metric_tag == NULL) {
+                ERROR("metric[%zu]->tags[%zu] == NULL", i, tag_index);
+                return;
+            }
+
+            if (metric_tag->name == NULL) {
+                ERROR("metric[%zu]->tags[%zu]->name == NULL", i, tag_index);
+                return;
+            }
+
+            if (metric_tag->value == NULL) {
+                ERROR("metric[%zu]->tags[%zu]->value == NULL", i, tag_index);
+                return;
+            }
+        }
+        // INFO("validated %zu tags", one_metric->n_tags);
+        staging_context.tags2 = one_metric->tags;
+        staging_context.number_of_tags2 = one_metric->n_tags;
+
+        value = one_metric->value;
+
+        if (value == NULL) {
+            // malformed protobuf, bug in producer
+            INFO("BUGBUG 09");
+            assert(value);
+            return;
+        }
+        // metric:
+        //
+        // one_metric->name is the name, won't be NULL
+        // the value is a number or a histo, described below.
+        //
+        // tags come in two sets: common tags and normal tags.
+        // there are metrics->n_commontags (maybe zero) of
+        // metrics->commonTags, they each gave a name and a value, neither
+        // NULL;
+        // there are one_metric->n_tags (maybe zero) of non-common tags.
+        // they also have a name and value each, and neither is ever NULL.
+        //
+        // the value of the metric is determined below:
+
+        if ((value->n_buckets == 0) && !value->has_number) {
+            INFO("No metric no buckets for %s=%s",
+                one_metric->tags[1]->name, one_metric->tags[1]->value);
+            // assert((value->n_buckets > 0) || (value->has_number));
+            continue;
+        }
+
+        if (value->has_number) {
+            // uint64_t number = value->number;
+            // number is the value. It is a 64-bit integer, always.
+            staging_context.data.use_histo = 0;
+            staging_context.data.value = value->number;
+        } else {
+            staging_context.data.use_histo = 1;
+            DEBUG("%zd buckets in histo", value->n_buckets);
+            for (size_t j = 0; j < value->n_buckets; ++ j) {
+                HistoBucket *bucket = value->buckets[j];
+                assert(bucket);
+                if (bucket == NULL) {
+                    // unexpected, bug in library
+                    INFO("BUGBUG 11");
+                    return;
+                }
+
+                assert(bucket->has_start && bucket->has_end && bucket->has_number);
+                if (!bucket->has_start || !bucket->has_end || !bucket->has_number) {
+                    // malformed protobuf, bug on producer side
+                    INFO("BUGBUG 12");
+                    return;
+                }
+            }
+            // the metric is a histogram. The buckets are right above. There
+            // are value->n_buckets. Each has a start, and end, and a number.
+            // Number is never zero.
+            staging_context.data.histo.buckets = value->buckets;
+            staging_context.data.histo.number_of_buckets = value->n_buckets;
+
+        }
+
+        // INFO("Dumping one metric to buffer at 0x%p", staging_pointer);
+        char * temp = mapr_dump_to_json(staging_pointer, &staging_context);
+        INFO("jsoned metric: %s", staging_pointer);
+        staging_pointer = temp;
+    }
+}
+
+
+void wt_process_and_write_opaque_buffer(
+    const MetricsBuffer *ptr,
+    struct wt_kafka_topic_context *cb)
+{
+    assert(ptr != NULL);
+    if (!ptr) {
+        return;
+    }
+
+    INFO("processing opaque buffer, %d bytes", ptr->bytes);
+    Metrics *metrics = metrics__unpack(NULL, ptr->bytes, ptr->data);
+    if (metrics == NULL) {
+        ERROR("Failed to unpack the opaque protobuf");
+        return;
+    }
+    INFO("Unpacked metrics at %p", metrics);
+
+    wt_process_and_write_unpacked_metrics(metrics, cb);
+
+    metrics__free_unpacked(metrics, NULL);
+
+}
+
 
 static int wt_write_messages(const data_set_t *ds, const value_list_t *vl,
                              struct wt_kafka_topic_context *cb)
@@ -707,6 +960,13 @@ static int wt_write_messages(const data_set_t *ds, const value_list_t *vl,
     char tags[10*DATA_MAX_NAME_LEN];
 
     int status, i;
+
+    MetricsBuffer *ptr = DecodeMetricsPointer(vl);
+    if (ptr != NULL) {
+        wt_process_and_write_opaque_buffer(ptr, cb);
+        ReleaseMetricsPointer(ptr);
+        return 0;
+    }
 
     if (0 != strcmp(ds->type, vl->type))
     {

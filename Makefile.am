@@ -1452,16 +1452,21 @@ endif
 
 if BUILD_PLUGIN_MAPR_TBLMETRICS
 
-BUILT_SOURCES += src/mapr_table_metrics.pb.cc src/mapr_table_metrics.pb.h
+BUILT_SOURCES += src/mapr_table_metrics.pb.cc src/mapr_table_metrics.pb.h src/mapr_metrics.pb.cc src/mapr_metrics.pb.h
 
-src/mapr_table_metrics.pb.cc src/mapr_table_metrics.pb.h : src/mapr_table_metrics.proto
+src/mapr_table_metrics.pb.cc src/mapr_table_metrics.pb.h: src/mapr_table_metrics.proto
 	protoc --cpp_out=. src/mapr_table_metrics.proto
+
+src/mapr_metrics.pb.cc src/mapr_metrics.pb.h: src/mapr_metrics.proto
+	protoc --cpp_out=. src/mapr_metrics.proto
 
 pkglib_LTLIBRARIES += mapr_tblmetrics.la
 mapr_tblmetrics_la_SOURCES = src/mapr_table_metrics.cc
 nodist_mapr_tblmetrics_la_SOURCES = \
 	src/mapr_table_metrics.pb.cc \
-	src/mapr_table_metrics.pb.h
+	src/mapr_table_metrics.pb.h \
+	src/mapr_metrics.pb.cc \
+	src/mapr_metrics.pb.h
 mapr_tblmetrics_la_CPPFLAGS = $(AM_CPPFLAGS) $(HDFS_CPPFLAGS) $(BUILD_WITH_LIBRDKAFKA_JVM_CPPFLAGS) $(BUILD_MAPR_TABLE_METRICS_CPPFLAGS)
 mapr_tblmetrics_la_LDFLAGS = $(PLUGIN_LDFLAGS) $(BUILD_WITH_LIBRDKAFKA_JVM_LDFLAGS)
 mapr_tblmetrics_la_LIBADD = $(BUILD_WITH_LIBRDKAFKA_JVM_LIBS) $(BUILD_MAPR_TABLE_METRICS_LIBS)
@@ -1905,15 +1910,26 @@ xencpu_la_LIBADD = -lxenctrl
 endif
 
 if BUILD_PLUGIN_WRITE_MAPRSTREAMS
+
+BUILT_SOURCES += src/mapr_metrics.pb-c.c src/mapr_metrics.pb-c.h
+
+src/mapr_metrics.pb-c.c src/mapr_metrics.pb-c.h: src/mapr_metrics.proto
+	protoc-c --c_out=. src/mapr_metrics.proto
+
 pkglib_LTLIBRARIES += write_maprstreams.la
 write_maprstreams_la_SOURCES = \
         src/write_maprstreams.c \
         src/utils_crc32.c \
         src/utils_crc32.h
+
+nodist_write_maprstreams_la_SOURCES = \
+	src/mapr_metrics.pb-c.c \
+	src/mapr_metrics.pb-c.h
+
 write_maprstreams_la_CPPFLAGS = $(AM_CPPFLAGS) $(BUILD_WITH_LIBRDKAFKA_JVM_CPPFLAGS)
 write_maprstreams_la_LDFLAGS = $(PLUGIN_LDFLAGS) $(BUILD_WITH_LIBRDKAFKA_JVM_LDFLAGS) \
                                libformat_graphite.la libformat_json.la libcmds.la
-write_maprstreams_la_LIBADD = $(BUILD_WITH_LIBRDKAFKA_JVM_LIBS)
+write_maprstreams_la_LIBADD = $(BUILD_WITH_LIBRDKAFKA_JVM_LIBS) $(BUILD_WITH_LIBPROTOBUF_C_CPPFLAGS)
 endif
 
 if BUILD_PLUGIN_XMMS
