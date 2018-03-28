@@ -128,8 +128,8 @@
 
 #include "common.h"
 #include "plugin.h"
-
 #include "utils_cache.h"
+#include "utils_random.h"
 
 #include <netdb.h>
 
@@ -176,6 +176,8 @@ static const char *meta_tag_metric_id[] = {
  * Private variables
  */
 struct wt_callback {
+  struct addrinfo *ai;
+  cdtime_t ai_last_update;
   int sock_fd;
 
   char *node;
@@ -191,8 +193,14 @@ struct wt_callback {
   cdtime_t send_buf_init_time;
 
   pthread_mutex_t send_lock;
+
+  _Bool connect_failed_log_enabled;
+  int connect_dns_failed_attempts_remaining;
+  cdtime_t next_random_ttl;
 };
 
+static cdtime_t resolve_interval = 0;
+static cdtime_t resolve_jitter = 0;
 static int tsdbNodesCount;
 static int nextTsdbNodeIndex=-1;
 static int writesCount;
@@ -212,7 +220,7 @@ static int wt_send_buffer(struct wt_callback *cb) {
   ssize_t status = 0;
 
   status = swrite(cb->sock_fd, cb->send_buf, strlen(cb->send_buf));
-  if (status < 0) {
+  if (status != 0) {
     char errbuf[1024];
     ERROR("write_tsdb plugin: send failed with status %zi (%s)", status,
           sstrerror(errno, errbuf, sizeof(errbuf)));
@@ -254,9 +262,16 @@ static int wt_flush_nolock(cdtime_t timeout, struct wt_callback *cb) {
   return status;
 }
 
+static cdtime_t new_random_ttl() {
+  if (resolve_jitter == 0)
+    return 0;
+
+  return (cdtime_t)cdrand_range(0, (long)resolve_jitter);
+}
+
 static int wt_callback_init(struct wt_callback *cb) {
-  struct addrinfo *ai_list;
   int status;
+  cdtime_t now;
 
   /** Make Plugin HA
        * - Pick one node randomly from the list to which the connection can be established when running for the first time
@@ -280,30 +295,69 @@ static int wt_callback_init(struct wt_callback *cb) {
   if (cb->sock_fd > 0)
     return 0;
 
-  struct addrinfo ai_hints = {.ai_family = AF_UNSPEC,
-                              .ai_flags = AI_ADDRCONFIG,
-                              .ai_socktype = SOCK_STREAM};
+  now = cdtime();
+  if (cb->ai) {
+    /* When we are here, we still have the IP in cache.
+     * If we have remaining attempts without calling the DNS, we update the
+     * last_update date so we keep the info until next time.
+     * If there is no more attempts, we need to flush the cache.
+     */
 
-  status = getaddrinfo(node, service, &ai_hints, &ai_list);
-  if (status != 0) {
-    ERROR("write_tsdb plugin: getaddrinfo (%s, %s) failed: %s", node, service,
-          gai_strerror(status));
-    return -1;
+    if ((cb->ai_last_update + resolve_interval + cb->next_random_ttl) < now) {
+      cb->next_random_ttl = new_random_ttl();
+      if (cb->connect_dns_failed_attempts_remaining > 0) {
+        /* Warning : this is run under send_lock mutex.
+         * This is why we do not use another mutex here.
+         * */
+        cb->ai_last_update = now;
+        cb->connect_dns_failed_attempts_remaining--;
+      } else {
+        freeaddrinfo(cb->ai);
+        cb->ai = NULL;
+      }
+    }
   }
 
-  assert(ai_list != NULL);
-  for (struct addrinfo *ai_ptr = ai_list; ai_ptr != NULL;
-       ai_ptr = ai_ptr->ai_next) {
-    cb->sock_fd =
-        socket(ai_ptr->ai_family, ai_ptr->ai_socktype, ai_ptr->ai_protocol);
+  if (cb->ai == NULL) {
+    if ((cb->ai_last_update + resolve_interval + cb->next_random_ttl) >= now) {
+      DEBUG("write_tsdb plugin: too many getaddrinfo(%s, %s) failures", node,
+            service);
+      return -1;
+    }
+    cb->ai_last_update = now;
+    cb->next_random_ttl = new_random_ttl();
+
+    struct addrinfo ai_hints = {
+        .ai_family = AF_UNSPEC,
+        .ai_flags = AI_ADDRCONFIG,
+        .ai_socktype = SOCK_STREAM,
+    };
+
+    status = getaddrinfo(node, service, &ai_hints, &cb->ai);
+    if (status != 0) {
+      if (cb->ai) {
+        freeaddrinfo(cb->ai);
+        cb->ai = NULL;
+      }
+      if (cb->connect_failed_log_enabled) {
+        ERROR("write_tsdb plugin: getaddrinfo(%s, %s) failed: %s", node,
+              service, gai_strerror(status));
+        cb->connect_failed_log_enabled = 0;
+      }
+      return -1;
+    }
+  }
+
+  assert(cb->ai != NULL);
+  for (struct addrinfo *ai = cb->ai; ai != NULL; ai = ai->ai_next) {
+    cb->sock_fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
     if (cb->sock_fd < 0)
       continue;
 
     set_sock_opts(cb->sock_fd);
 
-    status = connect(cb->sock_fd, ai_ptr->ai_addr, ai_ptr->ai_addrlen);
-    if (status != 0)
-    {
+    status = connect(cb->sock_fd, ai->ai_addr, ai->ai_addrlen);
+    if (status != 0) {
       close(cb->sock_fd);
       cb->sock_fd = -1;
       continue;
@@ -312,8 +366,6 @@ static int wt_callback_init(struct wt_callback *cb) {
     break;
   }
 
-  freeaddrinfo(ai_list);
-
   if (cb->sock_fd < 0) {
     char errbuf[1024];
     ERROR("write_tsdb plugin: Connecting to %s:%s failed. "
@@ -321,6 +373,12 @@ static int wt_callback_init(struct wt_callback *cb) {
           node, service, sstrerror(errno, errbuf, sizeof(errbuf)));
     return -1;
   }
+
+  if (0 == cb->connect_failed_log_enabled) {
+    WARNING("write_tsdb plugin: Connecting to %s:%s succeeded.", node, service);
+    cb->connect_failed_log_enabled = 1;
+  }
+  cb->connect_dns_failed_attempts_remaining = 1;
 
   wt_reset_buffer(cb);
 
@@ -399,7 +457,7 @@ static int wt_format_values(char *ret, size_t ret_len, int ds_num,
 
 #define BUFFER_ADD(...)                                                        \
   do {                                                                         \
-    status = ssnprintf(ret + offset, ret_len - offset, __VA_ARGS__);           \
+    status = snprintf(ret + offset, ret_len - offset, __VA_ARGS__);            \
     if (status < 1) {                                                          \
       sfree(rates);                                                            \
       return -1;                                                               \
@@ -468,7 +526,7 @@ static int wt_format_tags(char *ret, int ret_len,
         const char *k = (key); \
         const char *v = (value); \
         if(k[0] != '\0' && v[0] != '\0') { \
-            n = ssnprintf(ptr, remaining_len, " %s=%s", k, v); \
+            n = snprintf(ptr, remaining_len, " %s=%s", k, v); \
             if(n >= remaining_len) { \
                 ptr[0] = '\0'; \
             } else { \
@@ -522,7 +580,7 @@ static int wt_format_tags(char *ret, int ret_len,
                 sfree(temp);
             }
             if(temp[0] != '\0') {
-                n = ssnprintf(ptr, remaining_len, " %s", temp);
+                n = snprintf(ptr, remaining_len, " %s", temp);
                 if(n >= remaining_len) {
                     ptr[0] = '\0';
                 } else {
@@ -596,7 +654,7 @@ static int wt_format_name(char *ret, int ret_len,
         }
     }
     if(tsdb_id) {
-        ssnprintf(ret, ret_len, "%s%s", prefix?prefix:"", tsdb_id);
+        snprintf(ret, ret_len, "%s%s", prefix?prefix:"", tsdb_id);
     } else {
 #define TSDB_STRING_APPEND_STRING(string) do { \
     const char *str = (string); \
@@ -691,7 +749,7 @@ static int wt_send_message (const char* key, const char* value,
         }
     }
 
-    message_len = ssnprintf (message,
+    message_len = snprintf (message,
                              sizeof(message),
                              "put %s %.0f %s fqdn=%s %s %s %s\r\n",
                              key,
@@ -855,10 +913,8 @@ static int wt_config_tsd(oconfig_item_t *ci) {
     return -1;
   }
   cb->sock_fd = -1;
-  cb->node = NULL;
-  cb->service = NULL;
-  cb->host_tags = NULL;
-  cb->store_rates = 0;
+  cb->connect_failed_log_enabled = 1;
+  cb->next_random_ttl = new_random_ttl();
 
   pthread_mutex_init(&cb->send_lock, NULL);
 
@@ -893,9 +949,9 @@ static int wt_config_tsd(oconfig_item_t *ci) {
     }
   }
 
-  ssnprintf(callback_name, sizeof(callback_name), "write_tsdb/%s/%s",
-            cb->node != NULL ? cb->node : WT_DEFAULT_NODE,
-            cb->service != NULL ? cb->service : WT_DEFAULT_SERVICE);
+  snprintf(callback_name, sizeof(callback_name), "write_tsdb/%s/%s",
+           cb->node != NULL ? cb->node : WT_DEFAULT_NODE,
+           cb->service != NULL ? cb->service : WT_DEFAULT_SERVICE);
 
   user_data_t user_data = {.data = cb, .free_func = wt_callback_free};
 
@@ -908,11 +964,18 @@ static int wt_config_tsd(oconfig_item_t *ci) {
 }
 
 static int wt_config(oconfig_item_t *ci) {
+  if ((resolve_interval == 0) && (resolve_jitter == 0))
+    resolve_interval = resolve_jitter = plugin_get_interval();
+
   for (int i = 0; i < ci->children_num; i++) {
     oconfig_item_t *child = ci->children + i;
 
     if (strcasecmp("Node", child->key) == 0)
       wt_config_tsd(child);
+    else if (strcasecmp("ResolveInterval", child->key) == 0)
+      cf_util_get_cdtime(child, &resolve_interval);
+    else if (strcasecmp("ResolveJitter", child->key) == 0)
+      cf_util_get_cdtime(child, &resolve_jitter);
     else {
       ERROR("write_tsdb plugin: Invalid configuration "
             "option: %s.",
@@ -926,5 +989,3 @@ static int wt_config(oconfig_item_t *ci) {
 void module_register(void) {
   plugin_register_complex_config("write_tsdb", wt_config);
 }
-
-/* vim: set sw=4 ts=4 sts=4 tw=78 et : */

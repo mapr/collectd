@@ -31,7 +31,8 @@
 --enable-ipvs
 --enable-irq
 --enable-java
---with-librdkafka=/opt/mapr
+--with-librdkafka_jvm=/opt/mapr
+--without-librdkafka
 --enable-load
 --enable-logfile
 --disable-log_logstash
