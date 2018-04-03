@@ -259,9 +259,7 @@ static int tags_to_json(char *buffer, size_t buffer_size, /* {{{ */
       count++;
       DEBUG("sub token %s\n", subtoken);
     }
-    sfree(subtoken);
   }
-  sfree(token);
   sfree(dupString);
 
 #undef BUFFER_ADD
