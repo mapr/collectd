@@ -4894,15 +4894,15 @@ fi
 
 if test "x$with_librdkafka_jvm" = "xyes"
 then
-	AC_CHECK_LIB(rdkafka_jvm, rd_kafka_new, [with_librdkafka_jvm="yes"], [with_librdkafka_jvm="no (Symbol 'rd_kafka_new' not found)"])
-        AC_CHECK_LIB(rdkafka_jvm, rd_kafka_conf_set_log_cb, [with_librdkafka_jvm_log_cb="yes"], [with_librdkafka_jvm_log_cb="no"])
-        AC_CHECK_LIB(rdkafka_jvm, rd_kafka_set_logger, [with_librdkafka_jvm_logger="yes"], [with_librdkafka_jvm_logger="no"])
+        TMPVAR=`find -L "$with_java_home" -type f \( -name libjvm.so -o -name libjvm.dylib \) -exec 'dirname' '{}' ';' 2>/dev/null | LC_ALL=C sort | head -n 1`
+	AC_CHECK_LIB(rdkafka_jvm, rd_kafka_new, [with_librdkafka_jvm="yes"], [with_librdkafka_jvm="no (Symbol 'rd_kafka_new' not found)"], -lMapRClient -L$TMPVAR -ljvm )
+        AC_CHECK_LIB(rdkafka_jvm, rd_kafka_conf_set_log_cb, [with_librdkafka_jvm_log_cb="yes"], [with_librdkafka_jvm_log_cb="no"], -lMapRClient -L$TMPVAR -ljvm)
+        AC_CHECK_LIB(rdkafka_jvm, rd_kafka_set_logger, [with_librdkafka_jvm_logger="yes"], [with_librdkafka_jvm_logger="no"], -lMapRClient -L$TMPVAR -ljvm)
 fi
 if test "x$with_librdkafka_jvm" = "xyes"
 then
 	BUILD_WITH_LIBRDKAFKA_JVM_CPPFLAGS="$with_librdkafka_jvm_cppflags"
 	BUILD_WITH_LIBRDKAFKA_JVM_LDFLAGS="$with_librdkafka_jvm_ldflags"
-        TMPVAR=`find -L "$with_java_home" -type f \( -name libjvm.so -o -name libjvm.dylib \) -exec 'dirname' '{}' ';' 2>/dev/null | LC_ALL=C sort | head -n 1`
 	if test "x$with_librdkafka_jvm_rpath" != "x"
 	then
 		BUILD_WITH_LIBRDKAFKA_JVM_LIBS="-Wl,-rpath,$with_librdkafka_jvm_rpath -lrdkafka_jvm -lMapRClient -L$TMPVAR -Wl,-rpath -Wl,$TMPVAR -ljvm"
