@@ -12,6 +12,14 @@ do
     if echo ${val} | grep -E -- '-[0-9]+\.[0-9]+' > /dev/null ; then
       val=0
     fi
-    echo "PUTVAL \"$HOSTNAME/mapr.${metrics[0]}/${metrics[1]}\" interval=$INTERVAL N:$val"
+    plugin_instance=""
+    type_instance=""
+    if [ ! -z "${metrics[3]}" -a "${metrics[3]}"!=" " ]; then
+      plugin_instance=-${metrics[3]}
+    fi
+    if [ ! -z "${metrics[4]}" -a "${metrics[4]}"!=" " ]; then
+      type_instance=-${metrics[4]}
+    fi
+    echo "PUTVAL \"$HOSTNAME/mapr.${metrics[0]}$plugin_instance/${metrics[1]}$type_instance\" interval=$INTERVAL N:$val"
   done
 done
