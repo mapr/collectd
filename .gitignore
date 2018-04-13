@@ -106,3 +106,4 @@ test_*
 
 # src/daemon/...
 /collectd
+compile_commands.json
