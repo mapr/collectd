@@ -96,8 +96,8 @@
 --enable-write_tsdb
 --enable-write_maprstreams
 --enable-mapr_process
---enable-mapr_volmetrics
 --enable-mapr_tblmetrics
+--enable-mapr_volmetrics
 --enable-zfs_arc
 --enable-zookeeper
 --disable-amqp
