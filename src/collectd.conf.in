@@ -179,8 +179,8 @@
 #@BUILD_PLUGIN_POWERDNS_TRUE@LoadPlugin powerdns
 #@BUILD_PLUGIN_PROCESSES_TRUE@LoadPlugin processes
 #@BUILD_PLUGIN_MAPR_PROCESS_TRUE@LoadPlugin mapr_process
-@BUILD_PLUGIN_MAPR_VOLMETRICS_TRUE@LoadPlugin mapr_volmetrics
 @BUILD_PLUGIN_MAPR_TBLMETRICS_TRUE@LoadPlugin mapr_tblmetrics
+@BUILD_PLUGIN_MAPR_VOLMETRICS_TRUE@LoadPlugin mapr_volmetrics
 #@BUILD_PLUGIN_PROTOCOLS_TRUE@LoadPlugin protocols
 #@BUILD_PLUGIN_PYTHON_TRUE@LoadPlugin python
 #@BUILD_PLUGIN_REDIS_TRUE@LoadPlugin redis
@@ -1220,10 +1220,10 @@
 #       PID_Directory "dirname"
 #</Plugin>
 
-<Plugin mapr_volmetrics>
+<Plugin mapr_tblmetrics>
 </Plugin>
 
-<Plugin mapr_tblmetrics>
+<Plugin mapr_volmetrics>
 </Plugin>
 
 #<Plugin protocols>
