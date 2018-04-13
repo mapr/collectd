@@ -566,7 +566,7 @@ static procstat_t *ps_read_tasks_status (int pid, procstat_t *ps)
 {
   char dirname[64];
   DIR *dh;
-  char filename[64];
+  char filename[PATH_MAX];
   FILE *fh;
   struct dirent *ent;
   derive_t cswitch_vol = 0;
