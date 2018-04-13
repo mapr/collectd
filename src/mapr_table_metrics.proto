@@ -1,0 +1,166 @@
+syntax="proto2";
+
+option optimize_for = LITE_RUNTIME;
+
+// this file must be kept in sync with appropriate proto files in
+// mapr-core repository.
+
+// Following structures a verbatim copy of what we have in mapr-core
+// it is unlikely that they will ever change:
+
+// from mapr-core/src/fs/proto/common.proto
+message FidMsg {
+  optional uint32 cid = 1;    // container-id
+  optional uint32 cinum = 2;  // inode number within container
+  optional uint32 uniq = 3;   // uniquifier
+}
+
+// from mapr-core/src/fs/proto/dbserver.proto
+enum DBProg {
+  // Tablet Procs
+  PutProc = 1;
+  ScanProc = 2;
+  GetProc = 3;
+  IncrementProc = 4;
+  CheckAndPutProc = 5;
+  AppendProc = 6;
+  TabletStatProc = 7;
+  UpdateAndGetProc = 8;
+
+  // The Req and Resp proto are same
+  // as that for UpdateAndGetProc but
+  // this is for JSON table and meaning of fields is little diff
+  JsonUpdateAndGetProc = 9;
+
+  MultiTabletGetProc = 10;
+
+  SchemaRefreshProc = 17;
+
+  // Table related procs
+  TableCreateProc = 20;
+  TabletLookupProc = 21;
+  GetTableSchemaProc = 22;
+  AttrModifyProc = 23;
+  GetTableOpenAttrsProc = 24;
+
+  //Column Family procs
+  ColumnFamilyCreateProc = 30;
+  ColumnFamilyModifyProc = 31;
+  ColumnFamilyDeleteProc = 32;
+  ColumnFamilyScanProc = 33;
+
+  // Tablet-merge related procs (sent from DST->SRC)
+  MergeSrcBeginProc = 50;
+  MergeSrcFreezePartitionProc = 51;
+  MergeSrcDeletePartitionProc = 52;
+
+  // Replication related
+  TableReplicaAddProc = 60;
+  TableReplicaEditProc = 61;
+  TableReplicaRemoveProc = 62;
+  TableReplicaInfoProc = 63;
+  TableReplicaListProc = 64;
+  TableReplicaStatsProc = 65;
+  TableReplicaAddWithCopyProc = 66;  // TableReplicaAdd with support for
+                                     // direct-copy.
+
+  TableUpstreamAddProc = 68;
+  TableUpstreamRemoveProc = 69;
+  TableUpstreamListProc = 70;
+
+  CopyRegionProc = 71;
+  CopyRegionStatusProc = 72;
+
+  // ReplMgr notify related
+  NotifyBucketCreateProc = 75;
+  NotifyBucketFlushedProc = 76;
+  CheckReplCompletionProc = 77;
+
+  VolumeActivityProc = 85;
+
+  // Debug/Info
+  InfoProc = 90;
+  TestScanProc = 91;
+  RawSpillScanProc = 92;
+  TedEventProc = 93;
+
+  TableUpdateStatsProc = 100;
+  TabletSplitProc = 101;
+  TabletCraftProc = 102;
+  TabletCompactProc = 103;
+  TabletMergeProc = 104;
+  DBRolesCacheProc = 105;
+  ImportSegmentProc = 106;
+  GetPartitionSplitsProc = 107;
+  ImportBucketProc = 108;
+  GatewayCacheProc = 109;
+  GatewayLookupProc = 110;
+
+  // Audits
+  SetDBAuditPathProc = 120;
+  SetDBAuditTestParamsProc = 121;
+
+  // RYOW related
+  TabletBucketReplTimeRequestProc = 122;
+}
+
+// Now metrics structures. These are subject to changes:
+
+// copied from mapr-core/src/fs/proto/dbserver.proto
+
+// latency histogram layout.
+// buckets are [0-1), [1-2), ..., [10000-inf):
+enum HistoBucketBoundary {
+  bucket0  =     1;
+  bucket1  =     2;
+  bucket2  =     5;
+  bucket3  =    10;
+  bucket4  =    25;
+  bucket5  =    50;
+  bucket6  =   100;
+  bucket7  =   250;
+  bucket8  =   500;
+  bucket9  =  1000;
+  bucket10 =  2500;
+  bucket11 =  5000;
+  bucket12 = 10000;
+}
+
+enum MetricsConstants {
+  IndexOfLastTableMetricsBucket = 13;
+  // we will have IndexOfLastTableMetricsBucket + 2 buckets:
+  // imagine there is only ONE bucket (with cutoff k). Its index, zero based, 
+  // is going to be zero. But we certainly have two buckets: [0 -- k) and
+  // [k -- inf). QED.
+}
+
+message HistoBar {
+  optional uint64 index = 1;
+  optional uint64 frequency = 2;
+}
+// Metrics that are collected per RPC
+message TableMetricsAuditRpcMetricProto {
+  optional DBProg prog = 1;
+  optional uint64 count = 2;
+  optional uint64 wsizeBytes = 3;
+  optional uint64 rsizeBytes = 4;
+  optional uint64 writeRows = 5;
+  optional uint64 respRows = 6;
+  optional uint64 readRows = 7;
+  repeated HistoBar latencyHisto = 8;
+}
+
+// The per table metrics structure that will be used only when audit wants to
+// serialize the table metrics to the local audit files
+// This structure needs to be in sync with TableMetrics defined in 
+// tablemetrics.h
+// If this structure changes in any manner, the function 
+// TableMetricsAudit::ConvertAuditRecordToJson() has to be updated
+message TableMetricsAuditProto {
+  optional FidMsg table = 1;
+  optional int64 timeStamp = 2;
+  repeated TableMetricsAuditRpcMetricProto rpcMetrics = 3;
+  optional uint64 valueCacheLookups = 4;
+  optional uint64 valueCacheHits = 5;
+}
+
