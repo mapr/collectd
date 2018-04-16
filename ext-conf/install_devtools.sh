@@ -92,8 +92,6 @@ EORC
 
     apt-get -y install libprotobuf-dev
     checkerror "Failed to install libprotobuf-dev"
-    apt-get -y install libprotobuf-c0-dev
-    checkerror "Failed to install libprotobuf-c0-dev"
 
 fi
 
