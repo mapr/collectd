@@ -79,6 +79,10 @@
 
 #define MAPR_HOSTNAME_FILE "/opt/mapr/hostname"
 
+#define STRINGIFY2(x) #x
+#define STRINGIFY(X) STRINGIFY2(X)
+
+
 int log_level = 0;
 int log_file_set = 0;
 char log_conf[PATH_MAX+1];
@@ -943,7 +947,10 @@ dispatchMetrics(TimestampHashTable *tsTbl, tsEntry_t *tsEntry)
       nextEntry = entry->next;
       for (j= 0; j<MetricsOpMAX; j++) {
         if (vnhtEntry) {
-          sprintf(vl.plugin_instance, "%s", vnhtEntry->volumeName);
+          sprintf(
+            vl.plugin_instance,
+            "%." STRINGIFY(sizeof(vl.plugin_instance)-1) "s",
+            vnhtEntry->volumeName);
         } else {
           sprintf(vl.plugin_instance, "%u", entry->volId);
         }

@@ -52,6 +52,23 @@ EOFC
     checkerror "Failed to download mapr-librdkafka"
     rpm -i --nodeps /tmp/cache/mapr-librdkafka*
     checkerror "Failed to install mapr-librdkafka"
+
+    yum -y install --downloadonly --downloaddir=/tmp/cache protobuf-compiler
+    checkerror "Failed to install protobuf-compiler"
+    rpm -i --nodeps /tmp/cache/protobuf-compiler*
+    checkerror "Failed to install protobuf-compiler"
+
+    yum -y install --downloadonly --downloaddir=/tmp/cache protobuf-c-compiler
+    checkerror "Failed to install protobuf-c-compiler"
+    rpm -i --nodeps /tmp/cache/protobuf-c-compiler*
+    checkerror "Failed to install protobuf-compiler"
+
+    yum -y install --downloadonly --downloaddir=/tmp/cache protobuf-devel
+    checkerror "Failed to install protobuf-devel"
+    rpm -i --nodeps /tmp/cache/protobuf-devel*
+    checkerror "Failed to install protobuf-devel"
+
+
 else
     cat > /etc/apt/sources.list.d/mapr_mep.list <<EOR
 deb $MEPREPO/ubuntu binary trusty
@@ -70,6 +87,12 @@ EORC
     checkerror "Failed to install mapr-core"
     apt-get -y -m install mapr-librdkafka
     checkerror "Failed to install mapr-librdkafka"
+    apt-get -y -m install protoc-compiler
+    checkerror "Failed to install protoc-compiler"
+    apt-get -y -m install libprotobuf-dev
+    checkerror "Failed to install libprotobuf-dev"
+    apt-get -y -m install protoc-c-compiler
+    checkerror "Failed to install protoc-c-compiler"
 fi
 
 ls -l /opt/mapr/lib
