@@ -327,7 +327,7 @@ static void getPids(char *name) {
       strcat(fileName,"/");
       strcat(fileName,directoryEntry->d_name);
       int filename_length = strlen(fileName);
-      if (filename_length < 4) {
+      if (filename_length <= 4) {
         continue;
       }
       if (strcmp(fileName + filename_length - 4, ".pid") != 0) {
