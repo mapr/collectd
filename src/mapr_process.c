@@ -327,19 +327,28 @@ static void getPids(char *name) {
       strcat(fileName,"/");
       strcat(fileName,directoryEntry->d_name);
       int filename_length = strlen(fileName);
-      if (filename_length >= 4 && strcmp(fileName + filename_length - 4, ".pid") == 0 && !strcmp(fileName + filename_length - 7, ".sh.pid") == 0) {
-        pidFP = fopen(fileName, "r");
-        if (pidFP == NULL) {
-          ERROR("mapr_process plugin failed to open pid file %s", directoryEntry->d_name);
-        } else {
-          int status = fscanf(pidFP, "%d", &pid);
-          if ( status == 0 ) {
-            ERROR("mapr_process plugin failed to read pid file %s", directoryEntry->d_name);
-            continue;
-          }
-          ps_list_register(pid, directoryEntry->d_name);
-          fclose(pidFP);
+      if (filename_length < 4) {
+        continue;
+      }
+      if (strcmp(fileName + filename_length - 4, ".pid") != 0) {
+        continue;
+      }
+      if (filename_length >= 7) {
+        if (strcmp(fileName + filename_length - 7, ".sh.pid") == 0) {
+          continue;
         }
+      }
+      pidFP = fopen(fileName, "r");
+      if (pidFP == NULL) {
+        ERROR("mapr_process plugin failed to open pid file %s", directoryEntry->d_name);
+      } else {
+        int status = fscanf(pidFP, "%d", &pid);
+        if ( status == 0 ) {
+          ERROR("mapr_process plugin failed to read pid file %s", directoryEntry->d_name);
+          continue;
+        }
+        ps_list_register(pid, directoryEntry->d_name);
+        fclose(pidFP);
       }
     }
     closedir(directory);
