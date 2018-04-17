@@ -84,7 +84,7 @@ extern int hdfsGetPathFromFid(hdfsFS fs, mapr::fs::FidMsg *fid, char *path);
 #include <functional>
 #include <vector>
 
-
+using namespace mapr::fs::tablemetrics;
 static constexpr
   std::array<std::pair<int64_t, int64_t>, IndexOfLastTableMetricsBucket + 1>
   kBuckets {{
@@ -563,11 +563,6 @@ class tableMetrics {
   // filename -> [position, timestamp]
   std::map<std::string, metricsFileData> knownMetricsFiles_;
 
-  struct metricRecord
-  {
-    TableMetricsAuditProto record;
-  };
-
 
   // takes the buffer at data sized bytes bytes. Consumes one record from that
   // buffer. Returns how many bytes were processed.
@@ -603,7 +598,7 @@ class tableMetrics {
     google::protobuf::io::ArrayInputStream stream(
       &data[lengthBytes], protobufBufferSize);
 
-    TableMetricsAuditProto messages;
+    MetricsMsg messages;
     auto parsed = messages.ParseFromBoundedZeroCopyStream(
       &stream, protobufBufferSize);
     if (!parsed) {
@@ -646,26 +641,26 @@ class tableMetrics {
     }
 
     for (const auto &perRpc : messages.rpcmetrics()) {
-      if (!perRpc.has_prog()) {
+      if (!perRpc.has_op()) {
         LOG("corrupt protobuf file 5 (no rpc type)");
         return -5;
       }
 
-      auto rpcProtobufType = perRpc.prog();
-      switch (rpcProtobufType) {
-        case PutProc:
-        case ScanProc:
-        case GetProc:
-        case IncrementProc:
-        case CheckAndPutProc:
-        case AppendProc:       // = 6
-        case UpdateAndGetProc: // = 8,
+      auto optype = perRpc.op();
+      switch (optype) {
+        case TM_PUT:
+        case TM_CHECKANDPUT:
+        case TM_UPDATEANDGET:
+        case TM_APPEND:
+        case TM_INCREMENT:
+        case TM_GET:
+        case TM_SCAN:
           break;
         default:
           continue;
       }
 
-      auto &metric = tm.perRpc[rpcTypeToIndex(rpcProtobufType)];
+      auto &metric = tm.perRpc[opTypeToIndex(optype)];
 
       if (perRpc.has_count()) {
         metric.rpcs += perRpc.count();
@@ -691,11 +686,11 @@ class tableMetrics {
           continue;
         }
 
-        if (!histoBar.has_frequency()) {
+        if (!histoBar.has_count()) {
           continue;
         }
 
-        metric.histo[histoBar.index()] += histoBar.frequency();
+        metric.histo[histoBar.index()] += histoBar.count();
       }
     }
 
@@ -703,25 +698,17 @@ class tableMetrics {
   }
 
 
-  static int rpcTypeToIndex(DBProg rpcType)
+  static int opTypeToIndex(opType optype)
   {
-    switch(rpcType) {
-      case PutProc:
-        return 0;
-      case ScanProc:
-        return 1;
-      case GetProc:
-        return 2;
-      case IncrementProc:
-        return 3;
-      case CheckAndPutProc:
-        return 4;
-      case AppendProc:
-        return 5;
-      case UpdateAndGetProc:
-        return 6;
-      default:
-        abort();
+    switch(optype) {
+        case TM_PUT: return 0;
+        case TM_CHECKANDPUT: return 1;
+        case TM_UPDATEANDGET: return 2;
+        case TM_APPEND: return 3;
+        case TM_INCREMENT: return 4;
+        case TM_GET: return 5;
+        case TM_SCAN: return 6;
+        default: abort();
     }
   }
 
@@ -817,13 +804,13 @@ class tableMetrics {
   };
 
   struct Fid {
-    const FidMsg fid_msg_;
+    const tmFidMsg fid_msg_;
     const uint32_t cid_;
     const uint32_t cinum_;
     const uint32_t uniq_;
     char c_str_[33];
 
-    Fid(FidMsg &msg) :
+    Fid(tmFidMsg &msg) :
     fid_msg_(msg),
     cid_(msg.cid()), cinum_(msg.cinum()), uniq_(msg.uniq())
     {
@@ -1036,7 +1023,7 @@ class tableMetrics {
     tag_fid->set_name("table_fid");
     tag_fid->set_value(key.c_str());
 
-    FidMsg temp(key.fid_msg_);
+    tmFidMsg temp(key.fid_msg_);
     char buffer[PATH_MAX];
     int fid_error = hdfsGetPathFromFid(cluster_.fs_, (mapr::fs::FidMsg *)&temp, buffer);
     if (fid_error != 0) {
