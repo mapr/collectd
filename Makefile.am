@@ -1926,10 +1926,11 @@ nodist_write_maprstreams_la_SOURCES = \
 	src/mapr_metrics.pb-c.c \
 	src/mapr_metrics.pb-c.h
 
-write_maprstreams_la_CPPFLAGS = $(AM_CPPFLAGS) $(BUILD_WITH_LIBRDKAFKA_JVM_CPPFLAGS)
+write_maprstreams_la_CPPFLAGS = $(AM_CPPFLAGS) $(BUILD_WITH_LIBPROTOBUF_C_CPPFLAGS) $(BUILD_WITH_LIBRDKAFKA_JVM_CPPFLAGS)
 write_maprstreams_la_LDFLAGS = $(PLUGIN_LDFLAGS) $(BUILD_WITH_LIBRDKAFKA_JVM_LDFLAGS) \
+                               $(BUILD_WITH_LIBPROTOBUF_C_LDFLAGS) \
                                libformat_graphite.la libformat_json.la libcmds.la
-write_maprstreams_la_LIBADD = $(BUILD_WITH_LIBRDKAFKA_JVM_LIBS) $(BUILD_WITH_LIBPROTOBUF_C_CPPFLAGS)
+write_maprstreams_la_LIBADD = $(BUILD_WITH_LIBRDKAFKA_JVM_LIBS) $(BUILD_WITH_LIBPROTOBUF_C_LIBS)
 endif
 
 if BUILD_PLUGIN_XMMS
