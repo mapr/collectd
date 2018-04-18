@@ -280,15 +280,7 @@ vs_threads              value:GAUGE:0:65535
 #
 
 # MapR Table Metrics
-table.rpcs value:GAUGE:0:U
-table.write_rows value:GAUGE:0:U
-table.resp_rows value:GAUGE:0:U
-table.read_rows value:GAUGE:0:U
-table.write_bytes value:GAUGE:0:U
-table.read_bytes value:GAUGE:0:U
-
-table.latency_hist bucket0:GAUGE:0:U, bucket1:GAUGE:0:U, bucket2:GAUGE:0:U, bucket3:GAUGE:0:U, bucket4:GAUGE:0:U, bucket5:GAUGE:0:U, bucket6:GAUGE:0:U, bucket7:GAUGE:0:U, bucket8:GAUGE:0:U, bucket9:GAUGE:0:U, bucket10:GAUGE:0:U,
-
+mapr_opaque value:GAUGE:0:U
 
 # MapR Volume Metrics
 read_latency value:GAUGE:0:U
