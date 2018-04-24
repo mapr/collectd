@@ -647,20 +647,12 @@ class tableMetrics {
       }
 
       auto optype = perRpc.op();
-      switch (optype) {
-        case TM_PUT:
-        case TM_CHECKANDPUT:
-        case TM_UPDATEANDGET:
-        case TM_APPEND:
-        case TM_INCREMENT:
-        case TM_GET:
-        case TM_SCAN:
-          break;
-        default:
-          continue;
+      if (!opType_IsValid(optype)) {
+        LOG("corrupt protobuf file 6 (unexpected optype = %d)", optype);
+        continue;
       }
 
-      auto &metric = tm.perRpc[opTypeToIndex(optype)];
+      auto &metric = tm.perRpc[optype];
 
       if (perRpc.has_count()) {
         metric.rpcs += perRpc.count();
@@ -697,32 +689,17 @@ class tableMetrics {
     return protobufBufferSize + lengthBytes;
   }
 
-
-  static int opTypeToIndex(opType optype)
-  {
-    switch(optype) {
-        case TM_PUT: return 0;
-        case TM_CHECKANDPUT: return 1;
-        case TM_UPDATEANDGET: return 2;
-        case TM_APPEND: return 3;
-        case TM_INCREMENT: return 4;
-        case TM_GET: return 5;
-        case TM_SCAN: return 6;
-        default: abort();
-    }
-  }
-
-  static const char *rpcIndexTo_c_str(int index)
+  static const char *rpcIndexTo_c_str(opType index)
   {
     switch (index)
     {
-      case 0: return "put";
-      case 1: return "scan";
-      case 2: return "get";
-      case 3: return "inc";
-      case 4: return "check_and_put";
-      case 5: return "append";
-      case 6: return "update_and_get";
+      case TM_PUT: return "put";
+      case TM_CHECKANDPUT: return "check_and_put";
+      case TM_UPDATEANDGET: return "update_and_get";
+      case TM_APPEND: return "append";
+      case TM_INCREMENT: return "inc";
+      case TM_GET: return "get";
+      case TM_SCAN:  return "scan";
       default: abort();
     }
   }
@@ -796,25 +773,22 @@ class tableMetrics {
   };
 
   struct perTable {
-    static const int kNumberOfRpcs = 7;
+    static const int kNumberOfRpcs = mapr::fs::tablemetrics::opType_ARRAYSIZE;
     std::array<perRpcTableMetricNumbers, kNumberOfRpcs> perRpc;
     int64_t get_valuecache_hits = 0;
     int64_t get_valuecache_lookups = 0;
     int64_t timestamp = INT64_MAX;
   };
 
+
   struct Fid {
     const tmFidMsg fid_msg_;
-    const uint32_t cid_;
-    const uint32_t cinum_;
-    const uint32_t uniq_;
     char c_str_[33];
 
     Fid(tmFidMsg &msg) :
-    fid_msg_(msg),
-    cid_(msg.cid()), cinum_(msg.cinum()), uniq_(msg.uniq())
+      fid_msg_(msg)
     {
-      sprintf(c_str_, "%u.%u.%u", cid_, cinum_, uniq_);
+      sprintf(c_str_, "%u.%u.%u", msg.cid(), msg.cinum(), msg.uniq());
     }
 
     const char *c_str() const
@@ -824,8 +798,9 @@ class tableMetrics {
 
     bool operator <(const Fid &r) const
     {
-      const std::initializer_list<uint32_t> enumL {cid_, cinum_, uniq_};
-      const std::initializer_list<uint32_t> enumR {r.cid_, r.cinum_, r.uniq_};
+      const auto enumL = {fid_msg_.cid(), fid_msg_.cinum(), fid_msg_.uniq()};
+      const auto enumR =
+        {r.fid_msg_.cid(), r.fid_msg_.cinum(), r.fid_msg_.uniq()};
 
       return std::lexicographical_compare(
         enumL.begin(), enumL.end(),
@@ -963,40 +938,6 @@ class tableMetrics {
     // no. No need to do anything.
   }
 
-  void flush() const
-  {
-    value_list_t vl = { 0 };
-    value_t dispatchedValue;
-    vl.values = &dispatchedValue;
-    vl.values_len = 1;
-    vl.interval = 10000;
-
-    // strcpy(vl.host, "my.host.name");
-
-    strcpy(vl.plugin, "mapr.db.table");
-    for (auto &t : unflushedMetrics_) {
-      auto &perTableData = t.second;
-      if (perTableData.timestamp == INT64_MAX) {
-          continue;
-      }
-      vl.time = MS_TO_CDTIME_T(perTableData.timestamp);
-      strcpy(vl.plugin_instance, t.first.c_str());
-      for (auto index = 0; index < perTableData.kNumberOfRpcs; ++index) {
-        strcpy(vl.type_instance, rpcIndexTo_c_str(index));
-        for (auto &metric : perTableData.perRpc[index].enumerate()) {
-          auto &val = metric.second;
-          if (val == 0) {
-            continue;
-          }
-          strcpy(vl.type, to_c_str(metric.first));
-          dispatchedValue.gauge = val;
-          LOG("pdv %s %ld @%.3f", vl.type, val, CDTIME_T_TO_DOUBLE(vl.time));
-          plugin_dispatch_values(&vl);
-        }
-      }
-    }
-  }
-
   void reset()
   {
     for (auto &t : unflushedMetrics_) {
@@ -1035,11 +976,11 @@ class tableMetrics {
     }
   }
 
-  void addRpcTag(int index, Metric *m) const
+  void addRpcTag(opType op, Metric *m) const
   {
     auto tag_rpc = m->add_tags();
     tag_rpc->set_name("rpc_type");
-    tag_rpc->set_value(rpcIndexTo_c_str(index));
+    tag_rpc->set_value(rpcIndexTo_c_str(op));
   }
 
   // max is the max count of non-histogram metrics to produce:
@@ -1051,9 +992,20 @@ class tableMetrics {
       if (perTableData.timestamp == INT64_MAX) {
           continue;
       }
-      for (auto index = 0; index < perTableData.kNumberOfRpcs; ++index) {
+      auto i = 0;
+      for (const auto &rpc : perTableData.perRpc) {
+        if (!opType_IsValid(i)) {
+          continue;
+        }
+        auto op = static_cast<opType>(i);
+        ++i;
+
+        if (rpc.rpcs == 0) {
+          continue;
+        }
+
         // for each RPC we have a bunch of metrics
-        for (auto &metric : perTableData.perRpc[index].enumerate()) {
+        for (auto &metric : rpc.enumerate()) {
           if (metric.second == 0) {
             continue;
           }
@@ -1066,24 +1018,20 @@ class tableMetrics {
           m->set_time(perTableData.timestamp);
 
           addTableTag(t.first, m);
-          addRpcTag(index, m);
-        }
-
-
-        if (perTableData.perRpc[index].rpcs == 0) {
-          continue;
+          addRpcTag(op, m);
         }
 
         // and a histogram. Histogram has several buckets:
-        static_assert(decltype(perTableData.perRpc[index].histo){}.size() == 
+        static_assert(kBuckets.size() == decltype(rpc.histo){}.size(), "");
+        static_assert(kBuckets.size() ==
           IndexOfLastTableMetricsBucket + 1, "");
-        static_assert(kBuckets.size() == IndexOfLastTableMetricsBucket + 1, "");
 
         auto mHisto = message.add_metrics();
         auto histo = mHisto->mutable_value();
 
+        // should rewrite in form of inner_product
         for (size_t bkt = 0; bkt < kBuckets.size(); ++bkt) {
-          auto countInBucket = perTableData.perRpc[index].histo[bkt];
+          auto countInBucket = rpc.histo[bkt];
           if (countInBucket == 0) {
             continue;
           }
@@ -1098,7 +1046,7 @@ class tableMetrics {
         mHisto->set_time(perTableData.timestamp);
 
         addTableTag(t.first, mHisto);
-        addRpcTag(index, mHisto);
+        addRpcTag(op, mHisto);
       }
     }
 
@@ -1131,7 +1079,6 @@ class tableMetrics {
       "Encoded opaque buffer: ptr 0x%p, type_instance %s, type %s, size %d",
       buffer, vl.type_instance, vl.type, cb);
     plugin_dispatch_values(&vl);
-
 
   }
 
