@@ -83,4 +83,5 @@ message MetricsMsg {
   repeated RpcMetrics rpcMetrics = 3;
   optional int64 valueCacheLookups = 4;
   optional int64 valueCacheHits = 5;
-}
+  optional tmFidMsg index = 6;
+  }

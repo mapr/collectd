@@ -58,14 +58,24 @@ extern "C" {
 // hdfsEverything
 #include "hdfs.h"
 
+extern "C" {
+// from api_support.h:
 
-namespace mapr {
-  namespace fs {
-    struct FidMsg;
-  }
+// populates path based on FID (made of c, i, u)
+// its purpose is to be called by clients who can't use FidMsg
+extern int hdfsGetPathFromFid2(
+  hdfsFS fs,
+  uint32_t cid, uint32_t cinum, uint32_t unuq,
+  char* path);
+
+// populates secondary index name based on fids for the table and its
+// secondary index.
+extern int hdfsGetIndexNameFromFids(
+  hdfsFS fs,
+  uint32_t TableCid, uint32_t TableCinum, uint32_t TableUniq,
+  uint32_t IndexCid, uint32_t IndexCinum, uint32_t IndexUniq,
+  char* name);
 }
-
-extern int hdfsGetPathFromFid(hdfsFS fs, mapr::fs::FidMsg *fid, char *path);
 
 // memset()
 #include <cstring>
@@ -203,9 +213,54 @@ getHostName(char *buf, int len)
 }
 }
 
+namespace std {
+  template<>
+  struct less<tmFidMsg> {
+    bool operator ()(const tmFidMsg &l, const tmFidMsg &r) const
+    {
+      const auto lhs = {l.cid(), l.cinum(), l.uniq()};
+      const auto rhs = {r.cid(), r.cinum(), r.uniq()};
+      return lexicographical_compare(
+        lhs.begin(), lhs.end(), rhs.begin(), rhs.end());
+    }
+  };
+}
+
+struct Fid {
+  const tmFidMsg fid_msg_;
+  char c_str_[33];
+
+  Fid(tmFidMsg &msg) :
+    fid_msg_(msg)
+  {
+    sprintf(c_str_, "%u.%u.%u", msg.cid(), msg.cinum(), msg.uniq());
+  }
+
+  struct blank {};
+  Fid(struct blank) :
+    c_str_("")
+  { }
+
+  bool empty() const
+  {
+    return c_str_[0] == '\0';
+  }
+
+  const char *c_str() const
+  {
+    return c_str_;
+  }
+
+  bool operator <(const Fid &other) const
+  {
+    return std::less<tmFidMsg>()(fid_msg_, other.fid_msg_);
+  }
+};
+
+
 static_assert(std::is_pointer<hdfsFile>::value, "sanity check");
 
-struct maprCluster {
+struct cluster {
   template <typename T> struct scopedHandle {
     scopedHandle(T input, std::function<void(T)> closer) :
       handle_(input), closer_(closer)
@@ -483,6 +538,23 @@ struct maprCluster {
     return false;
   }
 
+  int getPathFromFid(const Fid &fid, char *path)
+  {
+    auto &msg = fid.fid_msg_;
+    return hdfsGetPathFromFid2(fs_, msg.cid(), msg.cinum(), msg.uniq(), path);
+  }
+
+  int getIndexNameFromFids(const Fid &table, const Fid &index, char *name)
+  {
+    auto &tbl = table.fid_msg_;
+    auto &idx = index.fid_msg_;
+    return hdfsGetIndexNameFromFids(
+      fs_,
+      tbl.cid(), tbl.cinum(), tbl.uniq(), 
+      idx.cid(), idx.cinum(), idx.uniq(), 
+      name);
+  }
+
   char hostname_[PATH_MAX];
   static_assert(sizeof(hostname_) == PATH_MAX, "need ARRAYSIZE macro");
 };
@@ -528,7 +600,7 @@ class tableMetrics {
     return ret;
   }
 
-  maprCluster cluster_;
+  mutable cluster cluster_;
 
   struct metricsFileData
   {
@@ -619,6 +691,20 @@ class tableMetrics {
 
     const Fid tableFid(fidPb);
 
+    const Fid indexFid([messages] {
+      if (!messages.has_index()) {
+        return Fid(Fid::blank{});
+      }
+
+      auto siFid = messages.index();
+      if (!siFid.has_cid() || !siFid.has_cinum() || !siFid.has_uniq()) {
+        LOG("corrupt protobuf file 7: index fid not fully defined");
+        return Fid(Fid::blank{});
+      }
+
+      return Fid(siFid);
+    }());
+
     if (!messages.has_timestamp()) {
       LOG("corrupt protobuf file 3 (no timestamp)");
       return -3;
@@ -627,7 +713,7 @@ class tableMetrics {
 
     //LOG("%u:%u:%u @%lu", fidPb.cid(), fidPb.cinum(), fidPb.uniq(), timestamp);
 
-    auto &tm = unflushedMetrics_[tableFid];
+    auto &tm = unflushedMetrics_[{tableFid, indexFid}];
 
     if (tm.timestamp > timestamp) {
       tm.timestamp = timestamp;
@@ -739,77 +825,51 @@ class tableMetrics {
     int64_t write_bytes = 0;
     int64_t read_bytes = 0;
 
-    std::array<int64_t, IndexOfLastTableMetricsBucket + 1> histo;
+    std::array<int64_t, IndexOfLastTableMetricsBucket + 1> histo = {};
 
-    std::array<std::pair<const metricId, std::reference_wrapper<int64_t>>, 6> enumerate()
+    struct enum_per_rpc_metrics_item
+    {
+      metricId name;
+      int64_t value;
+    };
+    const std::array<enum_per_rpc_metrics_item, 6> enumerate() const
     {
       #define TABLE_METRIX_NAME_AND_VALUE(name) \
-        std::make_pair(metricId::name, std::ref(name))
+        enum_per_rpc_metrics_item{metricId::name, name}
       return { {
         TABLE_METRIX_NAME_AND_VALUE(rpcs),
         TABLE_METRIX_NAME_AND_VALUE(write_rows),
         TABLE_METRIX_NAME_AND_VALUE(resp_rows),
         TABLE_METRIX_NAME_AND_VALUE(read_rows),
         TABLE_METRIX_NAME_AND_VALUE(write_bytes),
-        TABLE_METRIX_NAME_AND_VALUE(read_bytes),
+        TABLE_METRIX_NAME_AND_VALUE(read_bytes), 
       }};
       #undef TABLE_METRIX_NAME_AND_VALUE
-    }
-
-    const std::array<std::pair<metricId, int64_t>, 6> enumerate() const
-    {
-      #define TABLE_METRIX_NAME_AND_VALUE2(name) \
-        std::make_pair(metricId::name, name)
-      return { {
-        TABLE_METRIX_NAME_AND_VALUE2(rpcs),
-        TABLE_METRIX_NAME_AND_VALUE2(write_rows),
-        TABLE_METRIX_NAME_AND_VALUE2(resp_rows),
-        TABLE_METRIX_NAME_AND_VALUE2(read_rows),
-        TABLE_METRIX_NAME_AND_VALUE2(write_bytes),
-        TABLE_METRIX_NAME_AND_VALUE2(read_bytes),
-      }};
-      #undef TABLE_METRIX_NAME_AND_VALUE2
     }
   };
 
   struct perTable {
     static const int kNumberOfRpcs = mapr::fs::tablemetrics::opType_ARRAYSIZE;
-    std::array<perRpcTableMetricNumbers, kNumberOfRpcs> perRpc;
+    std::array<perRpcTableMetricNumbers, kNumberOfRpcs> perRpc = {};
     int64_t get_valuecache_hits = 0;
     int64_t get_valuecache_lookups = 0;
     int64_t timestamp = INT64_MAX;
   };
 
+  struct table {
+    Fid m_primary;
+    Fid m_si;
 
-  struct Fid {
-    const tmFidMsg fid_msg_;
-    char c_str_[33];
-
-    Fid(tmFidMsg &msg) :
-      fid_msg_(msg)
+    bool operator <(const table &other) const
     {
-      sprintf(c_str_, "%u.%u.%u", msg.cid(), msg.cinum(), msg.uniq());
-    }
-
-    const char *c_str() const
-    {
-      return c_str_;
-    }
-
-    bool operator <(const Fid &r) const
-    {
-      const auto enumL = {fid_msg_.cid(), fid_msg_.cinum(), fid_msg_.uniq()};
-      const auto enumR =
-        {r.fid_msg_.cid(), r.fid_msg_.cinum(), r.fid_msg_.uniq()};
-
+      const auto lhs = {this->m_primary, this->m_si};
+      const auto rhs = {other.m_primary, other.m_si};
       return std::lexicographical_compare(
-        enumL.begin(), enumL.end(),
-        enumR.begin(), enumR.end());
+        lhs.begin(), lhs.end(), rhs.begin(), rhs.end());
     }
-
   };
 
-  std::map<Fid, perTable> unflushedMetrics_;
+  std::map<table, perTable> unflushedMetrics_;
 
   // we have a map of table -> timestamp [rpc->[, counter]]
   void processOneMetricsFile(const std::string& name, metricsFileData& details)
@@ -904,7 +964,7 @@ class tableMetrics {
   }
 
 
-  void processOneEnumeratedFile(const maprCluster::listingFileInfo &file)
+  void processOneEnumeratedFile(const cluster::listingFileInfo &file)
   {
     auto found = knownMetricsFiles_.find(file.name);
 
@@ -946,32 +1006,46 @@ class tableMetrics {
         continue;
       }
       perTableData.timestamp = INT64_MAX;
-      for (auto index = 0; index < perTableData.kNumberOfRpcs; ++index) {
-        for (auto &metric : perTableData.perRpc[index].enumerate()) {
-          metric.second.get() = 0;
-        }
-        for (auto &bucket : perTableData.perRpc[index].histo) {
-          bucket = 0;
-        }
-      }
+      perTableData.perRpc = {};
     }
   }
 
 
-  void addTableTag(const decltype(unflushedMetrics_)::key_type &key, Metric *m) const
+  void addTableTag(const Fid &key, Metric *m) const
   {
     auto tag_fid = m->add_tags();
     tag_fid->set_name("table_fid");
     tag_fid->set_value(key.c_str());
 
-    tmFidMsg temp(key.fid_msg_);
     char buffer[PATH_MAX];
-    int fid_error = hdfsGetPathFromFid(cluster_.fs_, (mapr::fs::FidMsg *)&temp, buffer);
+    int fid_error = cluster_.getPathFromFid(key, buffer);
+
     if (fid_error != 0) {
-      ERROR("name(%u.%u.%u) returned %d", temp.cid(), temp.cinum(), temp.uniq(), fid_error);
+      ERROR("getPathFromFid(%s) returned %d", key.c_str(), fid_error);
     } else {
       auto tag_path = m->add_tags();
       tag_path->set_name("table_path");
+      tag_path->set_value(buffer);
+    }
+  }
+
+  void addIndexTag(const Fid &table, const Fid &index, Metric *m) const
+  {
+    if (index.empty()) {
+      return;
+    }
+    auto tag_index_fid = m->add_tags();
+    tag_index_fid->set_name("index_fid");
+    tag_index_fid->set_value(index.c_str());
+
+    char buffer[PATH_MAX];
+    int fid_error = cluster_.getIndexNameFromFids(table, index, buffer);
+    if (fid_error != 0) {
+      ERROR("getIndexNameFromFids(%s, %s) returned %d",
+        table.c_str(), index.c_str(), fid_error);
+    } else {
+      auto tag_path = m->add_tags();
+      tag_path->set_name("index");
       tag_path->set_value(buffer);
     }
   }
@@ -987,8 +1061,11 @@ class tableMetrics {
   void flush2() const
   {
     Metrics message;
-    for (auto &t : unflushedMetrics_) {
-      auto &perTableData = t.second;
+    for (auto &it : unflushedMetrics_) {
+      const auto &key = it.first;
+      const auto &table = key.m_primary;
+      const auto &index = key.m_si;
+      auto &perTableData = it.second;
       if (perTableData.timestamp == INT64_MAX) {
           continue;
       }
@@ -1005,19 +1082,20 @@ class tableMetrics {
         }
 
         // for each RPC we have a bunch of metrics
-        for (auto &metric : rpc.enumerate()) {
-          if (metric.second == 0) {
+        for (const auto &metric : rpc.enumerate()) {
+          if (metric.value == 0) {
             continue;
           }
 
           auto m = message.add_metrics();
 
-          m->mutable_value()->set_number(metric.second);
+          m->mutable_value()->set_number(metric.value);
 
-          m->set_name(std::string("mapr.db.") + to_c_str(metric.first));
+          m->set_name(std::string("mapr.db.") + to_c_str(metric.name));
           m->set_time(perTableData.timestamp);
 
-          addTableTag(t.first, m);
+          addTableTag(table, m);
+          addIndexTag(table, index, m);
           addRpcTag(op, m);
         }
 
@@ -1045,7 +1123,8 @@ class tableMetrics {
         mHisto->set_name("mapr.db.table.latency");
         mHisto->set_time(perTableData.timestamp);
 
-        addTableTag(t.first, mHisto);
+        addTableTag(table, mHisto);
+        addIndexTag(table, index, mHisto);
         addRpcTag(op, mHisto);
       }
     }
