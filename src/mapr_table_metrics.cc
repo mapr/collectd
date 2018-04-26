@@ -806,12 +806,12 @@ class tableMetrics {
   {
     switch (metric)
     {
-      case metricId::rpcs: return "table.rpcs";
-      case metricId::write_rows: return "table.write_rows";
-      case metricId::resp_rows: return "table.resp_rows";
-      case metricId::read_rows: return "table.read_rows";
-      case metricId::write_bytes: return "table.write_bytes";
-      case metricId::read_bytes: return "table.read_bytes";
+      case metricId::rpcs: return "mapr.db.table.rpcs";
+      case metricId::write_rows: return "mapr.db.table.write_rows";
+      case metricId::resp_rows: return "mapr.db.table.resp_rows";
+      case metricId::read_rows: return "mapr.db.table.read_rows";
+      case metricId::write_bytes: return "mapr.db.table.write_bytes";
+      case metricId::read_bytes: return "mapr.db.table.read_bytes";
       default: abort();
     }
   }
@@ -846,6 +846,7 @@ class tableMetrics {
       }};
       #undef TABLE_METRIX_NAME_AND_VALUE
     }
+
   };
 
   struct perTable {
@@ -1010,6 +1011,15 @@ class tableMetrics {
     }
   }
 
+  void addEverything(
+    Metric *m,
+    const Fid &table, const Fid &index, opType op, int64_t timestamp) const
+  {
+    m->set_time(timestamp);
+    addTableTag(table, m);
+    addIndexTag(table, index, m);
+    addRpcTag(op, m);
+  }
 
   void addTableTag(const Fid &key, Metric *m) const
   {
@@ -1065,7 +1075,7 @@ class tableMetrics {
       const auto &key = it.first;
       const auto &table = key.m_primary;
       const auto &index = key.m_si;
-      auto &perTableData = it.second;
+      const auto &perTableData = it.second;
       if (perTableData.timestamp == INT64_MAX) {
           continue;
       }
@@ -1090,13 +1100,8 @@ class tableMetrics {
           auto m = message.add_metrics();
 
           m->mutable_value()->set_number(metric.value);
-
-          m->set_name(std::string("mapr.db.") + to_c_str(metric.name));
-          m->set_time(perTableData.timestamp);
-
-          addTableTag(table, m);
-          addIndexTag(table, index, m);
-          addRpcTag(op, m);
+          m->set_name(to_c_str(metric.name));
+          addEverything(m, table, index, op, perTableData.timestamp);
         }
 
         // and a histogram. Histogram has several buckets:
@@ -1119,13 +1124,8 @@ class tableMetrics {
           bucket->set_number(countInBucket);
         }
 
-
         mHisto->set_name("mapr.db.table.latency");
-        mHisto->set_time(perTableData.timestamp);
-
-        addTableTag(table, mHisto);
-        addIndexTag(table, index, mHisto);
-        addRpcTag(op, mHisto);
+        addEverything(mHisto, table, index, op, perTableData.timestamp);
       }
     }
 
@@ -1137,9 +1137,7 @@ class tableMetrics {
     auto buffer = AllocateMetricsPointer(cb);
     namespace pb = google::protobuf::io;
 
-    google::protobuf::io::ArrayOutputStream output(buffer->data, cb);
-    
-    auto bMustSucceed = message.SerializeToZeroCopyStream(&output);
+    auto bMustSucceed = message.SerializeToArray(buffer->data, cb);
     if (!bMustSucceed) {
       ERR("Failed to serialize the opaque message for writer, %d bytes.", cb);
       return;
