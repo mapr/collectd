@@ -1042,6 +1042,9 @@ class tableMetrics {
   void addIndexTag(const Fid &table, const Fid &index, Metric *m) const
   {
     if (index.empty()) {
+      auto noindex = m->add_tags();
+      noindex->set_name("noindex");
+      noindex->set_value("//primary");
       return;
     }
     auto tag_index_fid = m->add_tags();
