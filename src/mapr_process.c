@@ -340,7 +340,8 @@ static void getPids(char *name) {
       }
       pidFP = fopen(fileName, "r");
       if (pidFP == NULL) {
-        ERROR("mapr_process plugin failed to open pid file %s", directoryEntry->d_name);
+        int err = errno;
+        ERROR("mapr_process plugin failed to open pid file %s (err %d)", fileName, err);
       } else {
         int status = fscanf(pidFP, "%d", &pid);
         if ( status == 0 ) {
