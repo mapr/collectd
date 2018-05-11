@@ -237,9 +237,10 @@ struct Fid {
   }
 
   struct blank {};
-  Fid(struct blank) :
-    c_str_("")
-  { }
+  Fid(struct blank)
+  {
+    c_str_[0] = '\0';
+  }
 
   bool empty() const
   {
