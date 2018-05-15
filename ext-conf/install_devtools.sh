@@ -52,20 +52,6 @@ EOFC
     checkerror "Failed to download mapr-librdkafka"
     rpm -i --nodeps /tmp/cache/mapr-librdkafka*
     checkerror "Failed to install mapr-librdkafka"
-
-    yum -y install --downloadonly --downloaddir=/tmp/cache protobuf-devel
-    checkerror "Failed to download protobuf-devel"
-    rpm -i --nodeps /tmp/cache/protobuf*
-    checkerror "Failed to install protobuf (c++ compiler, headers, library)"
-    rm /tmp/cache/*
-
-    yum -y install --downloadonly --downloaddir=/tmp/cache protobuf-c-devel
-    checkerror "Failed to download protobuf-c-devel"
-    rpm -i --nodeps /tmp/cache/protobuf-c-*
-    checkerror "Failed to install protobuf-c (c compiler, headers, library)"
-    rm /tmp/cache/*
-
-
 else
     cat > /etc/apt/sources.list.d/mapr_mep.list <<EOR
 deb $MEPREPO/ubuntu binary trusty
@@ -84,15 +70,14 @@ EORC
     checkerror "Failed to install mapr-core"
     apt-get -y -m install mapr-librdkafka
     checkerror "Failed to install mapr-librdkafka"
-
-    apt-get -y install protobuf-compiler
-    checkerror "Failed to install protobuf-compiler"
-    apt-get -y install protobuf-c-compiler
-    checkerror "Failed to install protobuf-c-compiler"
-
-    apt-get -y install libprotobuf-dev
-    checkerror "Failed to install libprotobuf-dev"
-
 fi
+
+pushd /opt/protobuf-2.5.0
+checkerror "protobuf-2.5.0 not found on build machine"
+./configure --disable-shared --with-pic=yes --with-zlib=no
+checkerror "Failed to configure protobuf 2.5.0"
+make install
+checkerror "failed to build protobuf 2.5.0"
+popd
 
 ls -l /opt/mapr/lib
