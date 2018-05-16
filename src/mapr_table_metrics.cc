@@ -81,17 +81,14 @@ extern int hdfsGetIndexNameFromFids(
 #include <cstring>
 
 // c++
-#include <string>
-#include <set>
-#include <unordered_map>
-#include <map>
-#include <algorithm>
-#include <cstdlib>
-#include <cstdio>
+
+#include <array>
 #include <atomic>
-#include <chrono>
-#include <thread>
+#include <cstdio>
+#include <cstdlib>
 #include <functional>
+#include <map>
+#include <string>
 #include <vector>
 
 using namespace mapr::fs::tablemetrics;
