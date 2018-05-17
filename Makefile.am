@@ -1921,19 +1921,17 @@ endif
 
 pkglib_LTLIBRARIES += write_maprstreams.la
 write_maprstreams_la_SOURCES = \
-        src/write_maprstreams.cc \
-        src/utils_crc32.c \
-        src/utils_crc32.h
+        src/write_maprstreams.cc
 
 nodist_write_maprstreams_la_SOURCES = \
 	src/mapr_metrics.pb.cc \
 	src/mapr_metrics.pb.h
 
-write_maprstreams_la_CPPFLAGS = $(AM_CPPFLAGS) $(BUILD_WITH_LIBPROTOBUF_CPPFLAGS) $(BUILD_WITH_LIBRDKAFKA_JVM_CPPFLAGS)
+write_maprstreams_la_CPPFLAGS = $(AM_CPPFLAGS) $(BUILD_WITH_LIBPROTOBUF_CPPFLAGS) $(BUILD_WITH_LIBRDKAFKA_JVM_CPPFLAGS) -std=c++11
 write_maprstreams_la_LDFLAGS = $(PLUGIN_LDFLAGS) $(BUILD_WITH_LIBRDKAFKA_JVM_LDFLAGS) \
                                $(BUILD_WITH_LIBPROTOBUF_LDFLAGS) \
                                libformat_graphite.la libformat_json.la libcmds.la
-write_maprstreams_la_LIBADD = $(BUILD_WITH_LIBRDKAFKA_JVM_LIBS) $(BUILD_WITH_LIBPROTOBUF_C_LIBS)
+write_maprstreams_la_LIBADD = $(BUILD_WITH_LIBRDKAFKA_JVM_LIBS) $(BUILD_WITH_LIBPROTOBUF_LIBS)
 endif
 
 if BUILD_PLUGIN_XMMS
