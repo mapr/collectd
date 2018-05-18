@@ -151,9 +151,6 @@ static const char *meta_tag_metric_id[] = {
  * Private variables
  */
 struct wt_kafka_topic_context {
-#define KAFKA_FORMAT_JSON        0
-#define KAFKA_FORMAT_COMMAND     1
-    uint8_t                     format;
     _Bool                       store_rates;
     rd_kafka_topic_conf_t       *conf;
     rd_kafka_topic_t            *topic;
@@ -1047,7 +1044,6 @@ static int wt_config_stream(oconfig_item_t *ci)
 
     tctx->escape_char = '.';
     tctx->store_rates = 0;
-    tctx->format = KAFKA_FORMAT_JSON;
     tctx->stream = NULL;
     tctx->host_tags = NULL;
     tctx->topic_name = NULL;
