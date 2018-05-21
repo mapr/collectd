@@ -1011,12 +1011,21 @@ class tableMetrics {
 
   void addEverything(
     Metric *m,
-    const Fid &table, const Fid &index, opType op, int64_t timestamp) const
+    const Fid &table, const Fid &index,
+    opType op, int64_t timestamp, const char *host) const
   {
     m->set_time(timestamp);
     addTableTag(table, m);
     addIndexTag(table, index, m);
     addRpcTag(op, m);
+    addHostTag(host, m);
+  }
+
+  void addHostTag(const char *host, Metric *m) const
+  {
+    auto tag_host = m->add_tags();
+    tag_host->set_name("fqdn");
+    tag_host->set_value(host);
   }
 
   void addTableTag(const Fid &key, Metric *m) const
@@ -1072,6 +1081,7 @@ class tableMetrics {
   void flush2() const
   {
     Metrics message;
+    const auto host = cluster_.hostname_;
     for (auto &it : unflushedMetrics_) {
       const auto &key = it.first;
       const auto &table = key.m_primary;
@@ -1102,7 +1112,7 @@ class tableMetrics {
 
           m->mutable_value()->set_number(metric.value);
           m->set_name(to_c_str(metric.name));
-          addEverything(m, table, index, op, perTableData.timestamp);
+          addEverything(m, table, index, op, perTableData.timestamp, host);
         }
 
         // and a histogram. Histogram has several buckets:
@@ -1126,7 +1136,7 @@ class tableMetrics {
         }
 
         mHisto->set_name("mapr.db.table.latency");
-        addEverything(mHisto, table, index, op, perTableData.timestamp);
+        addEverything(mHisto, table, index, op, perTableData.timestamp, host);
       }
     }
 
