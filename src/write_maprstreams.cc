@@ -303,6 +303,15 @@ static int wt_kafka_handle(struct wt_kafka_topic_context *ctx) /* {{{ */
 
 } /* }}} int wt_kafka_handle */
 
+inline const char * format_PRIi64()
+{
+    return "%" PRIi64;
+}
+
+inline const char * format_PRIu64()
+{
+    return "%" PRIu64;
+}
 
 static int wt_format_values(char *ret, size_t ret_len,
                             int ds_num, const data_set_t *ds,
@@ -351,9 +360,9 @@ static int wt_format_values(char *ret, size_t ret_len,
     else if (ds->ds[ds_num].type == DS_TYPE_COUNTER)
         BUFFER_ADD("%llu", vl->values[ds_num].counter);
     else if (ds->ds[ds_num].type == DS_TYPE_DERIVE)
-        BUFFER_ADD(("%" PRIi64), vl->values[ds_num].derive);
+        BUFFER_ADD(format_PRIi64(), vl->values[ds_num].derive);
     else if (ds->ds[ds_num].type == DS_TYPE_ABSOLUTE)
-        BUFFER_ADD(("%" PRIu64), vl->values[ds_num].absolute);
+        BUFFER_ADD(format_PRIu64(), vl->values[ds_num].absolute);
     else
     {
         ERROR("format_values plugin: Unknown data source type: %i",
