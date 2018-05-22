@@ -107,6 +107,7 @@ extern "C" {
 #include "utils_cache.h"
 }
 
+#include <cinttypes>
 #include <new>
 #include <stdint.h>
 #include <librdkafka/rdkafka.h>
