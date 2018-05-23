@@ -1452,21 +1452,21 @@ endif
 
 if BUILD_PLUGIN_MAPR_TBLMETRICS
 
-BUILT_SOURCES += src/mapr_table_metrics.pb.cc src/mapr_table_metrics.pb.h src/mapr_metrics.pb.cc src/mapr_metrics.pb.h
+BUILT_SOURCES += src/mapr_table_metrics.pb.cc src/mapr_table_metrics.pb.h tm/mapr_metrics.pb.cc tm/mapr_metrics.pb.h
 
 src/mapr_table_metrics.pb.cc src/mapr_table_metrics.pb.h: src/mapr_table_metrics.proto
 	protoc --cpp_out=. src/mapr_table_metrics.proto
 
-src/mapr_metrics.pb.cc src/mapr_metrics.pb.h: src/mapr_metrics.proto
-	protoc --cpp_out=. src/mapr_metrics.proto
+tm/mapr_metrics.pb.cc tm/mapr_metrics.pb.h: src/mapr_metrics.proto
+	mkdir -p tm && cp src/mapr_metrics.proto tm && protoc --cpp_out=. tm/mapr_metrics.proto
 
 pkglib_LTLIBRARIES += mapr_tblmetrics.la
 mapr_tblmetrics_la_SOURCES = src/mapr_table_metrics.cc
 nodist_mapr_tblmetrics_la_SOURCES = \
 	src/mapr_table_metrics.pb.cc \
 	src/mapr_table_metrics.pb.h \
-	src/mapr_metrics.pb.cc \
-	src/mapr_metrics.pb.h
+	tm/mapr_metrics.pb.cc \
+	tm/mapr_metrics.pb.h
 mapr_tblmetrics_la_CPPFLAGS = $(AM_CPPFLAGS) $(HDFS_CPPFLAGS) $(BUILD_WITH_LIBRDKAFKA_JVM_CPPFLAGS) $(BUILD_MAPR_TABLE_METRICS_CPPFLAGS)
 mapr_tblmetrics_la_LDFLAGS = $(PLUGIN_LDFLAGS) $(BUILD_WITH_LIBRDKAFKA_JVM_LDFLAGS)
 mapr_tblmetrics_la_LIBADD = $(BUILD_WITH_LIBRDKAFKA_JVM_LIBS) $(BUILD_MAPR_TABLE_METRICS_LIBS)
@@ -1913,11 +1913,8 @@ if BUILD_PLUGIN_WRITE_MAPRSTREAMS
 
 BUILT_SOURCES += src/mapr_metrics.pb.cc src/mapr_metrics.pb.h
 
-if BUILD_PLUGIN_MAPR_TBLMETRICS
-else
 src/mapr_metrics.pb.cc src/mapr_metrics.pb.h: src/mapr_metrics.proto
 	protoc --cpp_out=. src/mapr_metrics.proto
-endif
 
 pkglib_LTLIBRARIES += write_maprstreams.la
 write_maprstreams_la_SOURCES = \

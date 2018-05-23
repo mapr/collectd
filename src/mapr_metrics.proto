@@ -1,5 +1,8 @@
 syntax="proto2";
 
+option optimize_for = LITE_RUNTIME;
+option cc_generic_services = false;
+
 // ("table_name", "/user1/table2")
 message Tag {
   optional string  name  = 1;

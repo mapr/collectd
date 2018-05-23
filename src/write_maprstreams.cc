@@ -110,7 +110,6 @@ extern "C" {
 }
 
 #include <new>
-#include <stdint.h>
 #include <librdkafka/rdkafka.h>
 #include <pthread.h>
 
@@ -790,12 +789,12 @@ void wt_process_and_write_unpacked_metrics(
     for (const auto &common_tag : metrics.commontags()) {
         if (!common_tag.has_name()) {
             // bug in producer.
-            ERROR("common tag [%s] has no name", common_tag.DebugString().c_str());
+            ERROR("common tag has no name");
             return;
         }
 
         if (!common_tag.has_value()) {
-            ERROR("common tag [%s] has no value", common_tag.DebugString().c_str());
+            ERROR("common tag has no value");
             return;
         }
     }
@@ -809,7 +808,7 @@ void wt_process_and_write_unpacked_metrics(
             return;
         }
         assert(one_metric.has_name());
-        if (one_metric.has_name()) {
+        if (!one_metric.has_name()) {
             // malformed protobuf, bug in producer
             return;
         }
@@ -820,12 +819,12 @@ void wt_process_and_write_unpacked_metrics(
             assert(metric_tag.has_name() && metric_tag.has_value());
 
             if (!metric_tag.has_name()) {
-                ERROR("no tag name in [%s]", metric_tag.DebugString().c_str());
+                ERROR("no tag name");
                 return;
             }
 
             if (!metric_tag.has_value()) {
-                ERROR("no tag value in [%s]", metric_tag.DebugString().c_str());
+                ERROR("no tag value");
                 return;
             }
         }
@@ -848,9 +847,7 @@ void wt_process_and_write_unpacked_metrics(
         // the value of the metric is determined below:
 
         if ((value.buckets_size() == 0) && !value.has_number()) {
-            INFO("No metric or buckets for [%s]",
-                one_metric.DebugString().c_str());
-            // assert((value->n_buckets > 0) || (value->has_number));
+            INFO("Neither value nor buckets for a metric");
             continue;
         }
 
@@ -1141,8 +1138,9 @@ static int wt_config(oconfig_item_t *ci)
     return 0;
 }
 
-void module_register(void)
+extern "C" void module_register(void)
 {
+    GOOGLE_PROTOBUF_VERIFY_VERSION;
     plugin_register_complex_config("write_maprstreams", wt_config);
 }
 
