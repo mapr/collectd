@@ -55,8 +55,10 @@ message RpcMetrics {
   optional int64 writeRows = 5;
   optional int64 respRows = 6;
   optional int64 readRows = 7;
+  optional int64 valueCacheLookups = 8;
+  optional int64 valueCacheHits = 9;
 
-  repeated HistoBar latencyHisto = 8;
+  repeated HistoBar latencyHisto = 15;
   // it is assertable that the sum of HistoBar::count for all bars of
   // latencyHisto is exactly .count of the containing RpcMetrics.
   // RpcMetrics::count is therefore redundant but we still keep it to
@@ -81,7 +83,5 @@ message MetricsMsg {
   optional tmFidMsg table = 1;
   optional int64 timeStamp = 2;
   repeated RpcMetrics rpcMetrics = 3;
-  optional int64 valueCacheLookups = 4;
-  optional int64 valueCacheHits = 5;
   optional tmFidMsg index = 6;
   }

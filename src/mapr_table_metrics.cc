@@ -717,13 +717,6 @@ class tableMetrics {
       tm.timestamp = timestamp;
     }
 
-    if (messages.has_valuecachehits()) {
-      tm.get_valuecache_hits += messages.valuecachehits();
-    }
-    if (messages.has_valuecachelookups()) {
-      tm.get_valuecache_lookups += messages.valuecachelookups();
-    }
-
     for (const auto &perRpc : messages.rpcmetrics()) {
       if (!perRpc.has_op()) {
         LOG("corrupt protobuf file 5 (no rpc type)");
@@ -755,6 +748,12 @@ class tableMetrics {
       }
       if (perRpc.has_wsizebytes()) {
         metric.write_bytes += perRpc.wsizebytes();
+      }
+      if (perRpc.has_valuecachelookups()) {
+        metric.value_cache_lookups += perRpc.valuecachelookups();
+      }
+      if (perRpc.has_valuecachehits()) {
+        metric.value_cache_hits += perRpc.valuecachehits();
       }
 
       for (auto &histoBar : perRpc.latencyhisto()) {
@@ -796,8 +795,8 @@ class tableMetrics {
     read_rows,
     write_bytes,
     read_bytes,
-//    get_valuecache_lookups,
-//    get_valuecache_hits,
+    value_cache_lookups,
+    value_cache_hits,
   };
 
   static const char *to_c_str(metricId metric)
@@ -810,6 +809,10 @@ class tableMetrics {
       case metricId::read_rows: return "mapr.db.table.read_rows";
       case metricId::write_bytes: return "mapr.db.table.write_bytes";
       case metricId::read_bytes: return "mapr.db.table.read_bytes";
+      case metricId::value_cache_lookups:
+        return "mapr.db.table.value_cache_lookups";
+      case metricId::value_cache_hits:
+        return "mapr.db.table.value_cache_hits";
       default: abort();
     }
   }
@@ -822,6 +825,8 @@ class tableMetrics {
     int64_t read_rows = 0;
     int64_t write_bytes = 0;
     int64_t read_bytes = 0;
+    int64_t value_cache_lookups = 0;
+    int64_t value_cache_hits = 0;
 
     std::array<int64_t, IndexOfLastTableMetricsBucket + 1> histo = {};
 
@@ -830,17 +835,19 @@ class tableMetrics {
       metricId name;
       int64_t value;
     };
-    const std::array<enum_per_rpc_metrics_item, 6> enumerate() const
+    const std::array<enum_per_rpc_metrics_item, 8> enumerate() const
     {
       #define TABLE_METRIX_NAME_AND_VALUE(name) \
         enum_per_rpc_metrics_item{metricId::name, name}
-      return { {
+      return {{
         TABLE_METRIX_NAME_AND_VALUE(rpcs),
         TABLE_METRIX_NAME_AND_VALUE(write_rows),
         TABLE_METRIX_NAME_AND_VALUE(resp_rows),
         TABLE_METRIX_NAME_AND_VALUE(read_rows),
         TABLE_METRIX_NAME_AND_VALUE(write_bytes),
         TABLE_METRIX_NAME_AND_VALUE(read_bytes), 
+        TABLE_METRIX_NAME_AND_VALUE(value_cache_lookups),
+        TABLE_METRIX_NAME_AND_VALUE(value_cache_hits),
       }};
       #undef TABLE_METRIX_NAME_AND_VALUE
     }
@@ -850,8 +857,6 @@ class tableMetrics {
   struct perTable {
     static const int kNumberOfRpcs = mapr::fs::tablemetrics::opType_ARRAYSIZE;
     std::array<perRpcTableMetricNumbers, kNumberOfRpcs> perRpc = {};
-    int64_t get_valuecache_hits = 0;
-    int64_t get_valuecache_lookups = 0;
     int64_t timestamp = INT64_MAX;
   };
 
@@ -1034,14 +1039,15 @@ class tableMetrics {
     tag_fid->set_name("table_fid");
     tag_fid->set_value(key.c_str());
 
+    auto tag_path = m->add_tags();
+    tag_path->set_name("table_path");
+
     char buffer[PATH_MAX];
     int fid_error = cluster_.getPathFromFid(key, buffer);
-
     if (fid_error != 0) {
       ERROR("getPathFromFid(%s) returned %d", key.c_str(), fid_error);
+      tag_path->set_value(std::string("//deleted_table_") + key.c_str());
     } else {
-      auto tag_path = m->add_tags();
-      tag_path->set_name("table_path");
       tag_path->set_value(buffer);
     }
   }
