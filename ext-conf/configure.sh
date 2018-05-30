@@ -63,6 +63,7 @@ CD_CLDB_ROLE=0
 CD_RM_ROLE=0
 CD_OOZIE_ROLE=0
 CD_OT_ROLE=0
+CD_ZK_ROLE=0
 CD_HBASE_REGION_SERVER_ROLE=0
 CD_HBASE_MASTER_ROLE=0
 CD_DRILLBITS_ROLE=0
@@ -76,6 +77,7 @@ nodelist=""
 nodeport=4242
 secureCluster=0
 useStreams=1
+minimal=0
 
 if [ -e "${MAPR_HOME}/server/common-ecosystem.sh" ]; then
     . "${MAPR_HOME}/server/common-ecosystem.sh"
@@ -132,20 +134,6 @@ function enableSection()
 function disableSection()
 {
     # $1 is the sectionTag prefix we will use to determine section to uncomment
-    awk -f ${AWKLIBPATH}/commentOutSection.awk -v tag="$1" \
-        ${NEW_CD_CONF_FILE} > ${NEW_CD_CONF_FILE}.tmp
-    if [[ $? -eq 0 ]]; then
-        mv ${NEW_CD_CONF_FILE}.tmp ${NEW_CD_CONF_FILE}
-    fi
-}
-
-#############################################################################
-# Function to comment out a section
-# $1 is the sectionTag prefix we will use to determine section to comment out
-#############################################################################
-function disableSection()
-{
-    # $1 is the sectionTag prefix we will use to determine section to comment out
     awk -f ${AWKLIBPATH}/commentOutSection.awk -v tag="$1" \
         ${NEW_CD_CONF_FILE} > ${NEW_CD_CONF_FILE}.tmp
     if [[ $? -eq 0 ]]; then
@@ -291,6 +279,7 @@ function getRoles() {
     hasRole 'drill-bits' ] && CD_DRILLBITS_ROLE=1
     hasRole 'oozie' && CD_OOZIE_ROLE=1
     hasRole 'opentsdb' && CD_OT_ROLE=1
+    hasRole 'zookeeper' && CD_ZK_ROLE=1
 }
 
 #############################################################################
@@ -350,7 +339,6 @@ function configureZookeeperConfig() {
     if [[ $? -eq 0 ]]; then
         mv ${NEW_CD_CONF_FILE}.tmp ${NEW_CD_CONF_FILE}
     fi
-
 }
 
 #############################################################################
@@ -437,6 +425,28 @@ function configureopentsdbplugin()
     return 0
 }
 
+function configureMinimal()
+{
+    if [ ${minimal} -eq 0 ]; then
+        pluginEnable mapr_tblmetrics
+    else
+        pluginDisable mapr_tblmetrics
+    fi
+}
+
+function configureZookeeperPlugin()
+{
+    if [ ${CD_ZK_ROLE} -eq 0 ]; then
+        pluginDisable zookeeper
+        disableSection MAPR_CONF_ZK_TAG
+    else
+        pluginEnable zookeeper
+        enableSection MAPR_CONF_ZK_TAG
+        # TODO: Set the port from the common-ecosystem.sh getZKPortNum() function
+        #configureZookeeperConfig
+    fi
+}
+
 #############################################################################
 # Function to configure java jmx plugin
 #
@@ -519,7 +529,6 @@ function configurejavajmxplugin()
         configureConnections
     fi
 }
-
 
 #############################################################################
 # Function to configure connections
@@ -960,10 +969,10 @@ function cleanupOldConfFiles
 initCfgEnv
 JMX_REMOTE_PASSWORD_FILE="${MAPR_CONF_DIR}/jmxremote.password"
 
-usage="usage: $0 [-help] [-nodeCount <cnt>] [-nodePort <port>] [-noStreams] [-EC <commonEcoOpts>]\n\t[--secure] [--customSecure] [--unsecure] [-R] [-OS] [-OT \"ip:port,ip1:port,\"] "
+usage="usage: $0 [-help] [-nodeCount <cnt>] [-nodePort <port>] [-noStreams] [-EC <commonEcoOpts>]\n\t[--secure] [--customSecure] [--unsecure] [--minimal] [-R] [-OS] [-OT \"ip:port,ip1:port,\"] "
 if [ ${#} -gt 0 ]; then
     # we have arguments - run as as standalone - need to get params and
-    OPTS=$(getopt -a -o chn:suC:NO:P:RS -l EC: -l help -l nodeCount: -l nodePort: -l noStreams -l OS -l OT: -l secure -l R -l unsecure -l customSecure -- "$@")
+    OPTS=$(getopt -a -o chn:msuC:NO:P:RS -l EC: -l help -l nodeCount: -l nodePort: -l noStreams -l OS -l OT: -l secure -l R -l unsecure -l customSecure -l minimal -- "$@")
     if [ $? != 0 ]; then
         echo -e ${usage}
         return 2 2>/dev/null || exit 2
@@ -1040,6 +1049,9 @@ if [ ${#} -gt 0 ]; then
             --unsecure|-u)
                 secureCluster=0;
                 shift 1;;
+            --minimal|-m)
+                minimal=1;
+                shift 1;;
             --help|-h)
                 echo -e ${usage}
                 return 2 2>/dev/null || exit 2
@@ -1079,12 +1091,14 @@ getRoles
 updateCoreVersion
 configuremaprstreamsplugin  # this ucomments everything between the MAPR_CONF_TAGs
 configureopentsdbplugin  # this ucomments everything between the MAPR_CONF_TAGs
+configureZookeeperPlugin
 configurejavajmxplugin
 #createFastJMXLink
 configureHadoopJMX
 configureHbaseJMX
 configureDrillBitsJMX
 configureOozieJMX
+configureMinimal
 if [ $CD_CONF_ASSUME_RUNNING_CORE -eq 1 ]; then
     if safeToRunMaprCLI ; then
         waitForCLDB
