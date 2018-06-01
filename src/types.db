@@ -370,6 +370,51 @@ listen_currpcs       value:GAUGE:0:U
 listen_bytes       value:GAUGE:0:U
 cpu_usage         value:GAUGE:0:U
 
+checkandput_rpcs value:COUNTER:U:U
+increment_rpcs value:COUNTER:U:U
+append_rpcrows value:COUNTER:U:U
+updateandget_rows value:COUNTER:U:U
+checkandput_rpcrows value:COUNTER:U:U
+increment_rpcrows value:COUNTER:U:U
+get_resprows value:COUNTER:U:U
+scan_resprows value:COUNTER:U:U
+put_readrows value:COUNTER:U:U
+get_readrows value:COUNTER:U:U
+scan_readrows value:COUNTER:U:U
+put_bytes value:COUNTER:U:U
+append_bytes value:COUNTER:U:U
+updateandget_bytes value:COUNTER:U:U
+checkandput_bytes value:COUNTER:U:U
+increment_bytes value:COUNTER:U:U
+get_bytes value:COUNTER:U:U
+scan_bytes value:COUNTER:U:U
+fullcompacts value:COUNTER:U:U
+minicompacts value:COUNTER:U:U
+ttlcompacts value:COUNTER:U:U
+flushes value:COUNTER:U:U
+forcedflushes value:COUNTER:U:U
+memindex_free_mb value:GAUGE:U:U
+
+cdc.sent_bytes value:COUNTER:U:U
+cdc.sent_rows value:COUNTER:U:U
+cdc.pending_bytes value:GAUGE:U:U
+cdc.pending_rows value:GAUGE:U:U
+
+index.sent_bytes value:COUNTER:U:U
+index.sent_rows value:COUNTER:U:U
+index.pending_bytes value:GAUGE:U:U
+index.pending_rows value:GAUGE:U:U
+
+repl.sent_bytes value:COUNTER:U:U
+repl.sent_rows value:COUNTER:U:U
+repl.pending_bytes value:GAUGE:U:U
+repl.pending_rows value:GAUGE:U:U
+
+log_compaction.sent_bytes value:COUNTER:U:U
+log_compaction.sent_rows value:COUNTER:U:U
+log_compaction.pending_bytes value:GAUGE:U:U
+log_compaction.pending_rows value:GAUGE:U:U
+
 # ResourceManager
 apps_running        value:COUNTER:U:U
 apps_killed        value:COUNTER:U:U
