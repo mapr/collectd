@@ -78,6 +78,7 @@ nodeport=4242
 secureCluster=0
 useStreams=1
 minimal=0
+all=0
 
 if [ -e "${MAPR_HOME}/server/common-ecosystem.sh" ]; then
     . "${MAPR_HOME}/server/common-ecosystem.sh"
@@ -425,12 +426,17 @@ function configureopentsdbplugin()
     return 0
 }
 
-function configureMinimal()
+function configureMinAll()
 {
-    if [ ${minimal} -eq 0 ]; then
-        pluginEnable mapr_tblmetrics
-    else
+    if [ ${minimal} -ne 0 -a ${all} -ne 0 ]; then
+        echo "ERROR --minimal|-m and --all|-a cannot be given as command line parameters at the same time"
+        exit 2
+    fi
+
+    if [ ${minimal} -ne 0 ]; then
         pluginDisable mapr_tblmetrics
+    elif [ ${all} -ne 0 ]; then
+        pluginEnable mapr_tblmetrics
     fi
 }
 
@@ -969,10 +975,10 @@ function cleanupOldConfFiles
 initCfgEnv
 JMX_REMOTE_PASSWORD_FILE="${MAPR_CONF_DIR}/jmxremote.password"
 
-usage="usage: $0 [-help] [-nodeCount <cnt>] [-nodePort <port>] [-noStreams] [-EC <commonEcoOpts>]\n\t[--secure] [--customSecure] [--unsecure] [--minimal] [-R] [-OS] [-OT \"ip:port,ip1:port,\"] "
+usage="usage: $0 [-help] [-nodeCount <cnt>] [-nodePort <port>] [-noStreams] [-EC <commonEcoOpts>]\n\t[--secure] [--customSecure] [--unsecure] [--minimal] [--all] [-R] [-OS] [-OT \"ip:port,ip1:port,\"] "
 if [ ${#} -gt 0 ]; then
     # we have arguments - run as as standalone - need to get params and
-    OPTS=$(getopt -a -o chn:msuC:NO:P:RS -l EC: -l help -l nodeCount: -l nodePort: -l noStreams -l OS -l OT: -l secure -l R -l unsecure -l customSecure -l minimal -- "$@")
+    OPTS=$(getopt -a -o chn:amsuC:NO:P:RS -l EC: -l help -l nodeCount: -l nodePort: -l noStreams -l OS -l OT: -l secure -l R -l unsecure -l customSecure -l minimal -l all -- "$@")
     if [ $? != 0 ]; then
         echo -e ${usage}
         return 2 2>/dev/null || exit 2
@@ -1052,6 +1058,9 @@ if [ ${#} -gt 0 ]; then
             --minimal|-m)
                 minimal=1;
                 shift 1;;
+            --all|-a)
+                all=1;
+                shift 1;;
             --help|-h)
                 echo -e ${usage}
                 return 2 2>/dev/null || exit 2
@@ -1098,7 +1107,8 @@ configureHadoopJMX
 configureHbaseJMX
 configureDrillBitsJMX
 configureOozieJMX
-configureMinimal
+configureMinAll
+
 if [ $CD_CONF_ASSUME_RUNNING_CORE -eq 1 ]; then
     if safeToRunMaprCLI ; then
         waitForCLDB
