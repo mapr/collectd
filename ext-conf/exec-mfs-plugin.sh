@@ -1,7 +1,11 @@
 #!/bin/bash
+
 HOSTNAME="${COLLECTD_HOSTNAME:-`hostname -f`}"
+# 10 Second sleep is within the spyglass executable
+# TODO: pass in the sleep/delay to the spyglass application
 INTERVAL="10"
-while sleep "$INTERVAL"
+
+while true
 do
   VALUE=`/opt/mapr/bin/spyglass`
   arr=(`echo ${VALUE}`);
