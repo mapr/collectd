@@ -373,7 +373,7 @@ cpu_usage         value:GAUGE:0:U
 checkandput_rpcs value:COUNTER:U:U
 increment_rpcs value:COUNTER:U:U
 append_rpcrows value:COUNTER:U:U
-updateandget_rows value:COUNTER:U:U
+updateandget_rpcrows value:COUNTER:U:U
 checkandput_rpcrows value:COUNTER:U:U
 increment_rpcrows value:COUNTER:U:U
 get_resprows value:COUNTER:U:U
