@@ -5,7 +5,7 @@ INTERVAL="10"
 
 while true
 do
-  VALUE=`/opt/mapr/bin/spyglass`
+  VALUE=`/opt/mapr/bin/spyglass --interval:${INTERVAL}`
   arr=(`echo ${VALUE}`);
   arrLen=${#arr[@]}
   for (( i=0; i<${arrLen}; i++ )); do
