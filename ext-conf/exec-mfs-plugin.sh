@@ -1,9 +1,11 @@
 #!/bin/bash
+
 HOSTNAME="${COLLECTD_HOSTNAME:-`hostname -f`}"
 INTERVAL="10"
-while sleep "$INTERVAL"
+
+while true
 do
-  VALUE=`/opt/mapr/bin/spyglass`
+  VALUE=`/opt/mapr/bin/spyglass --interval:${INTERVAL}`
   arr=(`echo ${VALUE}`);
   arrLen=${#arr[@]}
   for (( i=0; i<${arrLen}; i++ )); do
