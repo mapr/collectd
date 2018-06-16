@@ -1,0 +1,32 @@
+<!DOCTYPE log4j:configuration SYSTEM "log4j.dtd" >
+<log4j:configuration debug="false">
+
+    <!--Console appender -->
+    <appender name="stdout" class="org.apache.log4j.ConsoleAppender">
+        <layout class="org.apache.log4j.PatternLayout">
+            <param name="ConversionPattern" value="%d{yyyy-MM-dd HH:mm:ss} %p %m%n"/>
+        </layout>
+    </appender>
+
+    <!-- Rolling appenders -->
+    <appender name="createstreams" class="org.apache.log4j.RollingFileAppender">
+        <param name="file" value="__INSTALL__/var/log/collectd/createstreams.log"/>
+        <param name="MaxFileSize" value="100KB"/>
+        <param name="MaxBackupIndex" value="10"/> <!-- It's one by default. -->
+        <layout class="org.apache.log4j.PatternLayout">
+            <param name="ConversionPattern" value="%d{yyyy-MM-dd HH:mm:ss} %-5p %m%n"/>
+        </layout>
+        <triggeringPolicy
+            class="org.apache.log4j.rolling.OnStartupTriggeringPolicy">
+        </triggeringPolicy>
+    </appender>
+
+    <root>
+        <level value="INFO"/>
+        <appender-ref ref="stdout"/>
+        <appender-ref ref="createstreams"/>
+    </root>
+
+</log4j:configuration>
+
+
