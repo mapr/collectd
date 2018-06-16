@@ -1042,13 +1042,8 @@ static int wt_config_stream(oconfig_item_t *ci)
       return -1;
     }
 
+    memset(tctx, 0, sizeof(wt_kafka_topic_context));
     tctx->escape_char = '.';
-    tctx->store_rates = 0;
-    tctx->stream = NULL;
-    tctx->host_tags = NULL;
-    tctx->topic_name = NULL;
-    tctx->topic = NULL;
-    tctx->kafka = NULL;
 
     if ((tctx->kafka_conf = rd_kafka_conf_dup(conf)) == NULL) {
       delete tctx;
@@ -1090,7 +1085,7 @@ static int wt_config_stream(oconfig_item_t *ci)
     if (tctx->path == NULL) {
       ERROR("write_maprstreams plugin: Required parameters streams base path is missing in configuration");
       clearContext(tctx);
-
+      return -1;
     }
 
     snprintf(callback_name, sizeof(callback_name), "write_maprstreams/%s",
@@ -1107,7 +1102,7 @@ static int wt_config_stream(oconfig_item_t *ci)
           "failed with status %i.",
           callback_name, status);
       clearContext(tctx);
-
+      return -1;
     }
 
     pthread_mutex_init (&tctx->lock, /* attr = */ NULL);
