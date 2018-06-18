@@ -108,7 +108,7 @@ static constexpr
     {bucket9, bucket10},
     {bucket10, bucket11},
     {bucket11, bucket12},
-    {bucket12, std::numeric_limits<int64_t>::max()}
+    {bucket12, bucket12 + 1}
   }};
 
 //static int log_level = 3;
