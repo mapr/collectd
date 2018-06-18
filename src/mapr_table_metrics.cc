@@ -126,28 +126,7 @@ static constexpr
   "%s@" STRINGIFY(__LINE__) ": " fmt, __PRETTY_FUNCTION__, ## __VA_ARGS__)
 
 
-struct scopeLogger
-{
-  const char *name_;
-  scopeLogger(const char *name) : name_(name)
-  {
-    plugin_log(LOG_INFO, ">> %s entered", name_);
-  }
-  ~scopeLogger()
-  {
-    plugin_log(LOG_INFO, "<< %s exited", name_);
-
-  }
-};
-
-#define CONCAT_(x,y) x##y
-#define CONCAT(x,y) CONCAT_(x,y)
-
-#define LOG_SCOPE scopeLogger CONCAT(scope, __COUNTER__)(__FUNCTION__)
-
-
 namespace cHelpers {
-
 
 // verbatim copies from mapr_volmetrics.c
 
@@ -314,7 +293,6 @@ struct cluster {
 
   bool reconnect()
   {
-    LOG_SCOPE;
     fs_ = hdfsConnect("default", 0);
     if (fs_ == nullptr) {
       return false;
