@@ -206,7 +206,7 @@ struct Fid {
   const tmFidMsg fid_msg_;
   char c_str_[33];
 
-  Fid(tmFidMsg &msg) :
+  Fid(const tmFidMsg &msg) :
     fid_msg_(msg)
   {
     sprintf(c_str_, "%u.%u.%u", msg.cid(), msg.cinum(), msg.uniq());
@@ -557,7 +557,7 @@ class tableMetrics {
       return kCollectdSuccess;
     }
     // do we have any meaningful init? Log maybe?
-      return kCollectdSuccess;
+    return kCollectdSuccess;
   }
 
   static int readCallback()
@@ -610,7 +610,7 @@ class tableMetrics {
 
   // filename -> [position, timestamp]
   std::map<std::string, metricsFileData> knownMetricsFiles_;
-
+  MetricsMsg scratch_;
 
   // takes the buffer at data sized bytes bytes. Consumes one record from that
   // buffer. Returns how many bytes were processed.
@@ -626,40 +626,37 @@ class tableMetrics {
     }
     char temp[lengthBytes + 1];
     memcpy(temp, data, lengthBytes);
-    auto protobufBufferSize = std::atoi(temp);
-    if (protobufBufferSize + lengthBytes > bytes) {
+    auto protobufBytes = std::atoi(temp);
+    if (protobufBytes + lengthBytes > bytes) {
       // also need more bytes
       // LOG("%d + %d < %d", protobufBufferSize, lengthBytes, bytes);
       return 0;
     }
 
-    if (protobufBufferSize == 0) {
+    if (protobufBytes == 0) {
       // this is how 0-sized msg looks like:
       // 0007a1f0  30 30 33 31 0a 09 08 8c  10 10 24 18 fc 81 08 10  |0031......$.....| <-- 31-byte msg starts here
       // 0007a200  d0 a9 cc fd 90 2c 1a 0b  08 01 10 06 28 be e5 01  |.....,......(...|
-      // 0007a210  38 bc 04 00 00 00 00 00  00 00 00 00 00 00 00 00  |8...............| <---- HERE begins a 0-byte message
+      // 0007a210  38 bc 04 00 00 00 00 00  00 00 00 00 00 00 00 00  |8...............| <-- 0-byte message begins at 7a213
       // 0007a220  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|      
       LOG("can't parse 0-byte message");
       return -1;
     }
 
-    google::protobuf::io::ArrayInputStream stream(
-      &data[lengthBytes], protobufBufferSize);
+    assert(protobufBytes > 0);
 
-    MetricsMsg messages;
-    auto parsed = messages.ParseFromBoundedZeroCopyStream(
-      &stream, protobufBufferSize);
+    auto parsed = scratch_.ParseFromArray(&data[lengthBytes], protobufBytes);
     if (!parsed) {
-      LOG("failed parsing message (%d bytes)", protobufBufferSize);
+      LOG("failed parsing message (%d bytes)", protobufBytes);
       return -2;
     }
-    // LOG("parsed %d bytes", protobufBufferSize + lengthBytes);
+    // LOG("parsed %d bytes", protobufBytes + lengthBytes);
 
-    if (!messages.has_table()) {
+    if (!scratch_.has_table()) {
       LOG("corrupt protobuf file 3 (no table fid)");
       return -2;
     }
-    auto fidPb = messages.table();
+    auto fidPb = scratch_.table();
     if (!fidPb.has_cid() || !fidPb.has_cinum() || !fidPb.has_uniq()) {
       LOG("corrupt protobuf file 4 (fid not fully defined)");
       return -4;
@@ -667,12 +664,12 @@ class tableMetrics {
 
     const Fid tableFid(fidPb);
 
-    const Fid indexFid([messages] {
-      if (!messages.has_index()) {
+    const Fid indexFid([this] {
+      if (!scratch_.has_index()) {
         return Fid(Fid::blank{});
       }
 
-      auto siFid = messages.index();
+      const auto &siFid = scratch_.index();
       if (!siFid.has_cid() || !siFid.has_cinum() || !siFid.has_uniq()) {
         LOG("corrupt protobuf file 7: index fid not fully defined");
         return Fid(Fid::blank{});
@@ -681,21 +678,29 @@ class tableMetrics {
       return Fid(siFid);
     }());
 
-    if (!messages.has_timestamp()) {
+    if (!scratch_.has_timestamp()) {
       LOG("corrupt protobuf file 3 (no timestamp)");
       return -3;
     }
-    auto timestamp = messages.timestamp();
+    auto timestamp = scratch_.timestamp();
 
     //LOG("%u:%u:%u @%lu", fidPb.cid(), fidPb.cinum(), fidPb.uniq(), timestamp);
 
-    auto &tm = unflushedMetrics_[{tableFid, indexFid}];
+    auto &backlog = unflushedMetrics_[{tableFid, indexFid}];
+    auto pos = std::partition_point(
+      backlog.begin(), backlog.end(), [timestamp](timepoint &m) {
+        return m.m_timestamp < timestamp;
+      });
+    
+    // two possible options now. We are inserting a data point with a new
+    // timestamp, or updating an existing one. For update, partition_point
+    // will never return ::end() for update since equal timestamps do not
+    // compare less. Therefore if it is end, it is insert
+    auto &tm = ((pos != backlog.end()) && (pos->m_timestamp == timestamp)) ?
+      *pos :
+      *backlog.emplace(pos, timestamp);
 
-    if (tm.timestamp > timestamp) {
-      tm.timestamp = timestamp;
-    }
-
-    for (const auto &perRpc : messages.rpcmetrics()) {
+    for (const auto &perRpc : scratch_.rpcmetrics()) {
       if (!perRpc.has_op()) {
         LOG("corrupt protobuf file 5 (no rpc type)");
         return -5;
@@ -707,7 +712,7 @@ class tableMetrics {
         continue;
       }
 
-      auto &metric = tm.perRpc[optype];
+      auto &metric = tm.m_numbers[optype];
 
       if (perRpc.has_count()) {
         metric.rpcs += perRpc.count();
@@ -747,7 +752,7 @@ class tableMetrics {
       }
     }
 
-    return protobufBufferSize + lengthBytes;
+    return protobufBytes + lengthBytes;
   }
 
   static const char *rpcIndexTo_c_str(opType index)
@@ -832,10 +837,14 @@ class tableMetrics {
 
   };
 
-  struct perTable {
+  struct timepoint {
     static const int kNumberOfRpcs = mapr::fs::tablemetrics::opType_ARRAYSIZE;
-    std::array<perRpcTableMetricNumbers, kNumberOfRpcs> perRpc = {};
-    int64_t timestamp = INT64_MAX;
+    std::array<perRpcTableMetricNumbers, kNumberOfRpcs> m_numbers = {};
+    int64_t m_timestamp;
+    
+    timepoint(int64_t timestamp) :
+      m_timestamp(timestamp)
+    {}
   };
 
   struct table {
@@ -851,7 +860,7 @@ class tableMetrics {
     }
   };
 
-  std::map<table, perTable> unflushedMetrics_;
+  std::map<table, std::vector<timepoint>> unflushedMetrics_;
 
   // we have a map of table -> timestamp [rpc->[, counter]]
   void processOneMetricsFile(const std::string& name, metricsFileData& details)
@@ -983,12 +992,7 @@ class tableMetrics {
   void reset()
   {
     for (auto &t : unflushedMetrics_) {
-      auto &perTableData = t.second;
-      if (perTableData.timestamp == INT64_MAX) {
-        continue;
-      }
-      perTableData.timestamp = INT64_MAX;
-      perTableData.perRpc = {};
+      t.second.empty();
     }
   }
 
@@ -1061,66 +1065,71 @@ class tableMetrics {
     tag_rpc->set_value(rpcIndexTo_c_str(op));
   }
 
-  // max is the max count of non-histogram metrics to produce:
-  void flush2() const
+  void Protobufize(const Fid &table, const Fid &index, const timepoint &item,
+    Metrics *message) const
+  {
+    const auto host = cluster_.hostname_;
+
+    int i = 0;
+    for (const auto &rpc : item.m_numbers) {
+      const auto op = static_cast<opType>(i);
+
+      if (!opType_IsValid(i++)) { // postincrement intended
+        continue;
+      }
+
+      if (rpc.rpcs == 0) {
+        continue;
+      }
+
+      // for each RPC we have a bunch of metrics
+      for (const auto &metric : rpc.enumerate()) {
+        if (metric.value == 0) {
+          continue;
+        }
+
+        auto m = message->add_metrics();
+
+        m->mutable_value()->set_number(metric.value);
+        m->set_name(to_c_str(metric.name));
+        addEverything(m, table, index, op, item.m_timestamp, host);
+      }
+
+      // and a histogram. Histogram has several buckets:
+      static_assert(kBuckets.size() == decltype(rpc.histo){}.size(), "");
+      static_assert(kBuckets.size() ==
+        IndexOfLastTableMetricsBucket + 1, "");
+
+      auto mHisto = message->add_metrics();
+      auto histo = mHisto->mutable_value();
+
+      // should rewrite in form of inner_product
+      for (size_t bkt = 0; bkt < kBuckets.size(); ++bkt) {
+        auto countInBucket = rpc.histo[bkt];
+        if (countInBucket == 0) {
+          continue;
+        }
+        auto bucket = histo->add_buckets();
+        bucket->set_start(kBuckets[bkt].first);
+        bucket->set_end(kBuckets[bkt].second);
+        bucket->set_number(countInBucket);
+      }
+
+      mHisto->set_name("mapr.db.table.latency");
+      addEverything(mHisto, table, index, op, item.m_timestamp, host);
+    }
+
+  }
+  void flush() const
   {
     Metrics message;
-    const auto host = cluster_.hostname_;
     for (auto &it : unflushedMetrics_) {
       const auto &key = it.first;
       const auto &table = key.m_primary;
       const auto &index = key.m_si;
-      const auto &perTableData = it.second;
-      if (perTableData.timestamp == INT64_MAX) {
-          continue;
-      }
-      auto i = 0;
-      for (const auto &rpc : perTableData.perRpc) {
-        if (!opType_IsValid(i)) {
-          continue;
-        }
-        auto op = static_cast<opType>(i);
-        ++i;
-
-        if (rpc.rpcs == 0) {
-          continue;
-        }
-
-        // for each RPC we have a bunch of metrics
-        for (const auto &metric : rpc.enumerate()) {
-          if (metric.value == 0) {
-            continue;
-          }
-
-          auto m = message.add_metrics();
-
-          m->mutable_value()->set_number(metric.value);
-          m->set_name(to_c_str(metric.name));
-          addEverything(m, table, index, op, perTableData.timestamp, host);
-        }
-
-        // and a histogram. Histogram has several buckets:
-        static_assert(kBuckets.size() == decltype(rpc.histo){}.size(), "");
-        static_assert(kBuckets.size() ==
-          IndexOfLastTableMetricsBucket + 1, "");
-
-        auto mHisto = message.add_metrics();
-        auto histo = mHisto->mutable_value();
-
-        // should rewrite in form of inner_product
-        for (size_t bkt = 0; bkt < kBuckets.size(); ++bkt) {
-          auto countInBucket = rpc.histo[bkt];
-          if (countInBucket == 0) {
-            continue;
-          }
-          auto bucket = histo->add_buckets();
-          bucket->set_start(kBuckets[bkt].first);
-          bucket->set_end(kBuckets[bkt].second);
-          bucket->set_number(countInBucket);
-        }
-
-        mHisto->set_name("mapr.db.table.latency");
-        addEverything(mHisto, table, index, op, perTableData.timestamp, host);
+      const auto &backlog = it.second;
+      for (const auto &item : backlog) {
+        Protobufize(table, index, item, &message);
       }
     }
 
@@ -1130,7 +1139,6 @@ class tableMetrics {
       return;
     }
     auto buffer = AllocateMetricsPointer(cb);
-    namespace pb = google::protobuf::io;
 
     auto bMustSucceed = message.SerializeToArray(buffer->data, cb);
     if (!bMustSucceed) {
@@ -1198,8 +1206,8 @@ class tableMetrics {
       cluster_.setDispatchedOffset(name, details.bytesProcessed);
       details.storedDispatchedOffset = details.bytesProcessed;
     }
-    flush2();
 
+    flush();
     reset();
 
     return 0;
