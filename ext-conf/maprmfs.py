@@ -1,13 +1,13 @@
 #!/usr/bin/env python
+import datetime
 import os
 from random import random
-from time import sleep
 
 import collectd
 
 INTERVAL = 10
 
-collectd.info("Loading MapR MFS Plugin for Python")
+collectd.info("Starting MapR MFS Plugin for Python")
 
 
 # noinspection PyBroadException
@@ -16,6 +16,7 @@ class MapRMfsPlugin(object):
 
     def __init__(self):
         self.spyglass = None
+        self.debug_fp = None
 
     def config(self, config_obj):
         # Typical plugin initializaion
@@ -26,6 +27,7 @@ class MapRMfsPlugin(object):
         #     Import "maprmfs"
         #     <Module maprmfs>
         #         spyglass "/opt/mapr/bin/spyglass"
+        #         debug_file "/opt/mapr/collectd/collectd-5.8.0/var/log/collectd/collectd_mfs_debug.log"
         #     </Module>
         # </Plugin>
         try:
@@ -37,6 +39,7 @@ class MapRMfsPlugin(object):
 
                 if key == "spyglass":
                     self.log_info("Spyglass entry found; Processing...")
+
                     if not os.path.exists(val):
                         self.log_error("Spyglass path does not exist at: " + val)
                         break
@@ -51,14 +54,20 @@ class MapRMfsPlugin(object):
 
                     self.spyglass = val
                     self.log_info("Spyglass executable will be used at path: " + self.spyglass)
+
+                if key == "debug_file":
+                    self.log_info("Debug file entry found; Processing...")
+                    self.log_info("Debug file entry is: " + val)
+                    self.debug_fp = open(val, "w")
+
         except Exception, e:
-            self.log_error("Configuring MapR MFS Plugin for Python", e)
+            self.log_error("Configuring MapR MFS Plugin for Python failed", e)
 
     def init(self):
         try:
             self.log_info("Loading MapR MFS Plugin for Python")
         except Exception, e:
-            self.log_error("Loading MapR MFS Plugin for Python", e)
+            self.log_error("Loading MapR MFS Plugin for Python failed", e)
 
     def read(self):
         try:
@@ -66,44 +75,49 @@ class MapRMfsPlugin(object):
             vl = collectd.Values(type='gauge', type_instance='key1')
             vl.plugin = MapRMfsPlugin.PLUGIN_NAME
 
-            _v = int(random() * 3)
+            _v = int(random() * 10)
             vl.values = [_v]
             vl.dispatch()
         except Exception, e:
-            self.log_error("Reading MapR MFS Plugin for Python", e)
+            self.log_error("Reading MapR MFS Plugin for Python failed", e)
 
     def shutdown(self):
         try:
-            with open("/tmp/scottshutdown.txt") as f:
-                f.write("Hello")
-                f.flush()
-
-            collectd.error("Unloading MapR MFS Plugin for Python: " + MapRMfsPlugin.PLUGIN_NAME)
+            self.log_info("Unloading MapR MFS Plugin for Python: " + MapRMfsPlugin.PLUGIN_NAME)
+            if self.debug_fp is not None:
+                self.debug_fp.close()
+                self.debug_fp = None
         except Exception, e:
-            self.log_error("Unloading MapR MFS Plugin for Python", e)
+            self.log_error("Unloading MapR MFS Plugin for Python failed", e)
 
-    @staticmethod
-    def log_info(message):
+    def log_info(self, message):
         if not message:
             collectd.error(MapRMfsPlugin.PLUGIN_NAME + ": No message given to log")
         else:
             collectd.info(MapRMfsPlugin.PLUGIN_NAME + ": " + message)
+            self.log_debug("info", message)
 
-    @staticmethod
-    def log_warning(message):
+    def log_warning(self, message):
         if not message:
             collectd.error(MapRMfsPlugin.PLUGIN_NAME + ": No message given to log")
         else:
             collectd.warning(MapRMfsPlugin.PLUGIN_NAME + ": " + message)
+            self.log_debug("warning", message)
 
-    @staticmethod
-    def log_error(message, exc=None):
+    def log_error(self, message, exc=None):
         if not message:
             collectd.error(MapRMfsPlugin.PLUGIN_NAME + ": No message given to log")
         else:
             if exc:
                 message = message + "; Exception: " + str(exc)
             collectd.error(MapRMfsPlugin.PLUGIN_NAME + ": " + message)
+            self.log_debug("error", message)
+
+    def log_debug(self, level, message):
+        if self.debug_fp is not None:
+            dt = datetime.datetime.today().strftime("[%Y-%m-%d %H:%M:%S] ")
+            self.debug_fp.write(str(dt) + "[" + level + "] " + MapRMfsPlugin.PLUGIN_NAME + ": " + message + os.linesep)
+            self.debug_fp.flush()
 
 
 mapr_mfs_plugin = MapRMfsPlugin()
