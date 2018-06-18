@@ -333,7 +333,7 @@ createStreams() {
    # Create streams
    OUTPUT=$($JAVA -Dlog4j.configuration="$APP_CREATE_STREAMS_LOG_PROP" -cp \
        `mapr classpath`:$APP_HOME_DIR/lib/fast-jmx-1.1.jar org.collectd.CreateStreams \
-       $STREAMSROOT $MAXSTREAMS $DEFAULTSTREAMSPARTITIONS >> "$APP_LOG_START_FILE" )
+       $STREAMSROOT $MAXSTREAMS $DEFAULTSTREAMSPARTITIONS $DEFAULTTTL >> "$APP_LOG_START_FILE" )
    if [ $? -ne 0 ]; then
        echo "Failed to create streams - got $OUTPUT" | tee >> "$APP_LOG_START_FILE"
    elif [ -n "$OUTPUT" ]; then
