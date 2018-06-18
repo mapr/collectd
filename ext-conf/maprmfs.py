@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import datetime
 import os
+import subprocess
 from random import random
 
 import collectd
@@ -59,7 +60,7 @@ class MapRMfsPlugin(object):
                     self.log_info("Debug file entry found; Processing...")
                     self.log_info("Debug file entry is: " + val)
                     self.debug_fp = open(val, "w")
-
+                    self.log_info("Debug file opened")
         except Exception, e:
             self.log_error("Configuring MapR MFS Plugin for Python failed", e)
 
@@ -75,8 +76,13 @@ class MapRMfsPlugin(object):
             vl = collectd.Values(type='gauge', type_instance='key1')
             vl.plugin = MapRMfsPlugin.PLUGIN_NAME
 
+            sg_output = self.get_spyglass_output()
+            self.log_info(sg_output)
+
             _v = int(random() * 10)
+            vl.interval = INTERVAL
             vl.values = [_v]
+            self.log_info("Dispatched message: " + str(vl))
             vl.dispatch()
         except Exception, e:
             self.log_error("Reading MapR MFS Plugin for Python failed", e)
@@ -89,6 +95,18 @@ class MapRMfsPlugin(object):
                 self.debug_fp = None
         except Exception, e:
             self.log_error("Unloading MapR MFS Plugin for Python failed", e)
+
+    def get_spyglass_output(self):
+        if self.spyglass is None:
+            self.log_error("Spyglass executable is not available to be executed")
+            return
+
+        p = subprocess.Popen(self.spyglass, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
+        (out, err) = p.communicate()
+        if p.returncode != 0:
+            self.log_error("Spyglass executable failed to be executed: (" + str(p.returncode) + "): " + err)
+            return
+        return out
 
     def log_info(self, message):
         if not message:
