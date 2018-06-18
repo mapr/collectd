@@ -1,5 +1,13 @@
 #!/bin/bash
 
+# parses output from spyglass executable into collectd information
+# you can get information like this:
+# resync:bytesreceivedcount:0
+# thread:cpu_usage:0:Rpc:0
+# the format is [metric_area]:[metric_name]:[value]
+# or
+# # the format is [metric_area]:[metric_name]:[value]:[plugin_instance]:[type_instance]
+
 HOSTNAME="${COLLECTD_HOSTNAME:-`hostname -f`}"
 INTERVAL="10"
 
