@@ -126,8 +126,6 @@ static constexpr
   "%s@" STRINGIFY(__LINE__) ": " fmt, __PRETTY_FUNCTION__, ## __VA_ARGS__)
 
 
-namespace cHelpers {
-
 // verbatim copies from mapr_volmetrics.c
 
 #define MAPR_HOSTNAME_FILE "/opt/mapr/hostname"
@@ -136,62 +134,8 @@ namespace cHelpers {
 #define METRICS_DIRNAME "audit"
 
 
-extern "C" int
-getHostName(char *buf, int len)
-{
-
-  int i;
-  int fd;
-  int err;
-  int ret;
-  struct stat stbuf;
-  char mapr_home[PATH_MAX]; 
-  char *env_str;
-
-  env_str = getenv("MAPR_HOME");
-  if (env_str) {
-    snprintf(mapr_home, PATH_MAX-1, "%s/%s", env_str, "hostname");
-    err = stat(mapr_home, &stbuf);
-    LOG("MAPR_HOME is set to %s ", mapr_home);
-  }
-
-  if (!env_str || (env_str && err)) {
-    LOG("MAPR_HOME not found.");
-    snprintf(mapr_home, PATH_MAX-1, "%s", MAPR_HOSTNAME_FILE);
-    err = stat(mapr_home, &stbuf);
-    if (err) {
-      return errno;
-    }
-  }
-
-  fd = open(mapr_home, O_RDONLY);
-  if (fd == -1) {
-    return errno; 
-  }
-
-  ret = read(fd, buf, len-1);
-  if (ret < 0) {
-    close(fd);
-    return errno;
-  }
-
-  for (i=ret-1; i>=0; i--) {
-    if (buf[i] == '\n') {
-      ret = i;
-      break;
-    }
-  }
-
-  buf[ret] = '\0';
-  close(fd);
-  LOG("MAPR_HOSTNAME : %s:", buf);
-  return 0;
-}
-}
-
 namespace std {
-  template<>
-  struct less<tmFidMsg> {
+  template<> struct less<tmFidMsg> {
     bool operator ()(const tmFidMsg &l, const tmFidMsg &r) const
     {
       const auto lhs = {l.cid(), l.cinum(), l.uniq()};
@@ -202,6 +146,7 @@ namespace std {
   };
 }
 
+namespace {
 struct Fid {
   const tmFidMsg fid_msg_;
   char c_str_[33];
@@ -237,319 +182,344 @@ struct Fid {
 
 static_assert(std::is_pointer<hdfsFile>::value, "sanity check");
 
-struct cluster {
-  template <typename T> struct scopedHandle {
-    scopedHandle(T input, std::function<void(T)> closer) :
-      handle_(input), closer_(closer)
-      {};
+struct ListingFileInfo {
+  std::string name;
+  // from hdfsFileInfo:
+  tTime last_mod = 0;
+  tOffset size = 0;
 
-    T get() const {
-      return handle_;
+  ListingFileInfo(const hdfsFileInfo &info)
+      : name(info.mName),
+        last_mod(info.mLastMod),
+        size(info.mSize) {}
+};
+
+class LocalFile {
+  hdfsFS fs_;
+  hdfsFile file_;
+
+ public:
+  LocalFile(hdfsFS cluster, hdfsFile file) : fs_(cluster), file_(file) {}
+  bool Valid() { return file_ != nullptr; }
+  ~LocalFile()
+  {
+    if (file_ != nullptr) {
+      hdfsCloseFile(fs_, file_);
     }
-    
-    ~scopedHandle()
-    {
-      if (handle_ != nullptr) {
-        closer_(handle_);
-      }
-    }
-
-  private:
-    T handle_;
-    std::function<void(T)> closer_;
-  };
-
-  hdfsFS fs_ = nullptr;
-  std::string metricsDir_;
-  int refreshCount_;
-
-  struct listingFileInfo
-  {
-    std::string name;
-    // from hdfsFileInfo:
-    tTime mLastMod = 0;
-    tOffset mSize = 0;
-
-    listingFileInfo(const hdfsFileInfo &info) :
-      name(info.mName),
-      mLastMod(info.mLastMod),
-      mSize(info.mSize)
-      {}
-  };
-
-  std::vector<listingFileInfo> tableMetricsFiles_;
-
-  bool connected()
-  {
-    return (fs_ != nullptr);
-  }
-  
-  void disconnect()
-  {
-    LOG("");
-    hdfsDisconnect(fs_);
-    fs_ = nullptr;
   }
 
-  bool reconnect()
+  template <typename T> int32_t Read(int64_t offset, T *buffer)
   {
-    fs_ = hdfsConnect("default", 0);
-    if (fs_ == nullptr) {
-      return false;
-    }
-
-    auto success = populateHostname();
-    if (!success) {
-      hdfsDisconnect(fs_);
-      fs_ = nullptr;
-      return false;
-    }
-
-    // ok, we have hostname, let's build the path:
-    metricsDir_ = std::string(METRICS_PATH_PREFIX) + '/' 
-                + hostname_ + '/' 
-                + METRICS_DIRNAME;
-
-    return true;
+    assert(file_ != nullptr);
+    return hdfsPread(fs_, file_, offset, buffer->data(), buffer->size());
   }
-
-  bool metricsDirectoryExists()
-  {
-    hdfsFileInfo *info = hdfsGetPathInfo(fs_, metricsDir_.c_str());
-    if (!info) {
-      return false;
-    }
-
-    auto isDirectory = (info->mKind == kObjectKindDirectory);
-    hdfsFreeFileInfo(info, 1);
-
-    return isDirectory;
-  }
-
-  bool isTableMetricsFile(const hdfsFileInfo &file)
-  {
-    if (file.mSize <= 0) {
-      return false;
-    }
-
-    if (file.mKind != kObjectKindFile) {
-      return false;
-    }
-
-    // /var/mapr/local/atsqa4-104.qa.lab/audit/5660/...
-    // <-------------------------------------> this part is exactly the 
-    // same as metricsDir_ and it is by construction
-    //                                         <--> this part is some string
-    // token, yet again, by construction
-    // .../5660/TableMetricsAudit.log-2018-01-17-001.pb
-    //          <-------------------> this and      <-> this is what we will
-    // check:
-    
-    const char *lastSlashPlusOne = [this](const char *name) {
-      const char *pos = nullptr;
-      for (auto i = metricsDir_.size(); name[i] != '\0'; ++i) {
-        if (name[i] == '/') {
-          pos = &name[i + 1];
-        }
-      }
-      return pos;
-    }(file.mName);
-
-    if (lastSlashPlusOne == nullptr) {
-      // this is impossible
-      abort();
-    }
-    const char *kPrefix = "TableMetricsAudit.log";
-    return (strncmp(lastSlashPlusOne, kPrefix, strlen(kPrefix)) == 0);
-  }
-
-  bool walkMetricsDirAndEnumFiles()
-  {
-    tableMetricsFiles_.clear(); 
-    int numEntries = 0;
-    auto subdirs = hdfsListDirectory(fs_, metricsDir_.c_str(), &numEntries);
-    if (subdirs == nullptr) {
-      return false;
-    }
-    for (auto i = 0; i < numEntries; ++i) {
-      if (subdirs[i].mKind != kObjectKindDirectory) {
-        continue;
-      }
-
-      auto numFiles = 0;
-      auto files = hdfsListDirectory(fs_, subdirs[i].mName, &numFiles);
-      for (auto j = 0; j < numFiles; ++j) {
-        if (isTableMetricsFile(files[j])) {
-          tableMetricsFiles_.emplace_back(files[j]);
-        }
-      }
-      hdfsFreeFileInfo(files, numFiles);
-    }
-    hdfsFreeFileInfo(subdirs, numEntries);
-    return true;
-  }
-
-  int64_t getDispatchedOffset(const std::string &name)
-  {
-    char buf[32];
-    int xattrSize = hdfsGetXattr(fs_, name.c_str(), XATTR_NAME,
-                                      buf, sizeof(buf));
-    if (xattrSize <= 0) {
-      auto temp = errno;
-      if (temp == ENOENT) {
-        // this is not an error; there is no xattr on the file, it is a file
-        // we never dealt with:
-      } else {
-        LOG("Error when getting xattr " XATTR_NAME " on %s, errno %d",
-          name.c_str(), temp);
-      }
-      errno = temp;
-      return 0;
-    }
-
-    buf[xattrSize] = '\0';
-
-    auto val = std::strtoul(buf, nullptr, 10);
-    LOG("xattr " XATTR_NAME " on %s == %lu", name.c_str(), val);
-
-    return val;
-  }
-
-  bool setDispatchedOffset(const std::string &name, int64_t value)
-  {
-    char buf[24];
-    sprintf(buf, "%ld", value);
-
-    LOG("Setting xattr on %s to \"%s\"", name.c_str(), buf);
-
-    auto success = hdfsSetXattr(
-      fs_, name.c_str(),
-      XATTR_NAME, strlen(XATTR_NAME),
-      buf, strlen(buf));
-
-    if (success == 0) {
-      LOG("hdfsSetXattr() Success");
-      return true;
-    }
-
-    auto temp = errno;
-    ERROR("Error when setting xattr " XATTR_NAME " on %s, errno %d",
-          name.c_str(), temp);
-    errno = temp;
-    return false;
-  }
-
-  scopedHandle<hdfsFile> openForRead(const std::string &name)
-  {
-    auto handle = hdfsOpenFile(fs_, name.c_str(), O_RDONLY, 0, 0, 0);
-    return scopedHandle<hdfsFile>(
-      handle, [this](hdfsFile h){hdfsCloseFile(fs_, h);}
-    ); 
-  }
-
-  int getMapRHostName(char *buf, int len)
-  {
-    int i;
-    int fd;
-    int err;
-    int ret;
-    struct stat stbuf;
-    char mapr_home[PATH_MAX]; 
-    char *env_str;
-
-    env_str = getenv("MAPR_HOME");
-    if (env_str) {
-      snprintf(mapr_home, PATH_MAX-1, "%s/%s", env_str, "hostname");
-      err = ::stat(mapr_home, &stbuf);
-      LOG("MAPR_HOME is set to %s ", mapr_home);
-    }
-
-    if (!env_str || (env_str && err)) {
-      LOG("MAPR_HOME not found.");
-      snprintf(mapr_home, PATH_MAX-1, "%s", MAPR_HOSTNAME_FILE);
-      err = stat(mapr_home, &stbuf);
-      if (err) {
-        return errno;
-      }
-    }
-
-    fd = open(mapr_home, O_RDONLY);
-    if (fd == -1) {
-      return errno; 
-    }
-
-    ret = read(fd, buf, len-1);
-    if (ret < 0) {
-      close(fd);
-      return errno;
-    }
-
-    for (i=ret-1; i>=0; i--) {
-      if (buf[i] == '\n') {
-        ret = i;
-        break;
-      }
-    }
-
-    buf[ret] = '\0';
-    close(fd);
-    LOG("MAPR_HOSTNAME : %s", buf);
-    return 0;
-  }
-
-  bool populateHostname()
-  {
-    memset(hostname_, 0, sizeof(hostname_));
-    auto err = getMapRHostName(hostname_, sizeof(hostname_) - 1);
-    if (!err) {
-      return true;
-    }
-    err = gethostname(hostname_, sizeof(hostname_) - 1);
-    if (!err) {
-      return true;
-    }
-    // preserve errno across the hdfsDisconnect() call:
-    auto tempErrno = errno;
-    LOG("Could not get hostname, error %d", tempErrno);
-    return false;
-  }
-
-  int getPathFromFid(const Fid &fid, char *path)
-  {
-    auto &msg = fid.fid_msg_;
-    return hdfsGetPathFromFid2(fs_, msg.cid(), msg.cinum(), msg.uniq(), path);
-  }
-
-  int getIndexNameFromFids(const Fid &table, const Fid &index, char *name)
-  {
-    auto &tbl = table.fid_msg_;
-    auto &idx = index.fid_msg_;
-    return hdfsGetIndexNameFromFids(
-      fs_,
-      tbl.cid(), tbl.cinum(), tbl.uniq(), 
-      idx.cid(), idx.cinum(), idx.uniq(), 
-      name);
-  }
-
-  char hostname_[PATH_MAX];
-  static_assert(sizeof(hostname_) == PATH_MAX, "need ARRAYSIZE macro");
 };
 
 
-class tableMetrics {
+class MaprCluster {
+ private:
+  hdfsFS fs_ = nullptr;
+  std::string metrics_dir_;
+  std::vector<ListingFileInfo> enum_results_;
+  char hostname_[PATH_MAX];
+
+  bool Connected() const { return (fs_ != nullptr); }
+  void Disconnect() { hdfsDisconnect(fs_); fs_ = nullptr; }
+  bool Reconnect();
+  bool PopulateHostname();
+
+  bool MetricsDirectoryExists();
+  bool IsTableMetricsFile(const hdfsFileInfo &file);
+
+ public:
+  const char *Hostname() { return hostname_; }
+
+  const decltype(enum_results_) &GetMetricsFiles() { return enum_results_; }
+  bool EnumerateMetricsFiles();
+
+  int GetPathFromFid(const Fid &fid, char *path);
+  int GetIndexNameFromFids(const Fid &table, const Fid &index, char *name);
+
+  int64_t GetDispatchedOffset(const std::string &name);
+  bool SetDispatchedOffset(const std::string &name, int64_t value);
+
+  LocalFile OpenFileForRead(const std::string &name)
+  {
+    auto handle = hdfsOpenFile(fs_, name.c_str(), O_RDONLY, 0, 0, 0);
+    return LocalFile(fs_, handle);
+  }
+};
+} // anonymous namespace
+
+int MaprCluster::GetPathFromFid(const Fid &fid, char *path)
+{
+  auto &msg = fid.fid_msg_;
+  return hdfsGetPathFromFid2(fs_, msg.cid(), msg.cinum(), msg.uniq(), path);
+}
+
+int MaprCluster::GetIndexNameFromFids(
+  const Fid &table, const Fid &index, char *name)
+{
+  auto &tbl = table.fid_msg_;
+  auto &idx = index.fid_msg_;
+  return hdfsGetIndexNameFromFids(
+    fs_,
+    tbl.cid(), tbl.cinum(), tbl.uniq(), 
+    idx.cid(), idx.cinum(), idx.uniq(), 
+    name);
+}
+
+bool MaprCluster::MetricsDirectoryExists()
+{
+  hdfsFileInfo *info = hdfsGetPathInfo(fs_, metrics_dir_.c_str());
+  if (!info) {
+    return false;
+  }
+
+  auto isDirectory = (info->mKind == kObjectKindDirectory);
+  hdfsFreeFileInfo(info, 1);
+
+  return isDirectory;
+}
+
+int64_t MaprCluster::GetDispatchedOffset(const std::string &name)
+{
+  char buf[32];
+  int xattr_size = hdfsGetXattr(fs_, name.c_str(), XATTR_NAME,
+                                    buf, sizeof(buf));
+  if (xattr_size <= 0) {
+    auto temp = errno;
+    if (temp == ENOENT) {
+      // this is not an error; there is no xattr on the file, it is a file
+      // we never dealt with:
+    } else {
+      LOG("Error when getting xattr " XATTR_NAME " on %s, errno %d",
+        name.c_str(), temp);
+    }
+    errno = temp;
+    return 0;
+  }
+
+  buf[xattr_size] = '\0';
+
+  auto val = std::strtoul(buf, nullptr, 10);
+  LOG("xattr " XATTR_NAME " on %s == %lu", name.c_str(), val);
+
+  return val;
+}
+
+bool MaprCluster::SetDispatchedOffset(const std::string &name, int64_t value)
+{
+  char buf[24];
+  sprintf(buf, "%ld", value);
+
+  LOG("Setting xattr on %s to \"%s\"", name.c_str(), buf);
+
+  auto success = hdfsSetXattr(
+    fs_, name.c_str(),
+    XATTR_NAME, strlen(XATTR_NAME),
+    buf, strlen(buf));
+
+  if (success == 0) {
+    LOG("hdfsSetXattr() Success");
+    return true;
+  }
+
+  auto temp = errno;
+  ERROR("Error when setting xattr " XATTR_NAME " on %s, errno %d",
+        name.c_str(), temp);
+  errno = temp;
+  return false;
+}
+
+
+bool MaprCluster::Reconnect()
+{
+  fs_ = hdfsConnect("default", 0);
+  if (fs_ == nullptr) {
+    return false;
+  }
+
+  auto success = PopulateHostname();
+  if (!success) {
+    hdfsDisconnect(fs_);
+    fs_ = nullptr;
+    return false;
+  }
+
+  // ok, we have hostname, let's build the path:
+  metrics_dir_ = std::string(METRICS_PATH_PREFIX) + '/' 
+              + hostname_ + '/' 
+              + METRICS_DIRNAME;
+  return true;
+}
+
+static int GetMapRHostName(char *buf, int len)
+{
+  int i;
+  int fd;
+  int err;
+  int ret;
+  struct stat stbuf;
+  char mapr_home[PATH_MAX]; 
+  char *env_str;
+
+  env_str = getenv("MAPR_HOME");
+  if (env_str) {
+    snprintf(mapr_home, PATH_MAX-1, "%s/%s", env_str, "hostname");
+    err = ::stat(mapr_home, &stbuf);
+    LOG("MAPR_HOME is set to %s ", mapr_home);
+  }
+
+  if (!env_str || (env_str && err)) {
+    LOG("MAPR_HOME not found.");
+    snprintf(mapr_home, PATH_MAX-1, "%s", MAPR_HOSTNAME_FILE);
+    err = stat(mapr_home, &stbuf);
+    if (err) {
+      return errno;
+    }
+  }
+
+  fd = open(mapr_home, O_RDONLY);
+  if (fd == -1) {
+    return errno; 
+  }
+
+  ret = read(fd, buf, len-1);
+  if (ret < 0) {
+    close(fd);
+    return errno;
+  }
+
+  for (i=ret-1; i>=0; i--) {
+    if (buf[i] == '\n') {
+      ret = i;
+      break;
+    }
+  }
+
+  buf[ret] = '\0';
+  close(fd);
+  LOG("MAPR_HOSTNAME : %s", buf);
+  return 0;
+}
+
+
+bool MaprCluster::PopulateHostname()
+{
+  memset(hostname_, 0, sizeof(hostname_));
+  auto err = GetMapRHostName(hostname_, sizeof(hostname_) - 1);
+  if (!err) {
+    return true;
+  }
+  err = gethostname(hostname_, sizeof(hostname_) - 1);
+  if (!err) {
+    return true;
+  }
+  // preserve errno across the hdfsDisconnect() call:
+  auto tempErrno = errno;
+  LOG("Could not get hostname, error %d", tempErrno);
+  return false;
+}
+
+bool MaprCluster::EnumerateMetricsFiles()
+{
+  // let's make sure we have a good cluster:
+  if (!Connected()) {
+    LOG("Connected() == false");
+    Reconnect();
+    if (Connected()) {
+      LOG("connected() now true");
+    }
+  }
+  if (!Connected()) {
+    LOG("connected() still false");
+    return false;
+  }
+
+  // I have a handle to the cluster; let's check if there is a metrics
+  // directory. If there is not, we will retain the connection:
+  if (!MetricsDirectoryExists()) {
+    LOG("MetricsDirectoryExists() == false");
+    return false;
+  }
+
+  enum_results_.clear(); 
+  int num_subdirs = 0;
+  auto subdirs = hdfsListDirectory(fs_, metrics_dir_.c_str(), &num_subdirs);
+  if (subdirs == nullptr) {
+    return false;
+  }
+  for (auto i = 0; i < num_subdirs; ++i) {
+    if (subdirs[i].mKind != kObjectKindDirectory) {
+      continue;
+    }
+
+    auto num_files = 0;
+    auto files = hdfsListDirectory(fs_, subdirs[i].mName, &num_files);
+    for (auto j = 0; j < num_files; ++j) {
+      if (IsTableMetricsFile(files[j])) {
+        enum_results_.emplace_back(files[j]);
+      }
+    }
+    hdfsFreeFileInfo(files, num_files);
+  }
+  hdfsFreeFileInfo(subdirs, num_subdirs);
+  return true;
+}
+
+bool MaprCluster::IsTableMetricsFile(const hdfsFileInfo &file)
+{
+  if (file.mSize <= 0) {
+    return false;
+  }
+
+  if (file.mKind != kObjectKindFile) {
+    return false;
+  }
+
+  // /var/mapr/local/atsqa4-104.qa.lab/audit/5660/...
+  // <-------------------------------------> this part is exactly the 
+  // same as metricsDir_ and it is by construction
+  //                                         <--> this part is some string
+  // token, yet again, by construction
+  // .../5660/TableMetricsAudit.log-2018-01-17-001.pb
+  //          <-------------------> this and      <-> this is what we will
+  // check:
+  
+  const char *last_slash_plus_one = [this](const char *name) {
+    const char *pos = nullptr;
+    for (auto i = metrics_dir_.size(); name[i] != '\0'; ++i) {
+      if (name[i] == '/') {
+        pos = &name[i + 1];
+      }
+    }
+    return pos;
+  }(file.mName);
+
+  if (last_slash_plus_one == nullptr) {
+    // this is impossible
+    abort();
+  }
+  const char *kPrefix = "TableMetricsAudit.log";
+  return (strncmp(last_slash_plus_one, kPrefix, strlen(kPrefix)) == 0);
+}
+
+
+class TableMetricsPlugin {
   const static char kCollectdPluginName[];  // = "mapr_tblmetrics";
   const static char kLogSettingName[];      // = "Log_Config_File";
   const int kCollectdSuccess = 0;
 
-  static int initCallback()
+  static int InitCallback()
   {
     LOG("entered");
-    auto ret = instance()->init();
+    auto ret = instance()->Init();
     LOG("returning %d", ret);
     return ret;
   }
 
-  int init()
+  int Init()
   {
     static std::atomic<int> once;
     if ((++once) != 1) {
@@ -560,7 +530,7 @@ class tableMetrics {
     return kCollectdSuccess;
   }
 
-  static int readCallback()
+  static int ReadCallback()
   {
     LOG("entered");
     static std::atomic<bool> reentrancy_control;
@@ -576,64 +546,66 @@ class tableMetrics {
     return ret;
   }
 
-  mutable cluster cluster_;
+  mutable MaprCluster cluster_;
 
-  struct metricsFileData
+  struct MetricsFileData
   {
-    int64_t bytesProcessed;
-    int64_t storedDispatchedOffset;
-    int64_t lastKnownSize = -1;
+    int64_t bytes_processed;
+    int64_t stored_dispatched_offset;
+    int64_t last_known_size = -1;
     struct {
       int read = 0;
       int open = 0;
       int parse = 0;
-    } errorsSoFar;
-    bool dispatchNow = true;
+    } errors_so_far;
+    bool dispatch_now = true;
     static const int kMaxErrors = 5;
 
-    int openRetiresLeft() const
+    int OpenRetiresLeft() const
     {
-      return kMaxErrors - errorsSoFar.open;
+      return kMaxErrors - errors_so_far.open;
     }
 
-    int readRetiresLeft() const
+    int ReadRetiresLeft() const
     {
-      return kMaxErrors - errorsSoFar.read;
+      return kMaxErrors - errors_so_far.read;
     }
 
-    int parseRetiresLeft() const
+    int ParseRetiresLeft() const
     {
-      return kMaxErrors - errorsSoFar.parse;
+      return kMaxErrors - errors_so_far.parse;
     }
 
   };
 
   // filename -> [position, timestamp]
-  std::map<std::string, metricsFileData> knownMetricsFiles_;
+  std::map<std::string, MetricsFileData> known_metrics_files_;
   MetricsMsg scratch_;
 
   // takes the buffer at data sized bytes bytes. Consumes one record from that
   // buffer. Returns how many bytes were processed.
-  int processOneMetricsRecord(const char *data, int bytes)
+  int ProcessOneMetricsRecord(const char *data, int bytes)
   {
     // every record in the file has the following format:
     // [00123][protobuf]
-    const int lengthBytes = 5;
-    if (bytes < lengthBytes) {
+    const int kLengthBytes = 5;
+    if (bytes < kLengthBytes) {
       // need more bytes
       // LOG("bytesLeft == %d", bytes);
       return 0;
     }
-    char temp[lengthBytes + 1];
-    memcpy(temp, data, lengthBytes);
-    auto protobufBytes = std::atoi(temp);
-    if (protobufBytes + lengthBytes > bytes) {
+    char temp[kLengthBytes + 1];
+    memcpy(temp, data, kLengthBytes);
+    temp[kLengthBytes] = '\0';
+  
+    auto protobuf_bytes = std::atoi(temp);
+    if (protobuf_bytes + kLengthBytes > bytes) {
       // also need more bytes
       // LOG("%d + %d < %d", protobufBufferSize, lengthBytes, bytes);
       return 0;
     }
 
-    if (protobufBytes == 0) {
+    if (protobuf_bytes == 0) {
       // this is how 0-sized msg looks like:
       // 0007a1f0  30 30 33 31 0a 09 08 8c  10 10 24 18 fc 81 08 10  |0031......$.....| <-- 31-byte msg starts here
       // 0007a200  d0 a9 cc fd 90 2c 1a 0b  08 01 10 06 28 be e5 01  |.....,......(...|
@@ -643,11 +615,11 @@ class tableMetrics {
       return -1;
     }
 
-    assert(protobufBytes > 0);
+    assert(protobuf_bytes > 0);
 
-    auto parsed = scratch_.ParseFromArray(&data[lengthBytes], protobufBytes);
+    auto parsed = scratch_.ParseFromArray(&data[kLengthBytes], protobuf_bytes);
     if (!parsed) {
-      LOG("failed parsing message (%d bytes)", protobufBytes);
+      LOG("failed parsing message (%d bytes)", protobuf_bytes);
       return -2;
     }
     // LOG("parsed %d bytes", protobufBytes + lengthBytes);
@@ -656,15 +628,15 @@ class tableMetrics {
       LOG("corrupt protobuf file 3 (no table fid)");
       return -2;
     }
-    auto fidPb = scratch_.table();
-    if (!fidPb.has_cid() || !fidPb.has_cinum() || !fidPb.has_uniq()) {
+    auto fid_msg = scratch_.table();
+    if (!fid_msg.has_cid() || !fid_msg.has_cinum() || !fid_msg.has_uniq()) {
       LOG("corrupt protobuf file 4 (fid not fully defined)");
       return -4;
     }
 
-    const Fid tableFid(fidPb);
+    const Fid table_fid(fid_msg);
 
-    const Fid indexFid([this] {
+    const Fid index_fid([this] {
       if (!scratch_.has_index()) {
         return Fid(Fid::blank{});
       }
@@ -686,19 +658,20 @@ class tableMetrics {
 
     //LOG("%u:%u:%u @%lu", fidPb.cid(), fidPb.cinum(), fidPb.uniq(), timestamp);
 
-    auto &backlog = unflushedMetrics_[{tableFid, indexFid}];
+    auto &backlog = unflushed_metrics_[{table_fid, index_fid}];
     auto pos = std::partition_point(
-      backlog.begin(), backlog.end(), [timestamp](timepoint &m) {
-        return m.m_timestamp < timestamp;
+      backlog.timeline.begin(), backlog.timeline.end(),
+      [timestamp](Timepoint &m) {
+        return m.timestamp_ < timestamp;
       });
     
     // two possible options now. We are inserting a data point with a new
     // timestamp, or updating an existing one. For update, partition_point
     // will never return ::end() for update since equal timestamps do not
     // compare less. Therefore if it is end, it is insert
-    auto &tm = ((pos != backlog.end()) && (pos->m_timestamp == timestamp)) ?
+    auto &tm = ((pos != backlog.timeline.end()) && (pos->timestamp_ == timestamp)) ?
       *pos :
-      *backlog.emplace(pos, timestamp);
+      *backlog.timeline.emplace(pos, timestamp);
 
     for (const auto &perRpc : scratch_.rpcmetrics()) {
       if (!perRpc.has_op()) {
@@ -712,7 +685,7 @@ class tableMetrics {
         continue;
       }
 
-      auto &metric = tm.m_numbers[optype];
+      auto &metric = tm.numbers_[optype];
 
       if (perRpc.has_count()) {
         metric.rpcs += perRpc.count();
@@ -752,10 +725,10 @@ class tableMetrics {
       }
     }
 
-    return protobufBytes + lengthBytes;
+    return protobuf_bytes + kLengthBytes;
   }
 
-  static const char *rpcIndexTo_c_str(opType index)
+  static const char *to_c_str(opType index)
   {
     switch (index)
     {
@@ -770,7 +743,7 @@ class tableMetrics {
     }
   }
 
-  enum class metricId
+  enum class MetricId
   {
     rpcs,
     write_rows,
@@ -782,25 +755,25 @@ class tableMetrics {
     value_cache_hits,
   };
 
-  static const char *to_c_str(metricId metric)
+  static const char *to_c_str(MetricId metric)
   {
     switch (metric)
     {
-      case metricId::rpcs: return "mapr.db.table.rpcs";
-      case metricId::write_rows: return "mapr.db.table.write_rows";
-      case metricId::resp_rows: return "mapr.db.table.resp_rows";
-      case metricId::read_rows: return "mapr.db.table.read_rows";
-      case metricId::write_bytes: return "mapr.db.table.write_bytes";
-      case metricId::read_bytes: return "mapr.db.table.read_bytes";
-      case metricId::value_cache_lookups:
+      case MetricId::rpcs: return "mapr.db.table.rpcs";
+      case MetricId::write_rows: return "mapr.db.table.write_rows";
+      case MetricId::resp_rows: return "mapr.db.table.resp_rows";
+      case MetricId::read_rows: return "mapr.db.table.read_rows";
+      case MetricId::write_bytes: return "mapr.db.table.write_bytes";
+      case MetricId::read_bytes: return "mapr.db.table.read_bytes";
+      case MetricId::value_cache_lookups:
         return "mapr.db.table.value_cache_lookups";
-      case metricId::value_cache_hits:
+      case MetricId::value_cache_hits:
         return "mapr.db.table.value_cache_hits";
       default: abort();
     }
   }
 
-  struct perRpcTableMetricNumbers
+  struct PerRpcTableMetricNumbers
   {
     int64_t rpcs = 0;
     int64_t write_rows = 0;
@@ -813,15 +786,15 @@ class tableMetrics {
 
     std::array<int64_t, IndexOfLastTableMetricsBucket + 1> histo = {};
 
-    struct enum_per_rpc_metrics_item
+    struct EnumPerRpcMetricsItem
     {
-      metricId name;
+      MetricId name;
       int64_t value;
     };
-    const std::array<enum_per_rpc_metrics_item, 8> enumerate() const
+    const std::array<EnumPerRpcMetricsItem, 8> enumerate() const
     {
       #define TABLE_METRIX_NAME_AND_VALUE(name) \
-        enum_per_rpc_metrics_item{metricId::name, name}
+        EnumPerRpcMetricsItem{MetricId::name, name}
       return {{
         TABLE_METRIX_NAME_AND_VALUE(rpcs),
         TABLE_METRIX_NAME_AND_VALUE(write_rows),
@@ -837,71 +810,70 @@ class tableMetrics {
 
   };
 
-  struct timepoint {
-    static const int kNumberOfRpcs = mapr::fs::tablemetrics::opType_ARRAYSIZE;
-    std::array<perRpcTableMetricNumbers, kNumberOfRpcs> m_numbers = {};
-    int64_t m_timestamp;
-    
-    timepoint(int64_t timestamp) :
-      m_timestamp(timestamp)
-    {}
+  struct Timepoint {
+    Timepoint(int64_t timestamp)
+        : timestamp_(timestamp) {}
+    std::array<PerRpcTableMetricNumbers, opType_ARRAYSIZE> numbers_ = {};
+    int64_t timestamp_;
   };
 
-  struct table {
-    Fid m_primary;
-    Fid m_si;
+  struct History {
+    int64_t high_water_mark = 0;
+    std::vector<Timepoint> timeline;
+  };
 
-    bool operator <(const table &other) const
+  struct Table {
+    Fid primary_;
+    Fid si_;
+
+    bool operator <(const Table &other) const
     {
-      const auto lhs = {this->m_primary, this->m_si};
-      const auto rhs = {other.m_primary, other.m_si};
+      const auto lhs = {this->primary_, this->si_};
+      const auto rhs = {other.primary_, other.si_};
       return std::lexicographical_compare(
         lhs.begin(), lhs.end(), rhs.begin(), rhs.end());
     }
   };
 
-  std::map<table, std::vector<timepoint>> unflushedMetrics_;
+  std::map<Table, History> unflushed_metrics_;
 
   // we have a map of table -> timestamp [rpc->[, counter]]
-  void processOneMetricsFile(const std::string& name, metricsFileData& details)
+  void ProcessOneMetricsFile(const std::string& name, MetricsFileData& details)
   {
-    if (details.openRetiresLeft() <= 0) {
+    if (details.OpenRetiresLeft() <= 0) {
       // we already gave up on this file, don't touch it again
       LOG("%s: details.openRetiresLeft() == %d",
-        name.c_str(), details.openRetiresLeft());
-      details.dispatchNow = false;
+        name.c_str(), details.OpenRetiresLeft());
+      details.dispatch_now = false;
       return;
     }
     LOG("Processing %s", name.c_str());
 
-    auto h = cluster_.openForRead(name);
-    if (!h.get()) {
+    auto file = cluster_.OpenFileForRead(name);
+    if (!file.Valid()) {
       auto err = errno;
-      ++details.errorsSoFar.open;
+      ++details.errors_so_far.open;
       LOG("can't open %s, errno %d, will retry %d more times",
-        name.c_str(), err, details.openRetiresLeft());
+        name.c_str(), err, details.OpenRetiresLeft());
       errno = err;
       return;
     }
 
     std::array<char, 256 * 1024> buffer;
     for (;;) {
-      const auto pbBytesRead = hdfsPread(
-        cluster_.fs_, h.get(),
-        details.bytesProcessed,
-        buffer.data(), buffer.size());
-      if (pbBytesRead == 0) {
+      const auto bytes_read = file.Read(details.bytes_processed, &buffer);
+      if (bytes_read == 0) {
         break;
       }
 
-      LOG("read %d bytes from %s", pbBytesRead, name.c_str());
+      LOG("read %d bytes from %s", bytes_read, name.c_str());
 
-      if (pbBytesRead == -1) {
+      if (bytes_read == -1) {
         // always an error;
-        if ((errno == EINTR) && (details.readRetiresLeft() > 0)) {
+        if ((errno == EINTR) && (details.ReadRetiresLeft() > 0)) {
           // this is a retriable error,
           NOTICE("hdfsRead(%s) failed with EINTR", name.c_str());
-          ++details.errorsSoFar.read;
+          ++details.errors_so_far.read;
           // consider
           //  std::this_thread::sleep_for(std::chrono::milliseconds(20));
           // and/or
@@ -909,113 +881,111 @@ class tableMetrics {
           // we will come back.
         } else {
           // this is not retriable
-          details.dispatchNow = false;
+          details.dispatch_now = false;
         }
         return;
       }
       
-      if (pbBytesRead < 0) {
+      if (bytes_read < 0) {
         // impossible case, hdfsPread() doesn't return this:
-        LOG("BUGBUG: hdfsPread() returned %d, unexpected",
-          pbBytesRead);
+        LOG("BUGBUG: hdfsPread() returned %d, unexpected", bytes_read);
         abort();
       }
 
       // parse the records, one after another:
-      auto bytesParsedSoFar = decltype(pbBytesRead){0};
-      while (bytesParsedSoFar < pbBytesRead) {
+      auto bytes_parsed_so_far = decltype(bytes_read){0};
+      while (bytes_parsed_so_far < bytes_read) {
         // LOG("parsed %d bytes so far", bytesParsedSoFar);
-        auto bytesParsedInOneTake = processOneMetricsRecord(
-          &buffer[bytesParsedSoFar],
-          pbBytesRead - bytesParsedSoFar);
-        if (bytesParsedInOneTake == 0) {
+        auto bytes_parsed_in_one_take = ProcessOneMetricsRecord(
+          &buffer[bytes_parsed_so_far],
+          bytes_read - bytes_parsed_so_far);
+
+        if (bytes_parsed_in_one_take > 0) {
+          // if we parsed anything, parse error counter goes to 0:
+          details.errors_so_far.parse = 0;
+          bytes_parsed_so_far += bytes_parsed_in_one_take;
+          continue;
+        }
+
+        if (bytes_parsed_in_one_take == 0) {
           break;
         }
-        if (bytesParsedInOneTake < 0) {
-          LOG("can't parse [%s] at %lu (of %lu)",
-            name.c_str(), details.bytesProcessed + bytesParsedSoFar,
-            details.lastKnownSize);
-          ++details.errorsSoFar.parse;
-          if (details.parseRetiresLeft() < 0) {
-            details.dispatchNow = false;
-            details.bytesProcessed = details.lastKnownSize;
-            return;
-          } else {
-            break;
-          }
+
+        // bytes_parsed_in_one_take < 0 
+        LOG("can't parse [%s] at %lu (of %lu)",
+          name.c_str(), details.bytes_processed + bytes_parsed_so_far,
+          details.last_known_size);
+        ++details.errors_so_far.parse;
+
+        if (details.ParseRetiresLeft() >= 0) {
+          break;
         }
 
-        // if we parsed anything, parse error counter goes to 0:
-        details.errorsSoFar.parse = 0;
-        bytesParsedSoFar += bytesParsedInOneTake;
+        details.dispatch_now = false;
+        details.bytes_processed = details.last_known_size;
+        return;
       }
 
-      details.bytesProcessed += bytesParsedSoFar;
+      details.bytes_processed += bytes_parsed_so_far;
     } // for(;;)
   }
 
-
-  void processOneEnumeratedFile(const cluster::listingFileInfo &file)
+  void ProcessOneEnumeratedFile(const ListingFileInfo &file) 
   {
-    auto found = knownMetricsFiles_.find(file.name);
+    auto emplace_result = known_metrics_files_.emplace(
+      std::piecewise_construct,
+      std::forward_as_tuple(std::move(file.name)),
+      std::forward_as_tuple()); // metricsFileData is default-constructed
 
-    if (found == knownMetricsFiles_.end()) {
-      // new file. What is the xattr value in there?
-      auto it = knownMetricsFiles_.emplace(
-        std::piecewise_construct,
-        std::forward_as_tuple(std::move(file.name)),
-        std::forward_as_tuple()); // metricsFileData is default-constructed
+    auto &data = emplace_result.first->second;
 
-      auto &name = it.first->first;
-      auto &data = it.first->second;
-      data.storedDispatchedOffset = cluster_.getDispatchedOffset(name);
-      data.bytesProcessed = data.storedDispatchedOffset;
-      data.lastKnownSize = file.mSize;
-      // if we dispatched it through the end, don't dispatch again
-      data.dispatchNow = (data.bytesProcessed < data.lastKnownSize);
+    if (emplace_result.second) {
+      // previously existing file (insertion did not happen). We have already
+      // read and/or updated dispatchedOffset. Has this file grown?
+      if (data.last_known_size < file.size) {
+        // yes.
+        data.last_known_size = file.size;
+        data.dispatch_now = true;
+      }
       return;
     }
 
-    // previously existing file. We have already read and/or updated
-    // dispatchedOffset.
-
-    // Has this file grown?
-    if (found->second.lastKnownSize < file.mSize) {
-      // yes.
-      found->second.lastKnownSize = file.mSize;
-      found->second.dispatchNow = true;
-      return;
-    }
-    // no. No need to do anything.
+    const auto &name = emplace_result.first->first;
+    // new file. What is the xattr value in there?
+    data.stored_dispatched_offset = cluster_.GetDispatchedOffset(name);
+    data.bytes_processed = data.stored_dispatched_offset;
+    data.last_known_size = file.size;
+    // if we dispatched it through the end, don't dispatch again
+    data.dispatch_now = (data.bytes_processed < data.last_known_size);
   }
 
-  void reset()
+  void Reset()
   {
-    for (auto &t : unflushedMetrics_) {
-      t.second.empty();
+    for (auto &t : unflushed_metrics_) {
+      t.second.timeline.clear();
     }
   }
 
-  void addEverything(
-    Metric *m,
-    const Fid &table, const Fid &index,
-    opType op, int64_t timestamp, const char *host) const
+   void AddEverything(
+     Metric *m, 
+    const Fid & table, const Fid &index,
+    opType op,  int64_t timestamp) const
   {
-    m->set_time(timestamp);
-    addTableTag(table, m);
-    addIndexTag(table, index, m);
-    addRpcTag(op, m);
-    addHostTag(host, m);
-  }
+     m->set_time(timestamp);
+     AddTableTag(table, m);
+     AddIndexTag(table, index, m);
+     AddRpcTag(op, m);
+     AddHostTag(m);
+   }
 
-  void addHostTag(const char *host, Metric *m) const
+  void AddHostTag(Metric *m) const
   {
     auto tag_host = m->add_tags();
     tag_host->set_name("fqdn");
-    tag_host->set_value(host);
+    tag_host->set_value(cluster_.Hostname());
   }
 
-  void addTableTag(const Fid &key, Metric *m) const
+  void AddTableTag(const Fid &key, Metric *m) const
   {
     auto tag_fid = m->add_tags();
     tag_fid->set_name("table_fid");
@@ -1025,7 +995,7 @@ class tableMetrics {
     tag_path->set_name("table_path");
 
     char buffer[PATH_MAX];
-    int fid_error = cluster_.getPathFromFid(key, buffer);
+    int fid_error = cluster_.GetPathFromFid(key, buffer);
     if (fid_error != 0) {
       ERROR("getPathFromFid(%s) returned %d", key.c_str(), fid_error);
       tag_path->set_value(std::string("//deleted_table_") + key.c_str());
@@ -1034,7 +1004,7 @@ class tableMetrics {
     }
   }
 
-  void addIndexTag(const Fid &table, const Fid &index, Metric *m) const
+  void AddIndexTag(const Fid &table, const Fid &index, Metric *m) const
   {
     if (index.empty()) {
       auto noindex = m->add_tags();
@@ -1047,7 +1017,7 @@ class tableMetrics {
     tag_index_fid->set_value(index.c_str());
 
     char buffer[PATH_MAX];
-    int fid_error = cluster_.getIndexNameFromFids(table, index, buffer);
+    int fid_error = cluster_.GetIndexNameFromFids(table, index, buffer);
     if (fid_error != 0) {
       ERROR("getIndexNameFromFids(%s, %s) returned %d",
         table.c_str(), index.c_str(), fid_error);
@@ -1058,20 +1028,19 @@ class tableMetrics {
     }
   }
 
-  void addRpcTag(opType op, Metric *m) const
+  void AddRpcTag(opType op, Metric *m) const
   {
     auto tag_rpc = m->add_tags();
     tag_rpc->set_name("rpc_type");
-    tag_rpc->set_value(rpcIndexTo_c_str(op));
+    tag_rpc->set_value(to_c_str(op));
   }
 
-  void Protobufize(const Fid &table, const Fid &index, const timepoint &item,
+  void Protobufize(
+    const Fid &table, const Fid &index, const Timepoint &item,
     Metrics *message) const
   {
-    const auto host = cluster_.hostname_;
-
     int i = 0;
-    for (const auto &rpc : item.m_numbers) {
+    for (const auto &rpc : item.numbers_) {
       const auto op = static_cast<opType>(i);
 
       if (!opType_IsValid(i++)) { // postincrement intended
@@ -1092,7 +1061,7 @@ class tableMetrics {
 
         m->mutable_value()->set_number(metric.value);
         m->set_name(to_c_str(metric.name));
-        addEverything(m, table, index, op, item.m_timestamp, host);
+        AddEverything(m, table, index, op, item.timestamp_);
       }
 
       // and a histogram. Histogram has several buckets:
@@ -1116,18 +1085,18 @@ class tableMetrics {
       }
 
       mHisto->set_name("mapr.db.table.latency");
-      addEverything(mHisto, table, index, op, item.m_timestamp, host);
+      AddEverything(mHisto, table, index, op, item.timestamp_);
     }
 
   }
-  void flush() const
+  void Flush() const
   {
     Metrics message;
-    for (auto &it : unflushedMetrics_) {
+    for (auto &it : unflushed_metrics_) {
       const auto &key = it.first;
-      const auto &table = key.m_primary;
-      const auto &index = key.m_si;
-      const auto &backlog = it.second;
+      const auto &table = key.primary_;
+      const auto &index = key.si_;
+      const auto &backlog = it.second.timeline;
       for (const auto &item : backlog) {
         Protobufize(table, index, item, &message);
       }
@@ -1142,7 +1111,7 @@ class tableMetrics {
 
     auto bMustSucceed = message.SerializeToArray(buffer->data, cb);
     if (!bMustSucceed) {
-      ERR("Failed to serialize the opaque message for writer, %d bytes.", cb);
+      ERR("Failed to serialize the opaque msg to writer, 0n%d bytes.", cb);
       return;
     }
 
@@ -1159,63 +1128,41 @@ class tableMetrics {
       "Encoded opaque buffer: ptr 0x%p, type_instance %s, type %s, size %d",
       buffer, vl.type_instance, vl.type, cb);
     plugin_dispatch_values(&vl);
-
   }
-
 
   int read()
   {
-    // let's make sure we have a good cluster:
-    if (!cluster_.connected()) {
-      LOG("connected() == false");
-      cluster_.reconnect();
-      if (cluster_.connected()) {
-        LOG("connected() now true");
-      }
-    }
-    if (!cluster_.connected()) {
-      LOG("connected() still false");
-      return -1;
+    int err = cluster_.EnumerateMetricsFiles();
+    if (err != 0) {
+      return err;
     }
 
-    // I have a handle to the cluster; let's check if there is a metrics
-    // directory. If there is not, we will retain the connection:
-    if (!cluster_.metricsDirectoryExists()) {
-      LOG("metricsDirectoryExists() == false");
-      return -1;
-    }
-
-    // traverse the metrics directory and build the list of metrics files
-    if (!cluster_.walkMetricsDirAndEnumFiles()) {
-      return -1;
-    };
-
-    for (const auto &file : cluster_.tableMetricsFiles_) {
-      processOneEnumeratedFile(file);
+    for (const auto &file : cluster_.GetMetricsFiles()) {
+      ProcessOneEnumeratedFile(file);
     }
 
     // at this point all files are in knownMetricsFiles_
-    for (auto &it : knownMetricsFiles_) {
+    for (auto &it : known_metrics_files_) {
       const auto &name = it.first;
       auto &details = it.second;
-      if (!details.dispatchNow) {
+      if (!details.dispatch_now) {
         // LOG("details.dispatchNow == false, next");
         continue;
       }
-      processOneMetricsFile(name, details);
-      cluster_.setDispatchedOffset(name, details.bytesProcessed);
-      details.storedDispatchedOffset = details.bytesProcessed;
+      ProcessOneMetricsFile(name, details);
+      cluster_.SetDispatchedOffset(name, details.bytes_processed);
+      details.stored_dispatched_offset = details.bytes_processed;
     }
 
-    flush();
-    reset();
+    Flush();
+    Reset();
 
     return 0;
   }
 
-  static tableMetrics *instance()
+  static TableMetricsPlugin *instance()
   {
-    static tableMetrics s_metrics;
+    static TableMetricsPlugin s_metrics;
     return &s_metrics;
   }
 
@@ -1223,12 +1170,12 @@ class tableMetrics {
 
   // config callback happens before anything else. it might tell us whether
   // we have a log file
-  static int configCallback(oconfig_item_t *item)
+  static int ConfigCallback(oconfig_item_t *item)
   {
-    return instance()->addConfig(item);
+    return instance()->AddConfig(item);
   }
 
-  int addConfig(oconfig_item_t *config_item)
+  int AddConfig(oconfig_item_t *config_item)
   {
     for (auto index = 0; index < config_item->children_num; ++index) {
       auto c = &config_item->children[index];
@@ -1260,22 +1207,22 @@ class tableMetrics {
     return 0;
   }
 
-public:
-  static void registerPlugin()
+ public:
+  static void RegisterPlugin()
   {
-    ::plugin_register_complex_config(kCollectdPluginName, configCallback);
-    ::plugin_register_init(kCollectdPluginName, initCallback);
-    ::plugin_register_read(kCollectdPluginName, readCallback);
+    ::plugin_register_complex_config(kCollectdPluginName, ConfigCallback);
+    ::plugin_register_init(kCollectdPluginName, InitCallback);
+    ::plugin_register_read(kCollectdPluginName, ReadCallback);
   }
 };
 
-const char tableMetrics::kCollectdPluginName[] = "mapr_tblmetrics";
-const char tableMetrics::kLogSettingName[] = "Log_Config_File";
+const char TableMetricsPlugin::kCollectdPluginName[] = "mapr_tblmetrics";
+const char TableMetricsPlugin::kLogSettingName[] = "Log_Config_File";
 
 extern "C"
 void module_register(void)
 {
   GOOGLE_PROTOBUF_VERIFY_VERSION;
 
-  tableMetrics::registerPlugin();
+  TableMetricsPlugin::RegisterPlugin();
 } /* void module_register */
