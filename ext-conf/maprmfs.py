@@ -77,6 +77,7 @@ class MapRMfsPlugin(object):
                     self.ignored_datasets_file = val
                     self.log_info("Ignored datasets path is: {0}".format(val))
 
+            self.log_info("Configured MapR MFS Plugin for Python")
         except Exception, e:
             self.log_error("Configuring MapR MFS Plugin for Python failed", e)
 
@@ -170,7 +171,9 @@ class MapRMfsPlugin(object):
             self.log_error("Spyglass executable is not available to be executed")
             return None
 
-        p = subprocess.Popen(self.spyglass, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
+        interval_param = "--interval:{0}".format(INTERVAL)
+        execute = [self.spyglass, interval_param]
+        p = subprocess.Popen(execute, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
         (out, err) = p.communicate()
         if p.returncode != 0:
             self.log_error("Spyglass executable failed to be executed: (" + str(p.returncode) + "): " + err)
