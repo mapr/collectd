@@ -291,7 +291,7 @@ static void ps_list_register(int pid, char *name) {
   for (ptr = list_head_g; ptr != NULL; ptr = ptr->next) {
     //PID is already in the list
     if (ptr->pid == pid && strcmp(serviceName, ptr->processName) == 0) {
-      WARNING ("Found an entry for pid %d for service %s in the list",pid, serviceName);
+      INFO ("Found an entry for pid %d for service %s in the list",pid, serviceName);
       sfree(new);
       return;
     }
