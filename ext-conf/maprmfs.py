@@ -14,10 +14,14 @@ collectd.info("Starting MapR MFS Plugin for Python")
 # noinspection PyBroadException
 class MapRMfsPlugin(object):
     PLUGIN_NAME = "MapRMFS"
+    LOG_INFO = 0
+    LOG_WARNING = 1
+    LOG_ERROR = 2
 
     def __init__(self):
         self.spyglass = None
         self.debug_fp = None
+        self.debug_file_level = MapRMfsPlugin.LOG_ERROR
         self.fqdn = None
         # These are datasets that are sent in from spyglass that should not be sent to out to OT.
         self.ignored_datasets_file = None
@@ -32,6 +36,7 @@ class MapRMfsPlugin(object):
         #     Import "maprmfs"
         #     <Module maprmfs>
         #         debug_file "/opt/mapr/collectd/collectd-5.8.0/var/log/collectd/collectd_mfs_debug.log"
+        #         debug_file_level "warning"
         #         spyglass "/opt/mapr/bin/spyglass"
         #         ignored_datasets_file "/opt/mapr/collectd/collectd-5.8.0/lib/collectd/maprmfs_ignored_datasets.txt"
         #     </Module>
@@ -64,6 +69,10 @@ class MapRMfsPlugin(object):
                     self.log_info("Debug file entry is: " + val)
                     self.debug_fp = open(val, "w")
                     self.log_info("Debug file opened at: {0}".format(val))
+
+                if key == "debug_file_level":
+                    self.log_info("Debug file log level entry found; Processing...")
+                    self.debug_file_level = MapRMfsPlugin.log_level_str_to_int(val)
 
                 if key == "ignored_datasets_file":
                     self.log_info("Ignored datasets file entry found; Processing...")
@@ -109,7 +118,7 @@ class MapRMfsPlugin(object):
         try:
             sg_output = self.get_spyglass_output()
             if sg_output is None or len(sg_output) == 0:
-                self.log_warning("No spyglass information returned")
+                self.log_error("No spyglass information returned")
                 return
 
             sg_list = sg_output.split(" ")
@@ -205,10 +214,26 @@ class MapRMfsPlugin(object):
             self.log_debug("error", message)
 
     def log_debug(self, level, message):
-        if self.debug_fp is not None:
-            dt = datetime.datetime.today().strftime("[%Y-%m-%d %H:%M:%S] ")
-            self.debug_fp.write(str(dt) + "[" + level + "] " + MapRMfsPlugin.PLUGIN_NAME + ": " + message + os.linesep)
-            self.debug_fp.flush()
+        if self.debug_fp is not None and message is not None:
+            msg_level = MapRMfsPlugin.log_level_str_to_int(level)
+            if msg_level >= self.debug_file_level:
+                dt = datetime.datetime.today().strftime("[%Y-%m-%d %H:%M:%S] ")
+                self.debug_fp.write(str(dt) + "[" + level + "] " + MapRMfsPlugin.PLUGIN_NAME + ": " + message + os.linesep)
+                self.debug_fp.flush()
+
+    @staticmethod
+    def log_level_str_to_int(message_level_str):
+        if not message_level_str or len(message_level_str) == 0:
+            return MapRMfsPlugin.LOG_INFO
+
+        message_level_str = message_level_str.lower()
+        if message_level_str == "info":
+            return MapRMfsPlugin.LOG_INFO
+        if message_level_str == "warning":
+            return MapRMfsPlugin.LOG_WARNING
+        if message_level_str == "error":
+            return MapRMfsPlugin.LOG_ERROR
+        return MapRMfsPlugin.LOG_INFO
 
 
 mapr_mfs_plugin = MapRMfsPlugin()
