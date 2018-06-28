@@ -97,6 +97,7 @@
  */
 
 #include <cinttypes>
+#include <cctype>
 
 #include <stdbool.h>
 
@@ -375,6 +376,35 @@ static int wt_format_values(char *ret, size_t ret_len,
     return 0;
 }
 
+static char * replace_illegal_chars(const char * str) {
+    int len = 0;
+    int idx = 0;
+    char *rep_string = NULL;
+
+    if (str == NULL) {
+        return NULL;
+    } else {
+        /* tag keys or values may not contain characters other than */
+        /* ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') */
+        /* || ('0' <= c && c <= '9') || c == '-' || c == '_' || c == '.' */
+        /* || c == '/' || Character.isLetter(c) */
+        /* replace with underscore */
+        len = strlen(str);
+        rep_string = new(std::nothrow) char[len];
+        while(NULL != str && idx < len) {
+            if (!(isalpha(*str) || isdigit(*str) || *str == '-' ||
+                *str == '_' || *str == '.' || *str == '/')) {
+                rep_string[idx] = '_';
+            } else {
+                rep_string[idx] = *str;
+            }
+            idx++;
+            str++;
+        }
+    }
+    return rep_string;
+}
+
 static int wt_format_tags(char *ret, int ret_len,
                           const value_list_t *vl,
                           const struct wt_kafka_topic_context *,
@@ -386,7 +416,8 @@ static int wt_format_tags(char *ret, int ret_len,
     ptrdiff_t remaining_len = ret_len;
     const char *meta_tag = "tsdb_tag";
 
-#define TSDB_META_DATA_GET_STRING(tag) do { \
+#define TSDB_META_DATA_GET_STRING(tag) \
+    { \
         temp = NULL; \
         status = meta_data_get_string(vl->meta, tag, &temp); \
         if (status == -ENOENT) { \
@@ -396,24 +427,25 @@ static int wt_format_tags(char *ret, int ret_len,
             sfree(temp); \
             return status; \
         } \
-    } while(0)
+    }
 
-#define TSDB_STRING_APPEND_SPRINTF(key, value) do { \
+#define TSDB_STRING_APPEND_SPRINTF(key, value) \
+    { \
         int n; \
-        const char *k = (key); \
-        const char *v = (value); \
-        if(k[0] != '\0' && v[0] != '\0') { \
+        char *k = replace_illegal_chars(key); \
+        char *v = replace_illegal_chars(value); \
+        if(k != NULL && k[0] != '\0' && v != NULL && v[0] != '\0') { \
             n = snprintf(ptr, remaining_len, " %s=%s", k, v); \
             if(n >= remaining_len) { \
                 ptr[0] = '\0'; \
             } else { \
-                char *ptr2 = ptr+1; \
-                while(NULL != (ptr2 = strchr(ptr2, ' '))) ptr2[0] = '_';  \
                 ptr += n; \
                 remaining_len -= n; \
             } \
+            delete(k); \
+            delete(v); \
         } \
-    } while(0)
+    }
 
     if (vl->meta) {
         TSDB_META_DATA_GET_STRING(meta_tag_metric_id[TSDB_TAG_PLUGIN]);
