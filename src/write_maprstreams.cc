@@ -390,7 +390,7 @@ static char * replace_illegal_chars(const char * str) {
         /* || c == '/' || Character.isLetter(c) */
         /* replace with underscore */
         len = strlen(str);
-        rep_string = new(std::nothrow) char[len];
+        rep_string = new(std::nothrow) char[len + 1];
         while(NULL != str && idx < len) {
             if (!(isalpha(*str) || isdigit(*str) || *str == '-' ||
                 *str == '_' || *str == '.' || *str == '/')) {
@@ -401,6 +401,7 @@ static char * replace_illegal_chars(const char * str) {
             idx++;
             str++;
         }
+        rep_string[idx] = '\0';
     }
     return rep_string;
 }
