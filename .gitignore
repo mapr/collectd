@@ -94,6 +94,10 @@ bindings/perl/pm_to_blib
 
 #ide stuff
 .vscode
+.idea
+
+#Mac stuff
+.DS_Store
 
 # cscope stuff
 cscope.*
