@@ -442,8 +442,8 @@ static int wt_format_tags(char *ret, int ret_len,
                 ptr += n; \
                 remaining_len -= n; \
             } \
-            free(k); \
-            free(v); \
+            delete(k); \
+            delete(v); \
         } \
     }
 
