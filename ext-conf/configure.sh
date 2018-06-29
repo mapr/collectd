@@ -92,7 +92,7 @@ else
    exit 0
 fi
 
-INST_WARDEN_FILE="${MAPR_CONF_CONFD_DIR}/conf.d/warden.collectd.conf"
+INST_WARDEN_FILE="${MAPR_CONF_CONFD_DIR}/warden.collectd.conf"
 PKG_WARDEN_FILE="${COLLECTD_HOME}/etc/conf/warden.collectd.conf"
 
 #TODO
