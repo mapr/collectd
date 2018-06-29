@@ -18,7 +18,6 @@
  **/
 
 #include <cstdint>
-
 extern "C" {
 
 // collectd uses _Bool
@@ -84,6 +83,7 @@ extern int hdfsGetIndexNameFromFids(
 
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <functional>
@@ -112,6 +112,29 @@ static constexpr
   }};
 
 //static int log_level = 3;
+
+// we try to do our job while keeping the workign set small. If we digested
+// more than kIntakeThreshold bytes in one instance of plugin execution, we
+// try to finish up the work and get out.
+constexpr int kIntakeThreshold = 1024 * 1024;
+
+// how many bytes to read from metrics file in one shot. buffer is allocated
+// on the stack so it should nto be stupid large:
+constexpr int kMetricsFileReadSize = 256 * 1024;
+
+// if collectd wasn't running for a while, we start with a backlog. THere are
+// two conflicting goals: 1) reasonable workign set and 2) forward progress.
+// We should ingest metrics faster then they are produced. So although we will
+// honor kIntakeThreshold, we will never process less than
+// kBacklogMinimumProgressSeconds seconds of metrics data during one read
+// callback
+constexpr int kBacklogProgressSeconds = 120;
+
+// plugin maintains the working set of known pairs (table, index) and their
+// metrics in a map. If table or index go away forever, stale entry will just
+// sit there in the map until plugin exits, producing unbounded memory usage --
+// unless we do something about it.
+constexpr int kMaxMetricsAgeMinutes = 10;
 
 #define STRINGIFY2(x) #x
 #define STRINGIFY(X) STRINGIFY2(X)
@@ -197,15 +220,28 @@ struct ListingFileInfo {
 class LocalFile {
   hdfsFS fs_;
   hdfsFile file_;
+  const std::string &name_;
 
  public:
-  LocalFile(hdfsFS cluster, hdfsFile file) : fs_(cluster), file_(file) {}
+  LocalFile(hdfsFS cluster, hdfsFile file, const std::string &name) :
+    fs_(cluster), file_(file), name_(name) {}
+
+  LocalFile(LocalFile&& other) :
+    fs_(other.fs_), file_(other.file_), name_(other.name_)
+  {
+    other.file_ = nullptr;
+  }
+
   bool Valid() { return file_ != nullptr; }
   ~LocalFile()
   {
     if (file_ != nullptr) {
       hdfsCloseFile(fs_, file_);
     }
+  }
+  const char *c_str()
+  {
+    return name_.c_str();
   }
 
   template <typename T> int32_t Read(int64_t offset, T *buffer)
@@ -246,7 +282,7 @@ class MaprCluster {
   LocalFile OpenFileForRead(const std::string &name)
   {
     auto handle = hdfsOpenFile(fs_, name.c_str(), O_RDONLY, 0, 0, 0);
-    return LocalFile(fs_, handle);
+    return LocalFile(fs_, handle, name);
   }
 };
 } // anonymous namespace
@@ -428,13 +464,11 @@ bool MaprCluster::EnumerateMetricsFiles()
   if (!Connected()) {
     LOG("Connected() == false");
     Reconnect();
-    if (Connected()) {
-      LOG("connected() now true");
+    if (!Connected()) {
+      LOG("connected() still false");
+      return false;
     }
-  }
-  if (!Connected()) {
-    LOG("connected() still false");
-    return false;
+    LOG("connected() now true");
   }
 
   // I have a handle to the cluster; let's check if there is a metrics
@@ -486,7 +520,10 @@ bool MaprCluster::IsTableMetricsFile(const hdfsFileInfo &file)
   // .../5660/TableMetricsAudit.log-2018-01-17-001.pb
   //          <-------------------> this and      <-> this is what we will
   // check:
-  
+  // it is VERY IMPORTANT that the names enable natural sort order, that is,
+  // when alphabetically sorted, earlier files are before later files. We rely
+  // on this.
+
   const char *last_slash_plus_one = [this](const char *name) {
     const char *pos = nullptr;
     for (auto i = metrics_dir_.size(); name[i] != '\0'; ++i) {
@@ -540,7 +577,7 @@ class TableMetricsPlugin {
       return 0;
     }
 
-    auto ret = instance()->read();
+    auto ret = instance()->Read();
     reentrancy_control = false;
     LOG("returning %d", ret);
     return ret;
@@ -582,9 +619,14 @@ class TableMetricsPlugin {
   std::map<std::string, MetricsFileData> known_metrics_files_;
   MetricsMsg scratch_;
 
+  struct ParseResult {
+    int err;
+    int bytes;
+  };
+
   // takes the buffer at data sized bytes bytes. Consumes one record from that
-  // buffer. Returns how many bytes were processed.
-  int ProcessOneMetricsRecord(const char *data, int bytes)
+  // buffer. Returns how many bytes were processed and/or error.
+  ParseResult ProcessOneMetricsRecord(const char *data, int bytes)
   {
     // every record in the file has the following format:
     // [00123][protobuf]
@@ -592,7 +634,7 @@ class TableMetricsPlugin {
     if (bytes < kLengthBytes) {
       // need more bytes
       // LOG("bytesLeft == %d", bytes);
-      return 0;
+      return ParseResult{EOF, 0};
     }
     char temp[kLengthBytes + 1];
     memcpy(temp, data, kLengthBytes);
@@ -602,7 +644,7 @@ class TableMetricsPlugin {
     if (protobuf_bytes + kLengthBytes > bytes) {
       // also need more bytes
       // LOG("%d + %d < %d", protobufBufferSize, lengthBytes, bytes);
-      return 0;
+      return ParseResult{EOF, 0};
     }
 
     if (protobuf_bytes == 0) {
@@ -612,7 +654,7 @@ class TableMetricsPlugin {
       // 0007a210  38 bc 04 00 00 00 00 00  00 00 00 00 00 00 00 00  |8...............| <-- 0-byte message begins at 7a213
       // 0007a220  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|      
       LOG("can't parse 0-byte message");
-      return -1;
+      return ParseResult{ENOMSG, 0};
     }
 
     assert(protobuf_bytes > 0);
@@ -620,18 +662,27 @@ class TableMetricsPlugin {
     auto parsed = scratch_.ParseFromArray(&data[kLengthBytes], protobuf_bytes);
     if (!parsed) {
       LOG("failed parsing message (%d bytes)", protobuf_bytes);
-      return -2;
+      return ParseResult{ENOMSG, 0};
     }
     // LOG("parsed %d bytes", protobufBytes + lengthBytes);
+    if (!scratch_.has_timestamp()) {
+      LOG("corrupt protobuf file 3 (no timestamp)");
+      return ParseResult{EPROTO, 0};
+    }
+
+    if (early_finish.ShouldStop(protobuf_bytes, scratch_.timestamp())) {
+      // too much data processed during this callback.
+      return ParseResult{EFBIG, 0};
+    }
 
     if (!scratch_.has_table()) {
       LOG("corrupt protobuf file 3 (no table fid)");
-      return -2;
+      return ParseResult{EPROTO, 0};
     }
     auto fid_msg = scratch_.table();
     if (!fid_msg.has_cid() || !fid_msg.has_cinum() || !fid_msg.has_uniq()) {
       LOG("corrupt protobuf file 4 (fid not fully defined)");
-      return -4;
+      return ParseResult{EPROTO, 0};
     }
 
     const Fid table_fid(fid_msg);
@@ -650,38 +701,41 @@ class TableMetricsPlugin {
       return Fid(siFid);
     }());
 
-    if (!scratch_.has_timestamp()) {
-      LOG("corrupt protobuf file 3 (no timestamp)");
-      return -3;
-    }
-    auto timestamp = scratch_.timestamp();
 
     //LOG("%u:%u:%u @%lu", fidPb.cid(), fidPb.cinum(), fidPb.uniq(), timestamp);
 
     auto &backlog = unflushed_metrics_[{table_fid, index_fid}];
+    const auto high_water_mark = std::min(
+      backlog.high_water_mark, global_high_water_mark_);
+    const auto timestamp = (scratch_.timestamp() > high_water_mark)
+      ? scratch_.timestamp()
+      : high_water_mark + 1;
+
     auto pos = std::partition_point(
       backlog.timeline.begin(), backlog.timeline.end(),
       [timestamp](Timepoint &m) {
         return m.timestamp_ < timestamp;
       });
-    
+
     // two possible options now. We are inserting a data point with a new
     // timestamp, or updating an existing one. For update, partition_point
     // will never return ::end() for update since equal timestamps do not
     // compare less. Therefore if it is end, it is insert
-    auto &tm = ((pos != backlog.timeline.end()) && (pos->timestamp_ == timestamp)) ?
-      *pos :
-      *backlog.timeline.emplace(pos, timestamp);
+    auto &tm =
+      ((pos != backlog.timeline.end()) && (pos->timestamp_ == timestamp))
+      ? *pos
+      : *backlog.timeline.emplace(pos, timestamp);
 
     for (const auto &perRpc : scratch_.rpcmetrics()) {
       if (!perRpc.has_op()) {
         LOG("corrupt protobuf file 5 (no rpc type)");
-        return -5;
+        return ParseResult{EPROTO, 0};
       }
 
       auto optype = perRpc.op();
       if (!opType_IsValid(optype)) {
         LOG("corrupt protobuf file 6 (unexpected optype = %d)", optype);
+        return ParseResult{EPROTO, 0};
         continue;
       }
 
@@ -725,7 +779,7 @@ class TableMetricsPlugin {
       }
     }
 
-    return protobuf_bytes + kLengthBytes;
+    return ParseResult{0, protobuf_bytes + kLengthBytes};
   }
 
   static const char *to_c_str(opType index)
@@ -819,6 +873,7 @@ class TableMetricsPlugin {
 
   struct History {
     int64_t high_water_mark = 0;
+    std::chrono::time_point<std::chrono::steady_clock> high_water_time;
     std::vector<Timepoint> timeline;
   };
 
@@ -835,16 +890,17 @@ class TableMetricsPlugin {
     }
   };
 
+  int64_t global_high_water_mark_ = 0;
   std::map<Table, History> unflushed_metrics_;
 
   // we have a map of table -> timestamp [rpc->[, counter]]
-  void ProcessOneMetricsFile(const std::string& name, MetricsFileData& details)
+  void ProcessOneMetricsFile(const std::string& name, MetricsFileData* details)
   {
-    if (details.OpenRetiresLeft() <= 0) {
+    if (details->OpenRetiresLeft() <= 0) {
       // we already gave up on this file, don't touch it again
       LOG("%s: details.openRetiresLeft() == %d",
-        name.c_str(), details.OpenRetiresLeft());
-      details.dispatch_now = false;
+        name.c_str(), details->OpenRetiresLeft());
+      details->dispatch_now = false;
       return;
     }
     LOG("Processing %s", name.c_str());
@@ -852,82 +908,93 @@ class TableMetricsPlugin {
     auto file = cluster_.OpenFileForRead(name);
     if (!file.Valid()) {
       auto err = errno;
-      ++details.errors_so_far.open;
+      ++details->errors_so_far.open;
       LOG("can't open %s, errno %d, will retry %d more times",
-        name.c_str(), err, details.OpenRetiresLeft());
+        name.c_str(), err, details->OpenRetiresLeft());
       errno = err;
       return;
     }
 
-    std::array<char, 256 * 1024> buffer;
     for (;;) {
-      const auto bytes_read = file.Read(details.bytes_processed, &buffer);
-      if (bytes_read == 0) {
+      bool proceed = KeepParsingOneMetricsFile(file, details);
+      if (!proceed) {
+        break;
+      }
+    }
+  }
+
+  // returns whether to contunue parsing same file.
+  bool KeepParsingOneMetricsFile(LocalFile &file, MetricsFileData *details)
+  {
+    std::array<char, kMetricsFileReadSize> buffer;
+    const auto bytes_read = file.Read(details->bytes_processed, &buffer);
+    if (bytes_read == 0) {
+      return false;
+    }
+
+    LOG("read %d bytes from %s", bytes_read, file.c_str());
+
+    if (bytes_read == -1) {
+      // always an error;
+      if ((errno == EINTR) && (details->ReadRetiresLeft() > 0)) {
+        // this is a retriable error,
+        NOTICE("hdfsRead(%s) failed with EINTR", file.c_str());
+        ++details->errors_so_far.read;
+        // consider
+        //  std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        // and/or continue. We will come back.
+      } else {
+        // this is not retriable
+        details->dispatch_now = false;
+      }
+      return false;
+    }
+
+    if (bytes_read < 0) {
+      // impossible case, hdfsPread() doesn't return this:
+      LOG("BUGBUG: hdfsPread() returned %d, unexpected", bytes_read);
+      abort();
+    }
+
+    // parse the records, one after another:
+    auto bytes_parsed_so_far = decltype(bytes_read){0};
+    while (bytes_parsed_so_far < bytes_read) {
+      const auto result = ProcessOneMetricsRecord(
+          &buffer[bytes_parsed_so_far], bytes_read - bytes_parsed_so_far);
+
+      if (result.err == 0) {
+        assert(result.bytes > 0);
+        // if we parsed anything, parse error counter goes to 0:
+        details->errors_so_far.parse = 0;
+        bytes_parsed_so_far += result.bytes;
+        details->bytes_processed += result.bytes;
+        continue;
+      }
+
+      if (result.err == EOF) {
         break;
       }
 
-      LOG("read %d bytes from %s", bytes_read, name.c_str());
-
-      if (bytes_read == -1) {
-        // always an error;
-        if ((errno == EINTR) && (details.ReadRetiresLeft() > 0)) {
-          // this is a retriable error,
-          NOTICE("hdfsRead(%s) failed with EINTR", name.c_str());
-          ++details.errors_so_far.read;
-          // consider
-          //  std::this_thread::sleep_for(std::chrono::milliseconds(20));
-          // and/or
-          //  continue;
-          // we will come back.
-        } else {
-          // this is not retriable
-          details.dispatch_now = false;
-        }
-        return;
-      }
-      
-      if (bytes_read < 0) {
-        // impossible case, hdfsPread() doesn't return this:
-        LOG("BUGBUG: hdfsPread() returned %d, unexpected", bytes_read);
-        abort();
+      if (result.err == EFBIG) {
+        // we are using way too much memory, let's come back to this file
+        // on next take
+        return false;
       }
 
-      // parse the records, one after another:
-      auto bytes_parsed_so_far = decltype(bytes_read){0};
-      while (bytes_parsed_so_far < bytes_read) {
-        // LOG("parsed %d bytes so far", bytesParsedSoFar);
-        auto bytes_parsed_in_one_take = ProcessOneMetricsRecord(
-          &buffer[bytes_parsed_so_far],
-          bytes_read - bytes_parsed_so_far);
+      LOG("can't parse [%s] at %lu (of %lu), error %d", file.c_str(),
+          details->bytes_processed, details->last_known_size, result.err);
 
-        if (bytes_parsed_in_one_take > 0) {
-          // if we parsed anything, parse error counter goes to 0:
-          details.errors_so_far.parse = 0;
-          bytes_parsed_so_far += bytes_parsed_in_one_take;
-          continue;
-        }
-
-        if (bytes_parsed_in_one_take == 0) {
-          break;
-        }
-
-        // bytes_parsed_in_one_take < 0 
-        LOG("can't parse [%s] at %lu (of %lu)",
-          name.c_str(), details.bytes_processed + bytes_parsed_so_far,
-          details.last_known_size);
-        ++details.errors_so_far.parse;
-
-        if (details.ParseRetiresLeft() >= 0) {
-          break;
-        }
-
-        details.dispatch_now = false;
-        details.bytes_processed = details.last_known_size;
-        return;
+      ++details->errors_so_far.parse;
+      if (details->ParseRetiresLeft() >= 0) {
+        break;
       }
 
-      details.bytes_processed += bytes_parsed_so_far;
-    } // for(;;)
+      details->dispatch_now = false;
+      details->bytes_processed = details->last_known_size;
+      return false;
+    }
+
+    return bytes_read == buffer.size();
   }
 
   void ProcessOneEnumeratedFile(const ListingFileInfo &file) 
@@ -961,8 +1028,25 @@ class TableMetricsPlugin {
 
   void Reset()
   {
-    for (auto &t : unflushed_metrics_) {
-      t.second.timeline.clear();
+    const auto now = std::chrono::steady_clock::now();
+    const auto cutoff = now - std::chrono::minutes(kMaxMetricsAgeMinutes);
+
+    auto it = unflushed_metrics_.begin();
+    while (it != unflushed_metrics_.end()) {
+      auto &history = it->second;
+      if (!history.timeline.empty()) {
+        assert(history.high_water_mark < history.timeline.back().timestamp_);
+        history.high_water_mark = history.timeline.back().timestamp_;
+        global_high_water_mark_ =
+          std::max(history.high_water_mark, global_high_water_mark_);
+        history.high_water_time = now;
+        history.timeline.clear();
+        ++it;
+      } else if (history.high_water_time < cutoff) {
+        unflushed_metrics_.erase(it++); // postincrement intended
+      } else {
+        ++it;
+      }
     }
   }
 
@@ -1130,11 +1214,45 @@ class TableMetricsPlugin {
     plugin_dispatch_values(&vl);
   }
 
-  int read()
+  struct {
+    int64_t eta_;
+    int bytes_so_far_;
+    bool use_eta_;
+
+    void Reset()
+    {
+      bytes_so_far_ = 0;
+      use_eta_ = false;
+    }
+
+    // when returns true, plugin should not process this record at this time
+    bool ShouldStop(int bytes, int64_t timestamp)
+    {
+      if (use_eta_) {
+        return timestamp > eta_;
+      }
+
+      if (bytes_so_far_ < kIntakeThreshold) {
+        eta_ = std::min(eta_, timestamp);
+        bytes_so_far_ += bytes;
+      } else {
+        eta_ = std::max(timestamp, eta_ + 1000 * kBacklogProgressSeconds);
+        use_eta_ = true;
+      }
+
+      return false;
+    }
+
+  } early_finish;
+
+
+  int Read()
   {
-    int err = cluster_.EnumerateMetricsFiles();
-    if (err != 0) {
-      return err;
+    early_finish.Reset();
+
+    auto success = cluster_.EnumerateMetricsFiles();
+    if (!success) {
+      return ENOENT;
     }
 
     for (const auto &file : cluster_.GetMetricsFiles()) {
@@ -1149,7 +1267,7 @@ class TableMetricsPlugin {
         // LOG("details.dispatchNow == false, next");
         continue;
       }
-      ProcessOneMetricsFile(name, details);
+      ProcessOneMetricsFile(name, &details);
       cluster_.SetDispatchedOffset(name, details.bytes_processed);
       details.stored_dispatched_offset = details.bytes_processed;
     }
