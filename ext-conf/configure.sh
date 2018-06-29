@@ -72,6 +72,11 @@ CLDB_RETRIES=12
 CLDB_RETRY_DLY=5
 CD_ENABLE_SERVICE=0
 CD_RESTART_SVC_LIST=""
+WARDEN_START_KEY="service.command.start"
+WARDEN_HEAPSIZE_MIN_KEY="service.heapsize.min"
+WARDEN_HEAPSIZE_MAX_KEY="service.heapsize.max"
+WARDEN_HEAPSIZE_PERCENT_KEY="service.heapsize.percent"
+WARDEN_RUNSTATE_KEY="service.runstate"
 nodecount=0
 nodelist=""
 nodeport=4242
@@ -87,7 +92,10 @@ else
    exit 0
 fi
 
-#TODO 
+INST_WARDEN_FILE="${MAPR_CONF_CONFD_DIR}/conf.d/warden.collectd.conf"
+PKG_WARDEN_FILE="${COLLECTD_HOME}/etc/conf/warden.collectd.conf"
+
+#TODO
 # try to discover jmx ports for services
 
 #############################################################################
@@ -219,7 +227,7 @@ function configureServiceURL()
         mv ${NEW_CD_CONF_FILE}.tmp ${NEW_CD_CONF_FILE}
     fi
     if [ "$urlType" == "jmx" ]; then
-        # we always remove it so we don't have dups and if someone updates the 
+        # we always remove it so we don't have dups and if someone updates the
         # jmx password file we will get the new values
         awk -f ${AWKLIBPATH}/removeJmxLoginDetail.awk -v tag="$1" ${NEW_CD_CONF_FILE} > ${NEW_CD_CONF_FILE}.tmp
         if [[ $? -eq 0 ]]; then
@@ -364,9 +372,9 @@ function pluginDisable() {
 # Function to configure mapr streams plugin
 #############################################################################
 function configuremaprstreamsplugin()
-{ 
+{
     if [ $useStreams -eq 1 ]; then
-        # first enable the plugin   
+        # first enable the plugin
         pluginEnable write_maprstreams
 
         # configure maprstreams
@@ -522,7 +530,7 @@ function configurejavajmxplugin()
                     configureServiceURL MAPR_CONF_OOZIE_REST_TAG $host_name http $secureCluster $OOZIE_REST_PORT
                 fi
             fi
-            ## TODO - Don't enable this by default - Determine later if these metrics are needed 
+            ## TODO - Don't enable this by default - Determine later if these metrics are needed
             #if [ ${CD_OT_ROLE} -eq 1 ]; then
             #    enableSection MAPR_CONF_OPENTSDB_REST_TAG
             #    if [ $secureCluster -eq 1 ]; then
@@ -645,7 +653,7 @@ function configureHadoopJMX() {
                     -v yarn_opts="$YARN_JMX_RM_OPT_STR" \
                     -f ${AWKLIBPATH}/configureYarnJmx.awk ${YARN_BIN} > ${YARN_BIN}.tmp
                 rc1=$?
-        
+
                 awk  -v jmx_opts_pattern='"\\$COMMAND" = "nodemanager"' \
                      -v yarn_opts="$YARN_JMX_NM_OPT_STR" \
                      -f ${AWKLIBPATH}/configureYarnJmx.awk ${YARN_BIN}.tmp > ${YARN_BIN}.tmp.tmp
@@ -700,7 +708,7 @@ function configureHbaseJMX() {
         HBASE_ENV="${MAPR_HOME}/hbase/hbase-${HBASE_VER}/conf/hbase-env.sh"
         if ! grep "^#Enable JMX for MaprMonitoring" ${HBASE_ENV} > /dev/null 2>&1; then
             cp -p ${HBASE_ENV} ${HBASE_ENV}.prejmx
-    
+
             awk -v jmx_uncomment_start='# export HBASE_JMX_BASE=' \
                 -v jmx_uncomment_end='# export HBASE_REST_OPTS=' \
                 -f ${AWKLIBPATH}/configureHbaseJmx.awk ${HBASE_ENV} > ${HBASE_ENV}.tmp
@@ -770,12 +778,12 @@ function configureDrillBitsJMX() {
             # save backup copy fist time only
             if [ $jmxAlreadyEnabled -eq 0 ]; then
                 cp -p ${DRILL_ENV} ${DRILL_ENV}.prejmx
-    
+
                 DRILL_SECURE_JMX="false"
                 if [ $secureCluster -eq 1 ]; then
                     DRILL_SECURE_JMX="true"
                 fi
-        
+
                 awk -v jmx_insert_after="$DRILL_TAG" \
                     -f ${AWKLIBPATH}/${DRILL_AWK_SCRIPT} -vmapr_home=${MAPR_HOME} -vdrillport=$DRILLBITS_JMX_PORT -vsecurejmx=$DRILL_SECURE_JMX ${DRILL_ENV} > ${DRILL_ENV}.tmp
                 rc1=$?
@@ -863,7 +871,7 @@ function isMaprServiceRunning() {
    local myHname
    local serviceNameToCheck
    local serviceStatus
-   
+
    myHname=$1
    serviceNameToCheck=$2
 
@@ -890,7 +898,7 @@ function restartServices() {
         MyHname=$(hostname -f)
         if [ -z "$MyHname" ]; then
             # some aws machine reports an empty string with hostname -f
-            MyHname=$(hostname) 
+            MyHname=$(hostname)
         fi
 
         # restart services that we changed configuration files for
@@ -936,19 +944,101 @@ function createCustomConfDirectory()
 }
 
 
+
+#############################################################################
+# Function to extract key from warden config file
+#
+# Expects the following input:
+# $1 = warden file to extract key from
+# $2 = the key to extract
+#
+#############################################################################
+function get_warden_value() {
+    local f=$1
+    local key=$2
+    local val=""
+    local rc=0
+    if [ -f "$f" ] && [ -n "$key" ]; then
+        val=$(grep "$key" "$f" | cut -d'=' -f2)
+        rc=$?
+    fi
+    echo "$val"
+    return $rc
+}
+
+#############################################################################
+# Function to update value for  key in warden config file
+#
+# Expects the following input:
+# $1 = warden file to update key in
+# $2 = the key to update
+# $3 = the value to update with
+#
+#############################################################################
+function update_warden_value() {
+    local f=$1
+    local key=$2
+    local value=$3
+
+    sed -i 's/\([ ]*'"$key"'=\).*$/\1'"$value"'/' "$f"
+}
+
 #############################################################################
 # Function to install warden config file in $MAPR_CONF_DIR
 #
 #############################################################################
-function installWardenConfFile()
-{
-    if  ! [ -d ${MAPR_CONF_DIR}/conf.d ]; then
-        mkdir -p ${MAPR_CONF_DIR}/conf.d > /dev/null 2>&1
-    fi
+function installWardenConfFile() {
+    local curr_start_cmd
+    local curr_heapsize_min
+    local curr_heapsize_max
+    local curr_heapsize_percent
+    local curr_runstate
+    local pkg_start_cmd
+    local pkg_heapsize_min
+    local pkg_heapsize_max
+    local pkg_heapsize_percent
 
-    cp ${COLLECTD_HOME}/etc/conf/warden.collectd.conf ${MAPR_CONF_DIR}/conf.d/
-    chown $MAPR_USER:$MAPR_GROUP ${MAPR_CONF_DIR}/conf.d/warden.collectd.conf
+    if [ -f "$INST_WARDEN_FILE" ]; then
+        curr_start_cmd=$(get_warden_value "$INST_WARDEN_FILE" "$WARDEN_START_KEY")
+        curr_heapsize_min=$(get_warden_value "$INST_WARDEN_FILE" "$WARDEN_HEAPSIZE_MIN_KEY")
+        curr_heapsize_max=$(get_warden_value "$INST_WARDEN_FILE" "$WARDEN_HEAPSIZE_MAX_KEY")
+        curr_heapsize_percent=$(get_warden_value "$INST_WARDEN_FILE" "$WARDEN_HEAPSIZE_PERCENT_KEY")
+        curr_runstate=$(get_warden_value "$INST_WARDEN_FILE" "$WARDEN_RUNSTATE_KEY")
+        pkg_start_cmd=$(get_warden_value "$PKG_WARDEN_FILE" "$WARDEN_START_KEY")
+        pkg_heapsize_min=$(get_warden_value "$PKG_WARDEN_FILE" "$WARDEN_HEAPSIZE_MIN_KEY")
+        pkg_heapsize_max=$(get_warden_value "$PKG_WARDEN_FILE" "$WARDEN_HEAPSIZE_MAX_KEY")
+        pkg_heapsize_percent=$(get_warden_value "$PKG_WARDEN_FILE" "$WARDEN_HEAPSIZE_PERCENT_KEY")
+
+        if [ "$curr_start_cmd" != "$pkg_start_cmd" ]; then
+            cp "$PKG_WARDEN_FILE" "/tmp/$PKG_WARDEN_FILE$$"
+            if [ -n "$curr_runstate" ]; then
+                echo "service.runstate=$curr_runstate" >> "/tmp/$PKG_WARDEN_FILE$$"
+            fi
+            if [ -n "$curr_heapsize_min" ] && [ "$curr_heapsize_min" -gt "$pkg_heapsize_min" ]; then
+                update_warden_value "/tmp/$PKG_WARDEN_FILE$$" "$WARDEN_HEAPSIZE_MIN_KEY" "$curr_heapsize_min"
+            fi
+            if [ -n "$curr_heapsize_max" ] && [ "$curr_heapsize_max" -gt "$pkg_heapsize_max" ]; then
+                update_warden_value "/tmp/$PKG_WARDEN_FILE$$" "$WARDEN_HEAPSIZE_MAX_KEY" "$curr_heapsize_max"
+            fi
+            if [ -n "$curr_heapsize_percent" ] && [ "$curr_heapsize_percent" -gt "$pkg_heapsize_percent" ]; then
+                update_warden_value "/tmp/$PKG_WARDEN_FILE$$" "$WARDEN_HEAPSIZE_PERCENT_KEY" "$curr_heapsize_percent"
+            fi
+            cp "/tmp/$PKG_WARDEN_FILE$$" "$INST_WARDEN_FILE"
+            rm -f "/tmp/$PKG_WARDEN_FILE$$"
+        fi
+    else
+        if  ! [ -d "${MAPR_CONF_CONFD_DIR}" ]; then
+            mkdir -p "${MAPR_CONF_CONFD_DIR}" > /dev/null 2>&1
+        fi
+        cp "$PKG_WARDEN_FILE" "$INST_WARDEN_FILE"
+        if [ $? -ne 0 ]; then
+            logWarn "collectd - Failed to install Warden conf file for service - service will not start"
+        fi
+    fi
+    chown $MAPR_USER:$MAPR_GROUP "$INST_WARDEN_FILE"
 }
+
+
 
 #############################################################################
 # Function to clean up old files
@@ -1013,7 +1103,7 @@ if [ ${#} -gt 0 ]; then
                             shift 1;;
                     esac
                 done
-                shift 2 
+                shift 2
                 eval set -- "$restOpts"
                 ;;
             --OS|-S)
@@ -1039,11 +1129,11 @@ if [ ${#} -gt 0 ]; then
                     # collectd added after secure 5.x cluster upgraded to customSecure
                     # 6.0 cluster. Deal with this by assuming a regular --secure path
                     :
-                else 
+                else
                     # this is a little tricky. It either means a simpel configure.sh -R run
                     # or it means that collectd was part of the 5.x to 6.0 upgrade
                     # At the moment collectd knows of no other security settings besides jmx
-                    # and port numbers the jmx uses. Since we have no way of detecting what 
+                    # and port numbers the jmx uses. Since we have no way of detecting what
                     # these ports are - we assume for now they don't change.
                     :
                 fi
