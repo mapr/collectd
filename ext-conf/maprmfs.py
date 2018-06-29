@@ -118,7 +118,7 @@ class MapRMfsPlugin(object):
         try:
             sg_output = self.get_spyglass_output()
             if sg_output is None or len(sg_output) == 0:
-                self.log_error("No spyglass information returned")
+                self.log_warning("No spyglass information returned")
                 return
 
             sg_list = sg_output.split(" ")
@@ -184,6 +184,9 @@ class MapRMfsPlugin(object):
         execute = [self.spyglass, interval_param]
         p = subprocess.Popen(execute, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
         (out, err) = p.communicate()
+        if p.returncode == -15:
+            self.log_warning("Spyglass executable terminated early probably due to CollectD shutting down")
+            return None
         if p.returncode != 0:
             self.log_error("Spyglass executable failed to be executed: (" + str(p.returncode) + "): " + err)
             return None
