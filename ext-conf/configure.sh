@@ -72,8 +72,6 @@ CLDB_RETRIES=12
 CLDB_RETRY_DLY=5
 CD_ENABLE_SERVICE=0
 CD_RESTART_SVC_LIST=""
-INST_WARDEN_FILE="${MAPR_CONF_DIR}/conf.d/warden.collectd.conf"
-PKG_WARDEN_FILE="${COLLECTD_HOME}/etc/conf/warden.collectd.conf"
 WARDEN_START_KEY="service.command.start"
 WARDEN_HEAPSIZE_MIN_KEY="service.heapsize.min"
 WARDEN_HEAPSIZE_MAX_KEY="service.heapsize.max"
@@ -93,6 +91,9 @@ else
    echo "Failed to source common-ecosystem.sh"
    exit 0
 fi
+
+INST_WARDEN_FILE="${MAPR_CONF_CONFD_DIR}/conf.d/warden.collectd.conf"
+PKG_WARDEN_FILE="${COLLECTD_HOME}/etc/conf/warden.collectd.conf"
 
 #TODO
 # try to discover jmx ports for services
@@ -1023,12 +1024,16 @@ function installWardenConfFile() {
                 update_warden_value "/tmp/$PKG_WARDEN_FILE$$" "$WARDEN_HEAPSIZE_PERCENT_KEY" "$curr_heapsize_percent"
             fi
             cp "/tmp/$PKG_WARDEN_FILE$$" "$INST_WARDEN_FILE"
+            rm -f "/tmp/$PKG_WARDEN_FILE$$"
         fi
     else
-        if  ! [ -d "${MAPR_CONF_DIR}/conf.d" ]; then
-            mkdir -p "${MAPR_CONF_DIR}/conf.d" > /dev/null 2>&1
+        if  ! [ -d "${MAPR_CONF_CONFD_DIR}" ]; then
+            mkdir -p "${MAPR_CONF_CONFD_DIR}" > /dev/null 2>&1
         fi
         cp "$PKG_WARDEN_FILE" "$INST_WARDEN_FILE"
+        if [ $? -ne 0 ]; then
+            logWarn "collectd - Failed to install Warden conf file for service - service will not start"
+        fi
     fi
     chown $MAPR_USER:$MAPR_GROUP "$INST_WARDEN_FILE"
 }
