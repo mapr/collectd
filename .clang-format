@@ -1,5 +1,12 @@
 ---
-BasedOnStyle: LLVM
-IncludeCategories:
-  - Regex: '"collectd.h"'
-  - Priority: -1
+BasedOnStyle: Google
+AccessModifierOffset: 1
+AlwaysBreakAfterReturnType: TopLevelDefinitions
+# DerivePointerAlignment: true
+PointerAlignment: Right
+PenaltyBreakComment: 10000
+IndentCaseLabels: false
+BreakBeforeBraces: WebKit
+AllowShortCaseLabelsOnASingleLine: true
+BinPackParameters: false
+...

@@ -4,6 +4,10 @@ sh build.sh   # builds configure
 configure --prefix=/opt/mapr/collectd/collectd-5.8.0/ `cat ext-conf/enable_modules_[rpm|deb].txt`
 make
 
+making a debug build when needed (automake defaults to -O2)
+
+./configure CXXFLAGS="-g -O0" --prefix=/opt/mapr/collectd/collectd-5.8.0/ --with-librdkafka=/opt/mapr/ `cat ext-conf/enable_modules_deb.txt`
+
 
 Then there are a few files that has to get moved to the right place
 ext-conf/collectd.conf -> /opt/mapr/collectd/collectd-5.8.0/etc/collectd.conf.mapr
