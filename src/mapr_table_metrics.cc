@@ -223,7 +223,7 @@ class LocalFile {
   const std::string &name_;
 
  public:
-  LocalFile(hdfsFS cluster, hdfsFile file, const std::string &name) :
+  LocalFile(hdfsFS cluster, hdfsFile file, const std::string &name) : 
     fs_(cluster), file_(file), name_(name) {}
 
   LocalFile(LocalFile&& other) :
@@ -949,7 +949,7 @@ class TableMetricsPlugin {
       }
       return false;
     }
-
+    
     if (bytes_read < 0) {
       // impossible case, hdfsPread() doesn't return this:
       LOG("BUGBUG: hdfsPread() returned %d, unexpected", bytes_read);
@@ -960,7 +960,7 @@ class TableMetricsPlugin {
     auto bytes_parsed_so_far = decltype(bytes_read){0};
     while (bytes_parsed_so_far < bytes_read) {
       const auto result = ProcessOneMetricsRecord(
-          &buffer[bytes_parsed_so_far], bytes_read - bytes_parsed_so_far);
+        &buffer[bytes_parsed_so_far], bytes_read - bytes_parsed_so_far);
 
       if (result.err == 0) {
         assert(result.bytes > 0);
@@ -972,7 +972,7 @@ class TableMetricsPlugin {
       }
 
       if (result.err == EOF) {
-        break;
+          break;
       }
 
       if (result.err == EFBIG) {
@@ -982,7 +982,7 @@ class TableMetricsPlugin {
       }
 
       LOG("can't parse [%s] at %lu (of %lu), error %d", file.c_str(),
-          details->bytes_processed, details->last_known_size, result.err);
+        details->bytes_processed, details->last_known_size, result.err);
 
       ++details->errors_so_far.parse;
       if (details->ParseRetiresLeft() >= 0) {
@@ -1034,6 +1034,7 @@ class TableMetricsPlugin {
     auto it = unflushed_metrics_.begin();
     while (it != unflushed_metrics_.end()) {
       auto &history = it->second;
+      auto next = std::next(it);
       if (!history.timeline.empty()) {
         assert(history.high_water_mark < history.timeline.back().timestamp_);
         history.high_water_mark = history.timeline.back().timestamp_;
@@ -1041,12 +1042,11 @@ class TableMetricsPlugin {
           std::max(history.high_water_mark, global_high_water_mark_);
         history.high_water_time = now;
         history.timeline.clear();
-        ++it;
       } else if (history.high_water_time < cutoff) {
-        unflushed_metrics_.erase(it++); // postincrement intended
-      } else {
-        ++it;
+        unflushed_metrics_.erase(it);
       }
+
+      it = next;
     }
   }
 
