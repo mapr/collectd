@@ -395,25 +395,10 @@ flushes value:COUNTER:U:U
 forcedflushes value:COUNTER:U:U
 memindex_free_mb value:GAUGE:U:U
 
-cdc.sent_bytes value:COUNTER:U:U
-cdc.sent_rows value:COUNTER:U:U
-cdc.pending_bytes value:GAUGE:U:U
-cdc.pending_rows value:GAUGE:U:U
-
-index.sent_bytes value:COUNTER:U:U
-index.sent_rows value:COUNTER:U:U
-index.pending_bytes value:GAUGE:U:U
-index.pending_rows value:GAUGE:U:U
-
-repl.sent_bytes value:COUNTER:U:U
-repl.sent_rows value:COUNTER:U:U
-repl.pending_bytes value:GAUGE:U:U
-repl.pending_rows value:GAUGE:U:U
-
-log_compaction.sent_bytes value:COUNTER:U:U
-log_compaction.sent_rows value:COUNTER:U:U
-log_compaction.pending_bytes value:GAUGE:U:U
-log_compaction.pending_rows value:GAUGE:U:U
+sent_bytes value:COUNTER:U:U
+sent_rows value:COUNTER:U:U
+pending_bytes value:GAUGE:U:U
+pending_rows value:GAUGE:U:U
 
 # ResourceManager
 apps_running        value:COUNTER:U:U
