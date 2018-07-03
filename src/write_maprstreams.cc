@@ -1087,7 +1087,7 @@ static int wt_config_stream(oconfig_item_t *ci)
     }
 
     char errstr[512];
-    rd_kafka_conf_set(tctx->kafka_conf, "queue.buffering.max.ms", "1000", errstr, sizeof(errstr)
+    rd_kafka_conf_set(tctx->kafka_conf, "queue.buffering.max.ms", "1000", errstr, sizeof(errstr));
     INFO("write_maprstreams plugin: queue.buffering.max.ms '%s'", errstr);
 
 #ifdef HAVE_LIBRDKAFKA_LOG_CB
