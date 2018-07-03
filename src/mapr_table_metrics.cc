@@ -695,6 +695,12 @@ class TableMetricsPlugin {
       const auto &siFid = scratch_.index();
       if (!siFid.has_cid() || !siFid.has_cinum() || !siFid.has_uniq()) {
         LOG("corrupt protobuf file 7: index fid not fully defined");
+        LOG("table %u.%u.%u index %d/%d/%d; %u.%u.%u",
+          scratch_.table().cid(), scratch_.table().cinum(),
+          scratch_.table().uniq(), scratch_.index().has_cid(),
+          scratch_.index().has_cinum(), scratch_.index().has_uniq(),
+          scratch_.index().cid(), scratch_.index().cinum(),
+          scratch_.index().uniq());
         return Fid(Fid::blank{});
       }
 
