@@ -1069,6 +1069,8 @@ static int wt_config_stream(oconfig_item_t *ci)
       return -1;
     }
 
+
+
     auto tctx = new(std::nothrow) wt_kafka_topic_context;
     if (tctx == nullptr) {
       ERROR ("write_maprstream plugin: malloc failed.");
@@ -1083,6 +1085,10 @@ static int wt_config_stream(oconfig_item_t *ci)
       ERROR("write_maprstream plugin: cannot allocate memory for kafka config");
       return -1;
     }
+
+    char errstr[512];
+    rd_kafka_conf_set(tctx->kafka_conf, "queue.buffering.max.ms", "1000", errstr, sizeof(errstr)
+    INFO("write_maprstreams plugin: queue.buffering.max.ms '%s'", errstr);
 
 #ifdef HAVE_LIBRDKAFKA_LOG_CB
     rd_kafka_conf_set_log_cb(tctx->kafka_conf, wt_kafka_log);
