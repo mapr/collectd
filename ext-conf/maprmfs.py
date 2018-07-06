@@ -135,12 +135,8 @@ class MapRMfsPlugin(object):
                     # self.log_info("spyglass metric at index {0} is blank". format(i))
                     continue
 
-                if len(sg_items) != 2 and len(sg_items) != 3 and len(sg_items) != 5:
+                if len(sg_items) != 3 and len(sg_items) != 5:
                     self.log_error("spyglass metric '{0}' has an invalid length of {1}". format(sg_list[i], len(sg_items)))
-                    continue
-
-                if len(sg_items) == 2:
-                    # TODO: we need values from Spyglass coming back with 3 or 5 values not 2 that the db metrics come back as
                     continue
 
                 if self.ignored_datasets_list and sg_items[1] in self.ignored_datasets_list:
