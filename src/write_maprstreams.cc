@@ -134,6 +134,10 @@ extern "C" {
 # define WT_SEND_BUF_SIZE 1428
 #endif
 
+#ifndef KAFKA_BUFFERING
+# define KAFKA_BUFFERING "1000"
+#endif
+
 /* Meta data definitions about tsdb tags */
 #define TSDB_TAG_PLUGIN 0
 #define TSDB_TAG_PLUGININSTANCE 1
@@ -1069,8 +1073,6 @@ static int wt_config_stream(oconfig_item_t *ci)
       return -1;
     }
 
-
-
     auto tctx = new(std::nothrow) wt_kafka_topic_context;
     if (tctx == nullptr) {
       ERROR ("write_maprstream plugin: malloc failed.");
@@ -1086,10 +1088,6 @@ static int wt_config_stream(oconfig_item_t *ci)
       return -1;
     }
 
-    char errstr[512];
-    rd_kafka_conf_set(tctx->kafka_conf, "queue.buffering.max.ms", "1000", errstr, sizeof(errstr));
-    INFO("write_maprstreams plugin: queue.buffering.max.ms '%s'", errstr);
-
 #ifdef HAVE_LIBRDKAFKA_LOG_CB
     rd_kafka_conf_set_log_cb(tctx->kafka_conf, wt_kafka_log);
 #endif
@@ -1101,22 +1099,30 @@ static int wt_config_stream(oconfig_item_t *ci)
       return -1;
     }
 
+    char *buffering = (char *)malloc(sizeof(char) * 16);
+    strcpy(buffering, KAFKA_BUFFERING);
+
     for (i = 0; i < ci->children_num; i++)
     {
       oconfig_item_t *child = ci->children + i;
 
-      if (strcasecmp("Path", child->key) == 0)
+      if (strcasecmp("Path", child->key) == 0) {
         cf_util_get_string(child, &tctx->path);
+      }
       else if (strcasecmp("HostTags", child->key) == 0) {
         cf_util_get_string(child, &tctx->host_tags);
         convert_host_tags_to_json(tctx->host_tags, &tctx->preprocessed_host_tags);
-      }  else if (strcasecmp("StreamsCount", child->key) == 0)
+      }
+      else if (strcasecmp("StreamsCount", child->key) == 0) {
         cf_util_get_int(child, &tctx->streamsCount);
-      else
-      {
-        ERROR("write_maprstreams plugin: Invalid configuration "
-            "option: %s.", child->key);
+      }
+      else if (strcasecmp("KafkaQueueBufferingMaxMs", child->key) == 0) {
+        cf_util_get_string(child, &buffering);
+      }
+      else {
+        ERROR("write_maprstreams plugin: Invalid configuration option: %s.", child->key);
         clearContext(tctx);
+        free(buffering);
         return -1;
       }
     }
@@ -1124,22 +1130,35 @@ static int wt_config_stream(oconfig_item_t *ci)
     if (tctx->path == NULL) {
       ERROR("write_maprstreams plugin: Required parameters streams base path is missing in configuration");
       clearContext(tctx);
+      free(buffering);
       return -1;
     }
 
     snprintf(callback_name, sizeof(callback_name), "write_maprstreams/%s",
         tctx->path != NULL ? tctx->path : WT_DEFAULT_PATH);
 
-    INFO ("write_maprstreams plugin: streams base path %s",tctx->path);
-    INFO ("write_maprstreams plugin: host tags name %s",tctx->host_tags);
+    char errstr[512];
+    rd_kafka_conf_res_t results;
+    results = rd_kafka_conf_set(tctx->kafka_conf, "queue.buffering.max.ms", buffering, errstr, sizeof(errstr));
+    if (results != RD_KAFKA_CONF_OK) {
+        ERROR("write_maprstreams plugin: queue.buffering.max.ms ERROR: '%s'", errstr);
+        clearContext(tctx);
+        free(buffering);
+        return -1;
+    }
+
+    INFO("write_maprstreams plugin: queue.buffering.max.ms set to '%s'", buffering);
+    INFO("write_maprstreams plugin: streams base path %s", tctx->path);
+    INFO("write_maprstreams plugin: host tags name %s", tctx->host_tags);
+
+    free(buffering);
+
     memset(&user_data, 0, sizeof(user_data));
     user_data.data = tctx;
     user_data.free_func = wt_kafka_topic_context_free;
     status = plugin_register_write(callback_name, wt_write, &user_data);
     if (status != 0) {
-      ERROR ("write_maprstreams plugin: plugin_register_write (\"%s\") "
-          "failed with status %i.",
-          callback_name, status);
+      ERROR ("write_maprstreams plugin: plugin_register_write (\"%s\") failed with status %i.", callback_name, status);
       clearContext(tctx);
       return -1;
     }
