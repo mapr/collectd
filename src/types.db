@@ -400,6 +400,36 @@ sent_rows value:COUNTER:U:U
 pending_bytes value:GAUGE:U:U
 pending_rows value:GAUGE:U:U
 
+# DB metrics
+tablet_gets value:COUNTER:U:U
+bucket_gets value:COUNTER:U:U
+seg_gets value:COUNTER:U:U
+spill_gets value:COUNTER:U:U
+bloom_skips value:COUNTER:U:U
+tablet_puts value:COUNTER:U:U
+resv_free value:COUNTER:U:U
+bucket_writes value:COUNTER:U:U
+bucket_writebytes value:COUNTER:U:U
+segflushes value:COUNTER:U:U
+curfullcompacts value:GAUGE:U:U
+seg_creates value:COUNTER:U:U
+spill_creates value:COUNTER:U:U
+bucket_scans value:COUNTER:U:U
+seg_scans value:COUNTER:U:U
+spill_scans value:COUNTER:U:U
+spill_scanrows value:COUNTER:U:U
+ldb_reads value:COUNTER:U:U
+block_reads value:COUNTER:U:U
+scan_rasegments value:COUNTER:U:U
+scan_raspills value:COUNTER:U:U
+scan_raadviseranges value:COUNTER:U:U
+scan_rablocks value:COUNTER:U:U
+increment_currpcs value:GAUGE:U:U
+tabletlookup_rpcs value:COUNTER:U:U
+tabletlookup_currpcs value:GAUGE:U:U
+importbucket_rpcs value:COUNTER:U:U
+importsegment_rpcs value:COUNTER:U:U
+
 # ResourceManager
 apps_running        value:COUNTER:U:U
 apps_killed        value:COUNTER:U:U
