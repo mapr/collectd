@@ -39,7 +39,6 @@ advun_cacheblocks
 shmats
 shmdts
 kvstore_lookupnear
-forceflushes
 reads_inode
 read_inodebytes
 reads_btree
