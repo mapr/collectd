@@ -119,11 +119,11 @@ static constexpr
 constexpr int kIntakeThreshold = 1024 * 1024;
 
 // how many bytes to read from metrics file in one shot. buffer is allocated
-// on the stack so it should nto be stupid large:
+// on the stack so it should not be stupid large:
 constexpr int kMetricsFileReadSize = 256 * 1024;
 
-// if collectd wasn't running for a while, we start with a backlog. THere are
-// two conflicting goals: 1) reasonable workign set and 2) forward progress.
+// if collectd wasn't running for a while, we start with a backlog. There are
+// two conflicting goals: 1) reasonable working set and 2) forward progress.
 // We should ingest metrics faster then they are produced. So although we will
 // honor kIntakeThreshold, we will never process less than
 // kBacklogMinimumProgressSeconds seconds of metrics data during one read
@@ -134,7 +134,7 @@ constexpr int kBacklogProgressSeconds = 120;
 // metrics in a map. If table or index go away forever, stale entry will just
 // sit there in the map until plugin exits, producing unbounded memory usage --
 // unless we do something about it.
-constexpr int kMaxMetricsAgeMinutes = 10;
+constexpr auto kMaxMetricsAge = std::chrono::minutes(21);
 
 #define STRINGIFY2(x) #x
 #define STRINGIFY(X) STRINGIFY2(X)
@@ -1005,14 +1005,10 @@ class TableMetricsPlugin {
 
   void ProcessOneEnumeratedFile(const ListingFileInfo &file) 
   {
-    auto emplace_result = known_metrics_files_.emplace(
-      std::piecewise_construct,
-      std::forward_as_tuple(std::move(file.name)),
-      std::forward_as_tuple()); // metricsFileData is default-constructed
+    auto &data = known_metrics_files_[file.name];
 
-    auto &data = emplace_result.first->second;
-
-    if (emplace_result.second) {
+    if (data.last_known_size != -1) {
+      LOG("known metrics file [%s]", file.name.c_str());
       // previously existing file (insertion did not happen). We have already
       // read and/or updated dispatchedOffset. Has this file grown?
       if (data.last_known_size < file.size) {
@@ -1023,9 +1019,9 @@ class TableMetricsPlugin {
       return;
     }
 
-    const auto &name = emplace_result.first->first;
+    LOG("New metrics file [%s]", file.name.c_str());
     // new file. What is the xattr value in there?
-    data.stored_dispatched_offset = cluster_.GetDispatchedOffset(name);
+    data.stored_dispatched_offset = cluster_.GetDispatchedOffset(file.name);
     data.bytes_processed = data.stored_dispatched_offset;
     data.last_known_size = file.size;
     // if we dispatched it through the end, don't dispatch again
@@ -1035,7 +1031,7 @@ class TableMetricsPlugin {
   void Reset()
   {
     const auto now = std::chrono::steady_clock::now();
-    const auto cutoff = now - std::chrono::minutes(kMaxMetricsAgeMinutes);
+    const auto cutoff = now - kMaxMetricsAge;
 
     auto it = unflushed_metrics_.begin();
     while (it != unflushed_metrics_.end()) {
@@ -1075,6 +1071,7 @@ class TableMetricsPlugin {
     tag_host->set_value(cluster_.Hostname());
   }
 
+  mutable std::array<int, 64> get_path_latency_stats_;
   void AddTableTag(const Fid &key, Metric *m) const
   {
     auto tag_fid = m->add_tags();
@@ -1085,7 +1082,15 @@ class TableMetricsPlugin {
     tag_path->set_name("table_path");
 
     char buffer[PATH_MAX];
+    using namespace std::chrono;
+    auto then = steady_clock::now();
     int fid_error = cluster_.GetPathFromFid(key, buffer);
+    auto latency = steady_clock::now() - then;
+
+    auto count = std::chrono::duration_cast<milliseconds>(latency).count() + 1;
+    auto index = (int)std::log2(count);
+    ++get_path_latency_stats_[index];
+
     if (fid_error != 0) {
       ERROR("getPathFromFid(%s) returned %d", key.c_str(), fid_error);
       tag_path->set_value(std::string("//deleted_table_") + key.c_str());
@@ -1221,12 +1226,9 @@ class TableMetricsPlugin {
   }
 
   struct {
-    int64_t eta_;
-    int bytes_so_far_;
-    bool use_eta_;
-
     void Reset()
     {
+      eta_ = std::numeric_limits<decltype(eta_)>::max();
       bytes_so_far_ = 0;
       use_eta_ = false;
     }
@@ -1248,6 +1250,11 @@ class TableMetricsPlugin {
 
       return false;
     }
+
+   private:
+    int64_t eta_;
+    int bytes_so_far_;
+    bool use_eta_;
 
   } early_finish;
 
@@ -1274,8 +1281,10 @@ class TableMetricsPlugin {
         continue;
       }
       ProcessOneMetricsFile(name, &details);
-      cluster_.SetDispatchedOffset(name, details.bytes_processed);
-      details.stored_dispatched_offset = details.bytes_processed;
+      if (details.bytes_processed > details.stored_dispatched_offset) {
+        cluster_.SetDispatchedOffset(name, details.bytes_processed);
+        details.stored_dispatched_offset = details.bytes_processed;
+      }
     }
 
     Flush();
