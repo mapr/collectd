@@ -245,7 +245,7 @@ static void wt_kafka_topic_context_free(void *p) /* {{{ */
   if (ctx->kafka != NULL)
     rd_kafka_destroy(ctx->kafka);
   //pthread_mutex_destroy(&ctx->lock); // Bug - 29675 - Removing the lock because this function is called by only one thread
-    sfree(ctx);
+    delete ctx;
 } /* }}} void wt_kafka_topic_context_free */
 
 static int wt_kafka_handle(struct wt_kafka_topic_context *ctx) /* {{{ */
@@ -447,8 +447,8 @@ static int wt_format_tags(char *ret, int ret_len,
                 ptr += n; \
                 remaining_len -= n; \
             } \
-            delete(k); \
-            delete(v); \
+            delete[] k; \
+            delete[] v; \
         } \
     }
 
