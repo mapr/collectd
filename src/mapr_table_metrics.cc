@@ -1345,6 +1345,28 @@ class TableMetricsPlugin {
   {
     ::plugin_register_complex_config(kCollectdPluginName, ConfigCallback);
     ::plugin_register_init(kCollectdPluginName, InitCallback);
+
+    // trickery:
+    //
+    // MFS flushes metrics' audit files at approx hh:mm:00.123, hh:mm:10.123,
+    // and so on. So let's begin our plugin reads somewhere between hh:mm:05
+    // and hh:mm:05; then between hh:mm:15 and hh:mm:18; that is, between 5
+    // and 8 seconds into the 10-second cycle to have the race condition more
+    // favorable. We still guarantee correctness (because we track the high
+    // water mark and we uniquify the metrics' timestamps) even if race
+    // codition is not favorable.
+
+    // core uses gettimeofday(); let's use that too:
+    for (;;) {
+      struct timeval now;
+      gettimeofday(&now, nullptr);
+      auto seconds = now.tv_sec % 10;
+      if ((seconds >= 5) && (seconds <= 8)) {
+        break;
+      }
+      sleep(1);
+    }
+
     ::plugin_register_read(kCollectdPluginName, ReadCallback);
   }
 };
