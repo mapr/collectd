@@ -688,7 +688,7 @@ static int wt_send_message (char *message, size_t mlen, cdtime_t time, const cha
 
     rd_kafka_poll(ctx->kafka,10);
 
-    INFO("write_maprstreams plugin: PRINT message %s of size %zu sent to topic %s",message, mlen, rd_kafka_topic_name(ctx->topic));
+    INFO("write_maprstreams plugin @%lu: PRINT message %s of size %zu sent to topic %s", CDTIME_T_TO_MS(time), message, mlen, rd_kafka_topic_name(ctx->topic));
     // Free the space allocated for temp topic name and stream name
     free(temp_topic_name);
     free(stream_name);
