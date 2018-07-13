@@ -108,3 +108,6 @@ bytesentcount
 restorecount
 msgreceivedcount
 bytesreceivedcount
+lcNumRowsFromKeyIndex
+lcNumKeyIndexPuts
+lcNumLogCompactionPuts
