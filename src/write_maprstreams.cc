@@ -216,9 +216,9 @@ static void msgDeliveryCB (rd_kafka_t *,
     } else {
         INFO("write_maprstreams plugin: Produced: %.*s\n",(int)rkmessage->len, (const char*)rkmessage->payload);
     }
-    //free((rd_kafka_message_t*)rkmessage);
 }
 
+// SWF: I do not see *kafka_conf, *preprocessed_host_tags, *path and lock (potentially set elsewhere) are freed
 static void wt_kafka_topic_context_free(void *p) /* {{{ */
 {
   auto ctx = static_cast<wt_kafka_topic_context *>(p);
@@ -255,19 +255,20 @@ static int wt_kafka_handle(struct wt_kafka_topic_context *ctx) /* {{{ */
     char                         errbuf[1024];
 
     if (ctx->kafka != NULL && ctx->topic != NULL)
-        return(0);
+        return 0;
 
     if (ctx->kafka == NULL) {
       if ((conf = rd_kafka_conf_dup(ctx->kafka_conf)) == NULL) {
         ERROR("write_maprstreams plugin: cannot duplicate kafka config");
-        return(1);
+        // SWF: rd_kafka_conf_destroy(conf);
+        return 1;
       }
 
       rd_kafka_conf_set_dr_msg_cb(conf, msgDeliveryCB);
 
-      if ((ctx->kafka = rd_kafka_new(RD_KAFKA_PRODUCER, conf,
-           errbuf, sizeof(errbuf))) == NULL) {
-        ERROR("write_maprstreams plugin: cannot create kafka handle.");
+      if ((ctx->kafka = rd_kafka_new(RD_KAFKA_PRODUCER, conf, errbuf, sizeof(errbuf))) == NULL) {
+        ERROR("write_maprstreams plugin: cannot create kafka handle: %s", errbuf);
+        // SWF: rd_kafka_conf_destroy(conf);
         return 1;
       }
 
@@ -280,19 +281,19 @@ static int wt_kafka_handle(struct wt_kafka_topic_context *ctx) /* {{{ */
     //tctx->kafka_conf = NULL;
 
       INFO ("write_maprstreams plugin: created KAFKA handle : %s", rd_kafka_name(ctx->kafka));
-
     }
 
-    if (ctx->topic == NULL ) {
+    if (ctx->topic == NULL) {
+      // SWF: This looks like an immediate explosion if the execution gets into this code block
       if ((topic_conf = rd_kafka_topic_conf_dup(ctx->conf)) == NULL) {
         ERROR("write_maprstreams plugin: cannot duplicate kafka topic config");
+        // SWF: rd_kafka_conf_destroy(conf);
         return 1;
       }
 
-      if ((ctx->topic = rd_kafka_topic_new(ctx->kafka, ctx->topic_name,
-          topic_conf)) == NULL) {
-        ERROR("write_maprstreams plugin: cannot create topic : %s\n",
-            rd_kafka_err2str(rd_kafka_last_error()));
+      if ((ctx->topic = rd_kafka_topic_new(ctx->kafka, ctx->topic_name, topic_conf)) == NULL) {
+        ERROR("write_maprstreams plugin: cannot create topic : %s\n", rd_kafka_err2str(rd_kafka_last_error()));
+        // SWF: rd_kafka_conf_destroy(conf);
         return errno;
       }
 
@@ -302,7 +303,8 @@ static int wt_kafka_handle(struct wt_kafka_topic_context *ctx) /* {{{ */
       INFO("write_maprstreams plugin: handle created for topic : %s", rd_kafka_topic_name(ctx->topic));
     }
 
-    return(0);
+    // SWF: rd_kafka_conf_destroy(conf);
+    return 0;
 
 } /* }}} int wt_kafka_handle */
 
@@ -354,8 +356,7 @@ static int wt_format_values(char *ret, size_t ret_len,
             rates = uc_get_rate (ds, vl);
         if (rates == NULL)
         {
-            WARNING("format_values: "
-                    "uc_get_rate failed.");
+            WARNING("format_values: uc_get_rate failed.");
             return -1;
         }
         BUFFER_ADD(GAUGE_FORMAT, rates[ds_num]);
@@ -447,9 +448,17 @@ static int wt_format_tags(char *ret, int ret_len,
                 ptr += n; \
                 remaining_len -= n; \
             } \
-            delete[] k; \
-            delete[] v; \
         } \
+		if (k != NULL) { \
+			// SWF is delete[] really the right thing to do on a char* shouldn't this be sfree()
+			// delete[] k;
+            sfree(k); \
+		} \
+		if (v != NULL) { \
+			// SWF is delete[] really the right thing to do on a char* shouldn't this be sfree()
+			// delete[] v;
+			sfree(v);
+		} \
     }
 
     if (vl->meta) {
@@ -491,7 +500,8 @@ static int wt_format_tags(char *ret, int ret_len,
             if(NULL == strchr(temp, '=')) {
                 ERROR("write_maprstreams plugin: meta_data tag '%s' does not contain a '=' char (host=%s, plugin=%s, type=%s)",
                         temp, vl->host, vl->plugin, vl->type);
-                sfree(temp);
+                // SWF: don't think we need this sfree as it is done below
+                //sfree(temp);
             }
             if(temp[0] != '\0') {
                 n = snprintf(ptr, remaining_len, " %s", temp);
@@ -507,7 +517,8 @@ static int wt_format_tags(char *ret, int ret_len,
             sfree(temp);
         }
 
-    } else {
+    }
+    else {
         ret[0] = '\0';
     }
 
@@ -552,6 +563,7 @@ static int wt_format_name(char *ret, int ret_len,
             /* defaults to empty string */
         } else if (status < 0) {
             sfree(temp);
+            // SWF: prefix variable might be pointing to a string too
             return status;
         } else {
             tsdb_id = temp;
@@ -667,6 +679,8 @@ static int wt_send_message (char *message, size_t mlen, cdtime_t time, const cha
     //INFO("write_maprstreams plugin: topic name %s ",ctx->topic_name);
     // Create conf because it gets set to NULL in wt_kafka_handle call below
     if ((ctx->conf = rd_kafka_topic_conf_new()) == NULL) {
+      // SWF: Free lock
+      pthread_mutex_unlock(&ctx->lock);
       rd_kafka_conf_destroy(ctx->kafka_conf);
       sfree(ctx);
       ERROR ("write_maprstream plugin: cannot create topic configuration.");
@@ -675,8 +689,14 @@ static int wt_send_message (char *message, size_t mlen, cdtime_t time, const cha
     // Get a handle to kafka topics and kafka conf
 
     status = wt_kafka_handle(ctx);
-    if( status != 0 )
+    if( status != 0 ) {
+      // SWF: Free lock, destroy Kafka conf, free conf
+      // why not call wt_kafka_topic_context_free(ctx)???
+      pthread_mutex_unlock(&ctx->lock);
+      rd_kafka_conf_destroy(ctx->kafka_conf);
+      sfree(ctx);
       return status;
+    }
 
     // Send the message to topic
     rd_kafka_producev (ctx->kafka,
@@ -695,11 +715,11 @@ static int wt_send_message (char *message, size_t mlen, cdtime_t time, const cha
     // Set topic name and topic to null so a new topic conf is created for each messages based on the metric key
     ctx->topic_name = NULL;
     ctx->stream = NULL;
+    pthread_mutex_unlock(&ctx->lock);
+    // SWF: Why not call wt_kafka_topic_context_free(ctx)???
     if (ctx->topic != NULL)
       rd_kafka_topic_destroy(ctx->topic);
     ctx->topic = NULL;
-    pthread_mutex_unlock(&ctx->lock);
-
     return 0;
 }
 
@@ -714,7 +734,7 @@ static int wt_make_send_message (const char* key, const char* value,
     char message[8192];
     const char *host_tags = ctx->host_tags ? ctx->host_tags : "";
     const char *meta_tsdb = "tsdb_tags";
-    const char* host = vl->host;
+    const char *host = vl->host;
     meta_data_t *md = vl->meta;
     size_t mfree = sizeof(message);
     size_t mfill = 0;
@@ -731,7 +751,8 @@ static int wt_make_send_message (const char* key, const char* value,
         } else if (status < 0) {
             ERROR("write_maprstreams plugin: tags metadata get failure");
             sfree(temp);
-            pthread_mutex_unlock(&ctx->lock);
+            // SWF: Don't ever see when this would be locked
+            // pthread_mutex_unlock(&ctx->lock);
             return status;
         } else {
             INFO("write_maprstreams plugin: metadata found %s ", tags);
@@ -905,10 +926,9 @@ void wt_process_and_write_unpacked_metrics(
         // INFO("Dumping one metric to buffer at 0x%p", staging_pointer);
         char *temp = mapr_dump_to_json(staging_pointer, one_metric, metrics.commontags(), ctx->preprocessed_host_tags);
         DEBUG("jsoned metric: %s", staging_pointer);
-        (void)wt_send_message(
-            staging_pointer, temp - staging_pointer, 
+        (void)wt_send_message(staging_pointer, temp - staging_pointer,
              MS_TO_CDTIME_T(one_metric.time()), host_from_vl, ctx);
-
+        // SWF: Do we need to free up what *temp is pointing to here?
     }
 }
 
@@ -945,6 +965,7 @@ static int wt_write_messages(const data_set_t *ds, const value_list_t *vl,
     int status;
 
     MetricsBuffer *ptr = DecodeMetricsPointer(vl);
+
     if (ptr != NULL) {
         wt_process_and_write_opaque_buffer(ptr, vl->host, cb);
         ReleaseMetricsPointer(ptr);
@@ -953,8 +974,7 @@ static int wt_write_messages(const data_set_t *ds, const value_list_t *vl,
 
     if (0 != strcmp(ds->type, vl->type))
     {
-        ERROR("write_maprstreams plugin: DS type does not match "
-              "value list type");
+        ERROR("write_maprstreams plugin: DS type does not match value list type");
         return -1;
     }
 
@@ -980,8 +1000,7 @@ static int wt_write_messages(const data_set_t *ds, const value_list_t *vl,
                                   cb->store_rates);
         if (status != 0)
         {
-            ERROR("write_maprstreams plugin: error with "
-                  "wt_format_values");
+            ERROR("write_maprstreams plugin: error with wt_format_values");
             return status;
         }
 
@@ -999,8 +1018,7 @@ static int wt_write_messages(const data_set_t *ds, const value_list_t *vl,
         status = wt_make_send_message(key, values, tags, vl->time, cb, vl);
         if (status != 0)
         {
-            ERROR("write_maprstreams plugin: error with "
-                  "wt_send_message");
+            ERROR("write_maprstreams plugin: error with wt_send_message");
             return status;
         }
     }
@@ -1023,6 +1041,8 @@ static int wt_write(const data_set_t *ds, const value_list_t *vl,
     return status;
 }
 
+// SWF: This looks like a less complete version of the method wt_kafka_topic_context_free
+// Why not use the same one??
 static void clearContext(struct wt_kafka_topic_context  *tctx) {
   if (tctx->conf != NULL)
     rd_kafka_topic_conf_destroy(tctx->conf);
@@ -1111,6 +1131,7 @@ static int wt_config_stream(oconfig_item_t *ci)
       }
       else if (strcasecmp("HostTags", child->key) == 0) {
         cf_util_get_string(child, &tctx->host_tags);
+        // SWF: preprocessed_host_tags has memory allocated to it that is not freed by clearContext
         convert_host_tags_to_json(tctx->host_tags, &tctx->preprocessed_host_tags);
       }
       else if (strcasecmp("StreamsCount", child->key) == 0) {
@@ -1179,8 +1200,7 @@ static int wt_config(oconfig_item_t *ci)
             wt_config_stream(child);
         else
         {
-            ERROR("write_maprstreams plugin: Invalid configuration "
-                  "option: %s.", child->key);
+            ERROR("write_maprstreams plugin: Invalid configuration option: %s.", child->key);
         }
     }
 
