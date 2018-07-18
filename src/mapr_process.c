@@ -616,7 +616,13 @@ static procstat_t *ps_read_tasks_status (int pid, procstat_t *ps)
     snprintf (filename, sizeof (filename), "/proc/%i/task/%s/status", pid, tpid);
     if ((fh = fopen (filename, "r")) == NULL)
     {
-      ERROR ("Failed to open file '%s', error = (%d)%s", filename, errno, strerror(errno));
+      if (errno == 2) {
+    	  INFO ("Failed to open file '%s' because it no longer exists", filename);
+      }
+      else {
+    	  ERROR ("Failed to open file '%s', error = (%d) %s", filename, errno, strerror(errno));
+      }
+
       continue;
     }
 
