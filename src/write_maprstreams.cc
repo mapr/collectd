@@ -220,6 +220,7 @@ static void msgDeliveryCB (rd_kafka_t *,
 
 static void wt_kafka_topic_context_free(void *p) /* {{{ */ {
   auto ctx = static_cast<wt_kafka_topic_context *>(p);
+
   INFO("mapr_writemaprstreams plugin: inside context free");
   if (ctx == NULL)
     return;
@@ -250,6 +251,8 @@ static void wt_kafka_topic_context_free(void *p) /* {{{ */ {
     rd_kafka_conf_destroy(ctx->kafka_conf);
   //pthread_mutex_destroy(&ctx->lock); // Bug - 29675 - Removing the lock because this function is called by only one thread
     delete ctx;
+
+    INFO("mapr_writemaprstreams plugin: completed context free");
 } /* }}} void wt_kafka_topic_context_free */
 
 static int wt_kafka_handle(struct wt_kafka_topic_context *ctx) /* {{{ */
@@ -694,17 +697,22 @@ static int wt_send_message (char *message, size_t mlen, cdtime_t time, const cha
       return status;
     }
 
-    // Send the message to topic
-    rd_kafka_producev (ctx->kafka,
-                          RD_KAFKA_V_RKT(ctx->topic),
-                          RD_KAFKA_V_VALUE(message, mlen),
-                          RD_KAFKA_V_MSGFLAGS (RD_KAFKA_MSG_F_COPY),
-                          RD_KAFKA_V_TIMESTAMP(CDTIME_T_TO_MS(time)),
-                          RD_KAFKA_V_END);
+    if (ctx->topic != NULL) {
+		// Send the message to topic
+		rd_kafka_producev (ctx->kafka,
+							  RD_KAFKA_V_RKT(ctx->topic),
+							  RD_KAFKA_V_VALUE(message, mlen),
+							  RD_KAFKA_V_MSGFLAGS (RD_KAFKA_MSG_F_COPY),
+							  RD_KAFKA_V_TIMESTAMP(CDTIME_T_TO_MS(time)),
+							  RD_KAFKA_V_END);
 
-    rd_kafka_poll(ctx->kafka,10);
+		rd_kafka_poll(ctx->kafka,10);
+	    INFO("write_maprstreams plugin @%lu: PRINT message %s of size %zu sent to topic %s", CDTIME_T_TO_MS(time), message, mlen, rd_kafka_topic_name(ctx->topic));
+    }
+    else {
+    	ERROR("write_maprstreams plugin: Could not send message %s; size: %zu with NULL topic", message, mlen);
+    }
 
-    INFO("write_maprstreams plugin @%lu: PRINT message %s of size %zu sent to topic %s", CDTIME_T_TO_MS(time), message, mlen, rd_kafka_topic_name(ctx->topic));
     // Free the space allocated for temp topic name and stream name
     free(temp_topic_name);
     free(stream_name);
