@@ -218,9 +218,7 @@ static void msgDeliveryCB (rd_kafka_t *,
     }
 }
 
-// SWF: I do not see *kafka_conf, *preprocessed_host_tags, *path and lock (potentially set elsewhere) are freed
-static void wt_kafka_topic_context_free(void *p) /* {{{ */
-{
+static void wt_kafka_topic_context_free(void *p) /* {{{ */ {
   auto ctx = static_cast<wt_kafka_topic_context *>(p);
   INFO("mapr_writemaprstreams plugin: inside context free");
   if (ctx == NULL)
@@ -232,6 +230,10 @@ static void wt_kafka_topic_context_free(void *p) /* {{{ */
     sfree(ctx->stream);
   if (ctx->host_tags != NULL)
     sfree(ctx->host_tags);
+  if (ctx->preprocessed_host_tags != NULL)
+	  sfree(ctx->preprocessed_host_tags);
+  if (ctx->path != NULL)
+	  sfree(ctx->path);
   if (ctx->topic != NULL)
     rd_kafka_topic_destroy(ctx->topic);
   if (ctx->conf != NULL)
@@ -244,6 +246,8 @@ static void wt_kafka_topic_context_free(void *p) /* {{{ */
     rd_kafka_poll(ctx->kafka, 100);
   if (ctx->kafka != NULL)
     rd_kafka_destroy(ctx->kafka);
+  if (ctx->kafka_conf != NULL)
+    rd_kafka_conf_destroy(ctx->kafka_conf);
   //pthread_mutex_destroy(&ctx->lock); // Bug - 29675 - Removing the lock because this function is called by only one thread
     delete ctx;
 } /* }}} void wt_kafka_topic_context_free */
@@ -448,17 +452,9 @@ static int wt_format_tags(char *ret, int ret_len,
                 ptr += n; \
                 remaining_len -= n; \
             } \
+			delete[] k; \
+			delete[] v; \
         } \
-		if (k != NULL) { \
-			// SWF is delete[] really the right thing to do on a char* shouldn't this be sfree()
-			// delete[] k;
-            sfree(k); \
-		} \
-		if (v != NULL) { \
-			// SWF is delete[] really the right thing to do on a char* shouldn't this be sfree()
-			// delete[] v;
-			sfree(v);
-		} \
     }
 
     if (vl->meta) {
@@ -1041,16 +1037,6 @@ static int wt_write(const data_set_t *ds, const value_list_t *vl,
     return status;
 }
 
-// SWF: This looks like a less complete version of the method wt_kafka_topic_context_free
-// Why not use the same one??
-static void clearContext(struct wt_kafka_topic_context  *tctx) {
-  if (tctx->conf != NULL)
-    rd_kafka_topic_conf_destroy(tctx->conf);
-  if (tctx->kafka_conf != NULL)
-    rd_kafka_conf_destroy(tctx->kafka_conf);
-  delete tctx;
-}
-
 static void convert_host_tags_to_json(const char *source, char **json)
 {
     assert(source);
@@ -1142,7 +1128,7 @@ static int wt_config_stream(oconfig_item_t *ci)
       }
       else {
         ERROR("write_maprstreams plugin: Invalid configuration option: %s.", child->key);
-        clearContext(tctx);
+        wt_kafka_topic_context_free(tctx);
         free(buffering);
         return -1;
       }
@@ -1150,7 +1136,7 @@ static int wt_config_stream(oconfig_item_t *ci)
 
     if (tctx->path == NULL) {
       ERROR("write_maprstreams plugin: Required parameters streams base path is missing in configuration");
-      clearContext(tctx);
+      wt_kafka_topic_context_free(tctx);
       free(buffering);
       return -1;
     }
@@ -1163,7 +1149,7 @@ static int wt_config_stream(oconfig_item_t *ci)
     results = rd_kafka_conf_set(tctx->kafka_conf, "queue.buffering.max.ms", buffering, errstr, sizeof(errstr));
     if (results != RD_KAFKA_CONF_OK) {
         ERROR("write_maprstreams plugin: queue.buffering.max.ms ERROR: '%s'", errstr);
-        clearContext(tctx);
+        wt_kafka_topic_context_free(tctx);
         free(buffering);
         return -1;
     }
@@ -1180,7 +1166,7 @@ static int wt_config_stream(oconfig_item_t *ci)
     status = plugin_register_write(callback_name, wt_write, &user_data);
     if (status != 0) {
       ERROR ("write_maprstreams plugin: plugin_register_write (\"%s\") failed with status %i.", callback_name, status);
-      clearContext(tctx);
+      wt_kafka_topic_context_free(tctx);
       return -1;
     }
 
