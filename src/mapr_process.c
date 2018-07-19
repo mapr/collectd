@@ -1153,6 +1153,9 @@ static int ps_read(void) {
   }
 
   ss = ps_read_sys_stat();
+  if (ss == NULL) {
+      return (0);
+  }
 
   for (ps_ptr = list_head_g; ps_ptr != NULL; ps_ptr = ps_ptr->next) {
     status = ps_read_process (ps_ptr->pid, &ps, &state);
