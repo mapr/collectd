@@ -388,35 +388,6 @@ static int wt_format_values(char *ret, size_t ret_len,
     return 0;
 }
 
-static char * replace_illegal_chars(const char * str) {
-    int len = 0;
-    int idx = 0;
-    char *rep_string = NULL;
-
-    if (str == NULL) {
-        return NULL;
-    } else {
-        /* tag keys or values may not contain characters other than */
-        /* ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') */
-        /* || ('0' <= c && c <= '9') || c == '-' || c == '_' || c == '.' */
-        /* || c == '/' || Character.isLetter(c) */
-        /* replace with underscore */
-        len = strlen(str);
-        rep_string = new(std::nothrow) char[len + 1];
-        while(NULL != str && idx < len) {
-            if (!(isalpha(*str) || isdigit(*str) || *str == '-' ||
-                *str == '_' || *str == '.' || *str == '/')) {
-                rep_string[idx] = '_';
-            } else {
-                rep_string[idx] = *str;
-            }
-            idx++;
-            str++;
-        }
-        rep_string[idx] = '\0';
-    }
-    return rep_string;
-}
 
 static int wt_format_tags(char *ret, int ret_len,
                           const value_list_t *vl,
@@ -445,18 +416,14 @@ static int wt_format_tags(char *ret, int ret_len,
 #define TSDB_STRING_APPEND_SPRINTF(key, value) \
     { \
         int n; \
-        char *k = replace_illegal_chars(key); \
-        char *v = replace_illegal_chars(value); \
-        if(k != NULL && k[0] != '\0' && v != NULL && v[0] != '\0') { \
-            n = snprintf(ptr, remaining_len, " %s=%s", k, v); \
+        if(key != NULL && key[0] != '\0' && value != NULL && value[0] != '\0') { \
+            n = snprintf(ptr, remaining_len, " %s=%s", key, value); \
             if(n >= remaining_len) { \
                 ptr[0] = '\0'; \
             } else { \
                 ptr += n; \
                 remaining_len -= n; \
             } \
-			delete[] k; \
-			delete[] v; \
         } \
     }
 
