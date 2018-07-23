@@ -679,10 +679,11 @@ static int wt_send_message (char *message, size_t mlen, cdtime_t time, const cha
     // Create conf because it gets set to NULL in wt_kafka_handle call below
     if ((ctx->conf = rd_kafka_topic_conf_new()) == NULL) {
       rd_kafka_conf_destroy(ctx->kafka_conf);
-      sfree(ctx);
+
       ERROR ("write_maprstream plugin: cannot create topic configuration.");
       // SWF: Free lock
       pthread_mutex_unlock(&ctx->lock);
+      sfree(ctx);
 
       return -1;
     }
