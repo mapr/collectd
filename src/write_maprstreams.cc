@@ -719,11 +719,13 @@ static int wt_send_message (char *message, size_t mlen, cdtime_t time, const cha
     // Set topic name and topic to null so a new topic conf is created for each messages based on the metric key
     ctx->topic_name = NULL;
     ctx->stream = NULL;
-    pthread_mutex_unlock(&ctx->lock);
     // SWF: Why not call wt_kafka_topic_context_free(ctx)???
     if (ctx->topic != NULL)
       rd_kafka_topic_destroy(ctx->topic);
     ctx->topic = NULL;
+
+    pthread_mutex_unlock(&ctx->lock);
+
     return 0;
 }
 
