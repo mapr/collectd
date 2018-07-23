@@ -678,9 +678,9 @@ static int wt_send_message (char *message, size_t mlen, cdtime_t time, const cha
     //INFO("write_maprstreams plugin: topic name %s ",ctx->topic_name);
     // Create conf because it gets set to NULL in wt_kafka_handle call below
     if ((ctx->conf = rd_kafka_topic_conf_new()) == NULL) {
-      rd_kafka_conf_destroy(ctx->kafka_conf);
+      ERROR ("write_maprstream plugin: cannot create topic configuration");
 
-      ERROR ("write_maprstream plugin: cannot create topic configuration.");
+      rd_kafka_conf_destroy(ctx->kafka_conf);
       // SWF: Free lock
       pthread_mutex_unlock(&ctx->lock);
       sfree(ctx);
@@ -691,6 +691,7 @@ static int wt_send_message (char *message, size_t mlen, cdtime_t time, const cha
 
     status = wt_kafka_handle(ctx);
     if( status != 0 ) {
+      ERROR ("write_maprstream plugin: cannot create Kafka handle");
       // SWF: Free lock, destroy Kafka conf, free conf
       // why not call wt_kafka_topic_context_free(ctx)???
       rd_kafka_conf_destroy(ctx->kafka_conf);
