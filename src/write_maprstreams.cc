@@ -693,9 +693,9 @@ static int wt_send_message (char *message, size_t mlen, cdtime_t time, const cha
       // SWF: Free lock, destroy Kafka conf, free conf
       // why not call wt_kafka_topic_context_free(ctx)???
       rd_kafka_conf_destroy(ctx->kafka_conf);
-      sfree(ctx);
 
       pthread_mutex_unlock(&ctx->lock);
+      sfree(ctx);
 
       return status;
     }
