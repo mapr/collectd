@@ -1,12 +1,23 @@
 #!/usr/bin/env python
 import datetime
+import fcntl
+import sys
+import time
+import math
 import os
 import socket
 import subprocess
 
 import collectd
 
+# The interval that this plugin will get called from CollectD
 INTERVAL = 10
+# When reading spyglass output, how long to wait to determine that we reached the end of the current stdout buffer
+READLINE_THRESHOLD = 2
+# The maximum amount of lines to process in one CollectD interval. This should typically be 1 or 2 lines but this is
+# a stop-gap measure to make sure the plugin returns
+MAX_LINES_PROCESSED = 50
+SPYGLASS_END_OF_METRIC = "!!<end_spyglass_statistic>!!\n"
 
 collectd.info("Starting MapR MFS Plugin for Python")
 
@@ -20,6 +31,7 @@ class MapRMfsPlugin(object):
 
     def __init__(self):
         self.spyglass = None
+        self.spyglass_process = None
         self.debug_fp = None
         self.debug_file_level = MapRMfsPlugin.LOG_ERROR
         self.fqdn = None
@@ -120,47 +132,47 @@ class MapRMfsPlugin(object):
             if sg_output is None or len(sg_output) == 0:
                 self.log_warning("No spyglass information returned")
                 return
-
-            sg_list = sg_output.split(" ")
-            self.log_info("There are {0} items from the spyglass output".format(str(len(sg_list))))
         except Exception, e:
             self.log_error("Reading MapR MFS Plugin for Python failed executing Spyglass executable", e)
             return
 
-        for i in range(0, len(sg_list)):
-            try:
-                sg_items = sg_list[i].split(":")
-
-                if len(sg_items) <= 1 or len(sg_list[i].strip()) == 0:
-                    # self.log_info("spyglass metric at index {0} is blank". format(i))
-                    continue
-
-                if len(sg_items) != 3 and len(sg_items) != 5:
-                    self.log_error("spyglass metric '{0}' has an invalid length of {1}". format(sg_list[i], len(sg_items)))
-                    continue
-
-                if self.ignored_datasets_list and sg_items[1] in self.ignored_datasets_list:
-                    continue
-
-                metric_value = sg_items[2]
+        for line in sg_output:
+            sg_list = line.split(" ")
+            self.log_info("There are {0} items from the spyglass output".format(str(len(sg_list))))
+            for i in range(0, len(sg_list)):
                 try:
-                    float(metric_value)
-                except ValueError:
-                    metric_value = 0.0
+                    sg_items = sg_list[i].split(":")
 
-                values = collectd.Values()
-                values.host = self.fqdn
-                values.plugin = "mapr.{0}".format(sg_items[0])
-                values.type = sg_items[1]
-                values.interval = INTERVAL
-                values.values = [metric_value]
-                if len(sg_items) > 3:
-                    values.plugin_instance = sg_items[3]
-                    values.type_instance = sg_items[4]
+                    if len(sg_items) <= 1 or len(sg_list[i].strip()) == 0:
+                        # self.log_info("spyglass metric at index {0} is blank". format(i))
+                        continue
 
-                values.dispatch()
-            except Exception, e:
-                self.log_error("Could not process spyglass output '{0}' at index {1}".format(sg_list[i], i), e)
+                    if len(sg_items) != 3 and len(sg_items) != 5:
+                        self.log_error("spyglass metric '{0}' has an invalid length of {1}". format(sg_list[i], len(sg_items)))
+                        continue
+
+                    if self.ignored_datasets_list and sg_items[1] in self.ignored_datasets_list:
+                        continue
+
+                    metric_value = sg_items[2]
+                    try:
+                        float(metric_value)
+                    except ValueError:
+                        metric_value = 0.0
+
+                    values = collectd.Values()
+                    values.host = self.fqdn
+                    values.plugin = "mapr.{0}".format(sg_items[0])
+                    values.type = sg_items[1]
+                    values.interval = INTERVAL
+                    values.values = [metric_value]
+                    if len(sg_items) > 3:
+                        values.plugin_instance = sg_items[3]
+                        values.type_instance = sg_items[4]
+
+                    values.dispatch()
+                except Exception, e:
+                    self.log_error("Could not process spyglass output '{0}' at index {1}".format(sg_list[i], i), e)
 
     def shutdown(self):
         try:
@@ -176,18 +188,119 @@ class MapRMfsPlugin(object):
             self.log_error("Spyglass executable is not available to be executed")
             return None
 
-        interval_param = "--interval:{0}".format(INTERVAL)
-        execute = [self.spyglass, interval_param]
-        p = subprocess.Popen(execute, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
-        (out, err) = p.communicate()
-        if p.returncode == -15:
-            self.log_warning("Spyglass executable terminated early probably due to CollectD shutting down")
-            return None
-        if p.returncode != 0:
-            self.log_error("Spyglass executable failed to be executed: (" + str(p.returncode) + "): " + err)
+        # start or restart spyglass executable if necessary
+        self.restart_spyglass()
+        if self.spyglass_process is None:
+            self.log_error("Spyglass executable could not be started")
             return None
 
-        return out
+        output = list()
+        lines_processed = 0
+        while lines_processed <= MAX_LINES_PROCESSED:
+            start_read = time.time()
+            line = self.spyglass_process.stdout.readline()
+            end_read = time.time()
+            time_delta = int(math.ceil(end_read - start_read))
+            lines_processed += 1
+
+            self.log_info("spyglass output line retrieved in less than {0} seconds".format(time_delta))
+            output.append(line.replace("\n", ""))
+
+            if time_delta >= READLINE_THRESHOLD:
+                self.log_info("spyglass output wait time of {0} exceeded threshold of {1}; "
+                              "Sending output to CollectD".format(time_delta, READLINE_THRESHOLD))
+                break
+
+        if lines_processed > MAX_LINES_PROCESSED:
+            self.log_error("The amount of lines processed {0} exceeded the threshold {1}"
+                           .format(lines_processed, MAX_LINES_PROCESSED))
+
+        self.log_info("Sending {0} line(s) of spyglass output to CollectD".format(len(output)))
+        return output
+
+    # def get_spyglass_output(self):
+    #     if self.spyglass is None:
+    #         self.log_error("Spyglass executable is not available to be executed")
+    #         return None
+    #
+    #     # start or restart spyglass executable if necessary
+    #     self.restart_spyglass()
+    #     if self.spyglass_process is None:
+    #         self.log_error("Spyglass executable could not be started")
+    #         return None
+    #
+    #     output = list()
+    #     lines_processed = 0
+    #     while lines_processed <= MAX_LINES_PROCESSED:
+    #         self.log_info("Reading line from spyglass...")
+    #         try:
+    #             line = self.spyglass_process.stdout.read()
+    #         except:
+    #             self.log_info("End of pipe found. Sending metrics to CollectD")
+    #             break
+    #
+    #         self.log_info("Line read from spyglass")
+    #         if line.startswith(SPYGLASS_END_OF_METRIC):
+    #             self.log_info("Found end of metric")
+    #         else:
+    #             self.log_info("Found metric data starting with: {0}".format(line[:20]))
+    #             output.append(line.replace("\n", ""))
+    #
+    #         lines_processed += 1
+    #
+    #     if lines_processed > MAX_LINES_PROCESSED:
+    #         self.log_error("The amount of lines processed {0} exceeded the threshold {1}"
+    #                        .format(lines_processed, MAX_LINES_PROCESSED))
+    #
+    #     self.log_info("Sending {0} line(s) of spyglass output to CollectD".format(len(output)))
+    #    return output
+
+    def restart_spyglass(self):
+        if self.spyglass_process is not None:
+            poll_result = self.spyglass_process.poll()
+            # if the spyglass app is terminated
+            if poll_result is not None:
+                self.log_warning("Spyglass application recently stopped with exit code: {0}".format(poll_result))
+                self.spyglass_process = None
+            else:
+                self.log_info("Spyglass application is still running")
+
+        if self.spyglass_process is None:
+            self.log_warning("Spyglass application is not running; Restarting spyglass...")
+
+            interval_param = "--interval:{0}".format(INTERVAL)
+            execute = [self.spyglass, interval_param]
+            try:
+                self.spyglass_process = subprocess.Popen(args=execute, stdout=subprocess.PIPE, shell=False, bufsize=0)
+
+                # TODO: Perhaps find a way to make stdout not blocking so we can collect data without blocking on readline() calls
+                # make stdout a non-blocking file
+                # fd = sys.stdout.fileno()
+                # fl = fcntl.fcntl(fd, fcntl.F_GETFL)
+                # fcntl.fcntl(fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
+
+                self.log_info("Spyglass application started")
+            except OSError, ose:
+                self.log_error("OS error executing spyglass application: {0}".format(str(ose)))
+                self.spyglass_process = None
+            except Exception, e:
+                self.log_error("Unexpected error executing spyglass application: {0}".format(str(e)))
+                self.spyglass_process = None
+                raise e
+
+        # interval_param = "--interval:{0}".format(INTERVAL)
+        # execute = [self.spyglass, interval_param]
+
+        # p = subprocess.Popen(execute, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
+        # (out, err) = p.communicate()
+        # if p.returncode == -15:
+        #     self.log_warning("Spyglass executable terminated early probably due to CollectD shutting down")
+        #     return None
+        # if p.returncode != 0:
+        #     self.log_error("Spyglass executable failed to be executed: (" + str(p.returncode) + "): " + err)
+        #     return None
+        #
+        # return out
 
     def log_info(self, message):
         if not message:
