@@ -79,9 +79,6 @@
 
 #define MAPR_HOSTNAME_FILE "/opt/mapr/hostname"
 
-#define STRINGIFY2(x) #x
-#define STRINGIFY(X) STRINGIFY2(X)
-
 
 int log_level = 0;
 int log_file_set = 0;
@@ -922,6 +919,7 @@ dispatchMetrics(TimestampHashTable *tsTbl, tsEntry_t *tsEntry)
   int i;
   int j;
   int count = 0;
+  char fmt[100];
   uint64_t dispatchTs = tsEntry->ts;
   MetricsHashTable *tbl = &(tsEntry->metricsTable);
   MHTEntry *entry = NULL;
@@ -934,6 +932,7 @@ dispatchMetrics(TimestampHashTable *tsTbl, tsEntry_t *tsEntry)
   vl.values_len = 1;
   vl.values = values;
   sstrncpy(vl.plugin, "mapr.volmetrics", sizeof(vl.plugin));
+  sprintf(fmt, "%%.%ds", sizeof(vl.plugin_instance)-1);
 
   for (i=0; i<tbl->nbuckets; i++) {
     entry = tbl->buckets[i];
@@ -949,7 +948,7 @@ dispatchMetrics(TimestampHashTable *tsTbl, tsEntry_t *tsEntry)
         if (vnhtEntry) {
           sprintf(
             vl.plugin_instance,
-            "%." STRINGIFY(sizeof(vl.plugin_instance)-1) "s",
+            fmt,
             vnhtEntry->volumeName);
         } else {
           sprintf(vl.plugin_instance, "%u", entry->volId);
