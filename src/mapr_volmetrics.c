@@ -932,7 +932,7 @@ dispatchMetrics(TimestampHashTable *tsTbl, tsEntry_t *tsEntry)
   vl.values_len = 1;
   vl.values = values;
   sstrncpy(vl.plugin, "mapr.volmetrics", sizeof(vl.plugin));
-  sprintf(fmt, "%%.%ds", sizeof(vl.plugin_instance)-1);
+  sprintf(fmt, "%%.%ls", sizeof(vl.plugin_instance)-1);
 
   for (i=0; i<tbl->nbuckets; i++) {
     entry = tbl->buckets[i];
