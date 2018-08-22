@@ -211,10 +211,18 @@ static int hash(const char *str, int range)
 static void msgDeliveryCB (rd_kafka_t *,
                            const rd_kafka_message_t *rkmessage, void *) {
     if (rkmessage->err != RD_KAFKA_RESP_ERR_NO_ERROR) {
-        ERROR("write_maprstreams plugin: FAILURE: Message not delivered to partition.\n");
+    	int64_t offset = rkmessage->offset;
+    	int64_t latency = rd_kafka_message_latency(rkmessage);
+    	rd_kafka_timestamp_type_t timestamp_type;
+    	int64_t timestamp = rd_kafka_message_timestamp(rkmessage, &timestamp_type);
+
+        ERROR("write_maprstreams plugin: FAILURE: Message not delivered. Offset: %lu; Latency: %lu; Timestamp: %lu\n",
+        		offset, latency, timestamp);
         ERROR("write_maprstreams plugin: ERROR: %s", rd_kafka_err2str(rkmessage->err));
-    } else {
-        INFO("write_maprstreams plugin: Produced: %.*s\n",(int)rkmessage->len, (const char*)rkmessage->payload);
+    }
+    else {
+        INFO("write_maprstreams plugin: Produced: Offset: %lu; Size: %lu; %s\n",
+        		rkmessage->offset, rkmessage->len, (const char*)rkmessage->payload);
     }
 }
 
@@ -252,7 +260,7 @@ static void wt_kafka_topic_context_free(void *p) /* {{{ */ {
   //pthread_mutex_destroy(&ctx->lock); // Bug - 29675 - Removing the lock because this function is called by only one thread
     delete ctx;
 
-    INFO("mapr_writemaprstreams plugin: completed context free");
+    INFO("write_maprstreams plugin: completed context free");
 } /* }}} void wt_kafka_topic_context_free */
 
 static int wt_kafka_handle(struct wt_kafka_topic_context *ctx) /* {{{ */
@@ -363,7 +371,7 @@ static int wt_format_values(char *ret, size_t ret_len,
             rates = uc_get_rate (ds, vl);
         if (rates == NULL)
         {
-            WARNING("format_values: uc_get_rate failed.");
+            WARNING("write_maprstreams plugin: format_values: uc_get_rate failed.");
             return -1;
         }
         BUFFER_ADD(GAUGE_FORMAT, rates[ds_num]);
@@ -376,7 +384,7 @@ static int wt_format_values(char *ret, size_t ret_len,
         BUFFER_ADD(format_PRIu64(), vl->values[ds_num].absolute);
     else
     {
-        ERROR("format_values plugin: Unknown data source type: %i",
+        ERROR("write_maprstreams plugin: format_values plugin: Unknown data source type: %i",
               ds->ds[ds_num].type);
         sfree(rates);
         return -1;
@@ -632,6 +640,7 @@ static int wt_send_message (char *message, size_t mlen, cdtime_t time, const cha
     sprintf(append,"%d",hashCode);
     strcat(stream_name,append);
     ctx->stream = stream_name;
+
     INFO("write_maprstreams plugin: Stream Name is %s for message %s",ctx->stream, message);
 
     // Allocate enough space for the topic name -- "<streamname>:<fqdn>"
@@ -641,8 +650,8 @@ static int wt_send_message (char *message, size_t mlen, cdtime_t time, const cha
     strcat(temp_topic_name,host);
 
     ctx->topic_name = temp_topic_name;
-    //INFO("write_maprstreams plugin for key %s stream name %s ",key,ctx->stream);
-    //INFO("write_maprstreams plugin: topic name %s ",ctx->topic_name);
+    DEBUG("write_maprstreams plugin for key %s stream name %s ",key,ctx->stream);
+    DEBUG("write_maprstreams plugin: topic name %s ",ctx->topic_name);
     // Create conf because it gets set to NULL in wt_kafka_handle call below
     if ((ctx->conf = rd_kafka_topic_conf_new()) == NULL) {
       ERROR ("write_maprstream plugin: cannot create topic configuration");
@@ -658,7 +667,7 @@ static int wt_send_message (char *message, size_t mlen, cdtime_t time, const cha
 
     status = wt_kafka_handle(ctx);
     if( status != 0 ) {
-      ERROR ("write_maprstream plugin: cannot create Kafka handle");
+      ERROR("write_maprstream plugin: cannot create Kafka handle");
       // SWF: Free lock, destroy Kafka conf, free conf
       // why not call wt_kafka_topic_context_free(ctx)???
       rd_kafka_conf_destroy(ctx->kafka_conf);
@@ -678,7 +687,6 @@ static int wt_send_message (char *message, size_t mlen, cdtime_t time, const cha
 							  RD_KAFKA_V_TIMESTAMP(CDTIME_T_TO_MS(time)),
 							  RD_KAFKA_V_END);
 
-		rd_kafka_poll(ctx->kafka,10);
 	    INFO("write_maprstreams plugin @%lu: PRINT message %s of size %zu sent to topic %s", CDTIME_T_TO_MS(time), message, mlen, rd_kafka_topic_name(ctx->topic));
     }
     else {
@@ -809,29 +817,26 @@ char *mapr_dump_to_json(
 }
 
 
-void wt_process_and_write_unpacked_metrics(
-    const Metrics &metrics,
-    const char *host_from_vl, 
-    struct wt_kafka_topic_context *ctx)
+void wt_process_and_write_unpacked_metrics(const Metrics &metrics, const char *host_from_vl, struct wt_kafka_topic_context *ctx)
 {
     char staging_buffer[512000];
     char *staging_pointer = &staging_buffer[0];
 
     // validate common tags:
-    INFO("validating 0n%d common tags", metrics.commontags_size());
+    INFO("write_maprstreams plugin: validating 0n%d common tags", metrics.commontags_size());
     for (const auto &common_tag : metrics.commontags()) {
         if (!common_tag.has_name()) {
             // bug in producer.
-            ERROR("common tag has no name");
+            ERROR("write_maprstreams plugin: common tag has no name");
             return;
         }
 
         if (!common_tag.has_value()) {
-            ERROR("common tag has no value");
+            ERROR("write_maprstreams plugin: common tag has no value");
             return;
         }
     }
-    DEBUG("validated 0n%d common tags", metrics.commontags_size());
+    DEBUG("write_maprstreams plugin: validated 0n%d common tags", metrics.commontags_size());
 
     for (const auto &one_metric : metrics.metrics()) {
         // each metric will produce one record.
@@ -845,23 +850,23 @@ void wt_process_and_write_unpacked_metrics(
             // malformed protobuf, bug in producer
             return;
         }
-        DEBUG("validated name %s and time %" PRIu64 ".",
+        DEBUG("write_maprstreams plugin: validated name %s and time %" PRIu64 ".",
           one_metric.name().c_str(), one_metric.time);
 
         for (const auto &metric_tag : one_metric.tags()) {
             assert(metric_tag.has_name() && metric_tag.has_value());
 
             if (!metric_tag.has_name()) {
-                ERROR("no tag name");
+                ERROR("write_maprstreams plugin: no tag name");
                 return;
             }
 
             if (!metric_tag.has_value()) {
-                ERROR("no tag value");
+                ERROR("write_maprstreams plugin: no tag value");
                 return;
             }
         }
-        DEBUG("validated %zu tags", one_metric.tags_size());
+        DEBUG("write_maprstreams plugin: validated %zu tags", one_metric.tags_size());
 
         const auto &value = one_metric.value();
 
@@ -880,19 +885,19 @@ void wt_process_and_write_unpacked_metrics(
         // the value of the metric is determined below:
 
         if ((value.buckets_size() == 0) && !value.has_number()) {
-            INFO("Neither value nor buckets for a metric");
+            INFO("write_maprstreams plugin: Neither value nor buckets for a metric");
             continue;
         }
 
         if (value.buckets_size()) {
-            DEBUG("%zd buckets in histo", value.buckets_size());
+            DEBUG("write_maprstreams plugin: %zd buckets in histo", value.buckets_size());
             for (const auto &bucket : value.buckets()) {
                 auto valid = bucket.has_number() && 
                     bucket.has_start() && bucket.has_end();
                 assert(valid);
                 if (!valid) {
                     // malformed protobuf, bug on producer side
-                    INFO("BUGBUG 12");
+                    INFO("write_maprstreams plugin: BUGBUG 12");
                     return;
                 }
             }
@@ -903,11 +908,24 @@ void wt_process_and_write_unpacked_metrics(
 
         // INFO("Dumping one metric to buffer at 0x%p", staging_pointer);
         char *temp = mapr_dump_to_json(staging_pointer, one_metric, metrics.commontags(), ctx->preprocessed_host_tags);
-        DEBUG("jsoned metric: %s", staging_pointer);
-        (void)wt_send_message(staging_pointer, temp - staging_pointer,
-             MS_TO_CDTIME_T(one_metric.time()), host_from_vl, ctx);
+        DEBUG("write_maprstreams plugin: jsoned metric: %s", staging_pointer);
+        (void)wt_send_message(staging_pointer, temp - staging_pointer, MS_TO_CDTIME_T(one_metric.time()), host_from_vl, ctx);
+
         // SWF: Do we need to free up what *temp is pointing to here?
     }
+
+    // Bug: COLD-95 poll was removed from after the producev call to here to reduce the amount of times it is called.
+    // Poll was causing a lag/limit in the amount of messages could be sent to the stream
+    // Moving the poll will be called at 1 minute intervals by default.
+    int callbacks_handled = 0;
+    while (rd_kafka_outq_len(ctx->kafka) > 0) {
+    	// The return from _poll might be 0 but there are still messages in the queue
+        int callbacks = rd_kafka_poll(ctx->kafka, 100);
+
+    	callbacks_handled += callbacks;
+    	INFO("write_maprstreams plugin: Handled callbacks: %d", callbacks);
+    }
+    INFO("write_maprstreams plugin: Total Callbacks handled: %d", callbacks_handled);
 }
 
 
@@ -921,11 +939,11 @@ void wt_process_and_write_opaque_buffer(
         return;
     }
 
-    INFO("processing opaque buffer, %d bytes", ptr->bytes);
+    INFO("write_maprstreams plugin: processing opaque buffer, %d bytes", ptr->bytes);
     Metrics metrics;
     bool success = metrics.ParseFromArray(ptr->data, ptr->bytes);
     if (!success) {
-        ERROR("Failed to unpack the opaque protobuf");
+        ERROR("write_maprstreams plugin: Failed to unpack the opaque protobuf");
         return;
     }
 
@@ -1057,7 +1075,7 @@ static int wt_config_stream(oconfig_item_t *ci)
 
     int i;
     if ((conf = rd_kafka_conf_new()) == NULL) {
-      ERROR("cannot allocate kafka configuration.");
+      ERROR("write_maprstreams plugin: cannot allocate kafka configuration.");
       return -1;
     }
 
