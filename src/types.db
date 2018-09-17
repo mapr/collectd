@@ -565,6 +565,8 @@ used        value:COUNTER:U:U
 snapshot_used value:COUNTER:U:U
 total_used value:COUNTER:U:U
 quota value:COUNTER:U:U
+durability_meet value:COUNTER:U:U
+durability_under value:COUNTER:U:U
 
 # HBase
 region_servers value:COUNTER:U:U
